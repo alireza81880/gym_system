@@ -1,0 +1,6 @@
+{
+  "name": "Gym Management System",
+  "description": "سامانه جامع مدیریت هوشمند باشگاه ورزشی، حسابداری و امور مربیان، شاگردان، کمدهای هوشمند، گیت تردد، ماژول رله الکترونیکی، تشخیص چهره و گزارشات تحلیلی به همراه حالت شب/روز و دو زبانه (فارسی و انگلیسی)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
