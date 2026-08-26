@@ -3,13 +3,17 @@ export type Theme = 'dark' | 'light';
 
 export type NavTab = 
   | 'dashboard' 
-  | 'coaches' 
-  | 'students' 
-  | 'finances' 
-  | 'attendance' 
   | 'smart_lockers'
+  | 'hardware_hub'
+  | 'students' // Members
+  | 'coaches' 
+  | 'attendance' 
+  | 'finances' 
   | 'plans' 
+  | 'insights' // Smart AI / Rule-based
   | 'reports' 
+  | 'features' // Module visibility center
+  | 'diagnostics' // System & Pilot diagnostics
   | 'settings';
 
 export type PackageType = 
@@ -24,6 +28,8 @@ export type PackageType =
 
 export interface MembershipPackage {
   id: string;
+  tenantId?: string;
+  branchId?: string;
   name: string;
   nameEn?: string;
   type?: PackageType;
@@ -38,11 +44,16 @@ export interface MembershipPackage {
   includesDietPlan?: boolean;
   includesWorkoutPlan?: boolean;
   isVip?: boolean;
+  allowedHoursStart?: string; // e.g. "06:00"
+  allowedHoursEnd?: string;   // e.g. "14:00" for ladies/morning
+  allowedDays?: string[];     // ['saturday', 'sunday', ...]
+  debtToleranceAmount?: number; // allow entry if debt < tolerance
 }
 
-export type StudentStatus = 'active' | 'expired' | 'pending_renewal' | 'suspended';
+export type MemberStatus = 'active' | 'expired' | 'pending_renewal' | 'suspended';
+export type StudentStatus = MemberStatus; // Compatibility alias
 
-export type PaymentMethod = 'pos' | 'cash' | 'card_transfer' | 'online';
+export type PaymentMethod = 'pos' | 'cash' | 'card_transfer' | 'online' | 'installment';
 
 export type TransactionType = 'tuition' | 'coach_settlement' | 'supplement_sale' | 'buffet' | 'expense' | 'other_income';
 
@@ -50,11 +61,13 @@ export type ExpenseCategory = 'rent' | 'salary' | 'utility' | 'equipment' | 'mai
 
 export interface Coach {
   id: string;
+  tenantId?: string;
+  branchId?: string;
   fullName: string;
   nationalId: string;
   phone: string;
-  specialty: string; // e.g. بدنسازی، کراس‌فیت، فیتنس، تی‌آر‌ایکس، تغذیه
-  commissionRate: number; // e.g. 70 means 70% to coach, 30% to club
+  specialty: string;
+  commissionRate: number;
   joinDate: string;
   avatar?: string;
   status: 'active' | 'inactive';
@@ -65,38 +78,58 @@ export interface Coach {
   bankName?: string;
 }
 
+export interface MemberCredential {
+  id: string;
+  type: 'rfid_card' | 'face' | 'fingerprint' | 'qr_code' | 'pin';
+  identifier: string; // RFID UID, facial feature hash ID, PIN
+  enrolledAt: string;
+  deviceId?: string;
+  isActive: boolean;
+}
+
 export interface Student {
   id: string;
+  tenantId?: string;
+  branchId?: string;
   fullName: string;
   nationalId: string;
   phone: string;
   emergencyPhone?: string;
-  coachId: string; // Assigned coach ID or '' / 'none' for Free Workout (بدون مربی)
-  wantsCoach?: boolean; // آیا مربی اختصاصی می‌خواهد؟
-  wantsWorkoutPlan?: boolean; // آیا برنامه تمرینی می‌خواهد؟
-  wantsDietPlan?: boolean; // آیا برنامه رژیم غذایی می‌خواهد؟
+  coachId: string;
+  wantsCoach?: boolean;
+  wantsWorkoutPlan?: boolean;
+  wantsDietPlan?: boolean;
   packageType: PackageType;
   registrationDate: string;
   expireDate: string;
-  totalFee: number; // شهریه کل دوره
-  paidAmount: number; // مبلغ پرداختی
-  remainingDebt: number; // مانده بدهی (totalFee - paidAmount)
+  totalFee: number;
+  paidAmount: number;
+  remainingDebt: number;
   status: StudentStatus;
   sessionsTotal: number;
   sessionsAttended: number;
   medicalNotes?: string;
-  height?: number; // cm
-  weight?: number; // kg
-  goal?: string; // کاهش وزن، افزایش حجم، آمادگی جسمانی
+  height?: number;
+  weight?: number;
+  goal?: string;
   avatar?: string;
   birthDate?: string;
-  rfidCardUid?: string; // UID تگ RFID یا مچ‌بند
-  biometricRegistered?: boolean; // آیا چهره یا اثر انگشت ثبت شده؟
-  assignedLocker?: number; // کمد اختصاص یافته فعال
+  rfidCardUid?: string;
+  biometricRegistered?: boolean;
+  assignedLocker?: number;
+  tags?: string[];
+  notes?: string;
+  isVip?: boolean;
+  lastAccessTime?: string;
+  credentials?: MemberCredential[];
 }
+
+export type Member = Student; // Clean domain alias
 
 export interface PaymentRecord {
   id: string;
+  tenantId?: string;
+  branchId?: string;
   studentId?: string;
   studentName?: string;
   coachId?: string;
@@ -108,10 +141,16 @@ export interface PaymentRecord {
   description: string;
   receiptNumber: string;
   recordedBy: string;
+  status?: 'completed' | 'voided' | 'refunded';
+  voidReason?: string;
+  voidedAt?: string;
+  voidedBy?: string;
 }
 
 export interface CoachSettlement {
   id: string;
+  tenantId?: string;
+  branchId?: string;
   coachId: string;
   coachName: string;
   date: string;
@@ -129,18 +168,25 @@ export interface CoachSettlement {
 
 export interface AttendanceRecord {
   id: string;
+  tenantId?: string;
+  branchId?: string;
   studentId: string;
   studentName: string;
   coachName: string;
-  checkInTime: string; // e.g. 17:30
-  date: string; // e.g. 1403/06/04 or 2026-08-25
+  checkInTime: string;
+  date: string;
+  checkOutTime?: string;
+  durationMinutes?: number;
   lockerNumber?: number;
   method?: 'manual' | 'face_scan' | 'rfid_wristband' | 'fingerprint' | 'qr_code';
   notes?: string;
+  isCurrentlyInside?: boolean;
 }
 
 export interface ExpenseRecord {
   id: string;
+  tenantId?: string;
+  branchId?: string;
   title: string;
   category: ExpenseCategory;
   amount: number;
@@ -149,6 +195,8 @@ export interface ExpenseRecord {
   paymentMethod: PaymentMethod;
   description?: string;
   receiptNumber?: string;
+  status?: 'completed' | 'voided';
+  voidReason?: string;
 }
 
 export interface WorkoutExercise {
@@ -162,12 +210,14 @@ export interface WorkoutExercise {
 
 export interface WorkoutDay {
   id: string;
-  dayTitle: string; // e.g. شنبه: سینه و جلو بازو
+  dayTitle: string;
   exercises: WorkoutExercise[];
 }
 
 export interface WorkoutPlan {
   id: string;
+  tenantId?: string;
+  branchId?: string;
   studentId: string;
   studentName: string;
   coachId: string;
@@ -182,7 +232,7 @@ export interface WorkoutPlan {
 
 export interface DietMeal {
   id: string;
-  mealName: string; // e.g. صبحانه، میان‌وعده، ناهار
+  mealName: string;
   timing: string;
   items: string;
   caloriesEstimate?: number;
@@ -190,6 +240,8 @@ export interface DietMeal {
 
 export interface DietPlan {
   id: string;
+  tenantId?: string;
+  branchId?: string;
   studentId: string;
   studentName: string;
   coachId: string;
@@ -207,11 +259,13 @@ export interface DietPlan {
 // ----------------------------------------------------
 
 export type LockerZone = 'general' | 'vip' | 'men' | 'women';
-export type LockerStatus = 'available' | 'occupied' | 'maintenance' | 'reserved';
+export type LockerStatus = 'available' | 'occupied' | 'maintenance' | 'reserved' | 'error';
 export type LockerLockType = 'rfid_relay' | 'solenoid' | 'magnetic' | 'ble_iot';
 
 export interface SmartLocker {
   id: string;
+  tenantId?: string;
+  branchId?: string;
   number: number;
   zone: LockerZone;
   status: LockerStatus;
@@ -219,37 +273,146 @@ export interface SmartLocker {
   currentStudentName?: string;
   assignedAt?: string;
   isLocked: boolean;
-  batteryLevel?: number; // percentage (for wireless locks)
+  batteryLevel?: number;
   lastUnlockedAt?: string;
   lockType: LockerLockType;
-  relayPort?: number; // e.g. Relay #1 to #64 on Modbus/ESP32 board
+  relayPort?: number;
+  controllerId?: string;
 }
+
+export interface LockerAssignment {
+  id: string;
+  tenantId?: string;
+  branchId?: string;
+  lockerNumber: number;
+  memberId: string;
+  memberName: string;
+  assignedAt: string;
+  releasedAt?: string;
+  assignedBy: 'auto_gate' | 'reception_manual' | 'kiosk';
+  zone: LockerZone;
+}
+
+// ----------------------------------------------------
+// HARDWARE HUB & INTEGRATION ARCHITECTURE TYPES
+// ----------------------------------------------------
+
+export type IntegrationMode = 
+  | 'shadow'        // Mode A: Observe only (No actuation, logs only, safe for coexisting)
+  | 'hybrid'        // Mode B: Hybrid (Logs + Explicit user-approved actions)
+  | 'full_control'; // Mode C: Full control (Gym OS is source of truth)
 
 export type HardwareDeviceType = 
   | 'rfid_nfc' 
   | 'biometric_face' 
   | 'fingerprint' 
   | 'barcode_turnstile' 
-  | 'locker_relay_board';
+  | 'locker_relay_board'
+  | 'door_controller'
+  | 'turnstile'
+  | 'camera'
+  | 'sensor'
+  | 'other';
+
+export type HardwareVendor = 
+  | 'zkteco'
+  | 'hikvision'
+  | 'suprema'
+  | 'dahua'
+  | 'generic_relay'
+  | 'generic_wiegand'
+  | 'custom_iot';
 
 export type HardwareProtocol = 
   | 'websocket' 
   | 'mqtt' 
   | 'serial_webusb' 
   | 'modbus_tcp' 
-  | 'http_webhook';
+  | 'http_webhook'
+  | 'tcp_raw'
+  | 'udp';
+
+export type HardwareCapability = 
+  | 'FACE_RECOGNITION'
+  | 'FINGERPRINT'
+  | 'RFID_NFC'
+  | 'QR_CODE'
+  | 'PIN_CODE'
+  | 'DOOR_ACTUATION'
+  | 'LOCKER_RELAY_PULSE'
+  | 'TEMPERATURE_SENSOR'
+  | 'EVENT_PULL'
+  | 'EVENT_STREAM_PUSH'
+  | 'USER_ENROLLMENT'
+  | 'DEVICE_TIME_SYNC';
 
 export interface HardwareDevice {
   id: string;
+  tenantId?: string;
+  branchId?: string;
   name: string;
+  vendor: HardwareVendor;
+  model: string;
   type: HardwareDeviceType;
-  status: 'online' | 'offline' | 'simulated';
+  status: 'online' | 'offline' | 'warning' | 'simulated';
   ipAddress: string;
   port: number;
   protocol: HardwareProtocol;
   lastPing: string;
   location: string;
+  zone?: LockerZone | 'entrance' | 'exit' | 'vip_lounge';
   relayPinsCount?: number;
+  capabilities: HardwareCapability[];
+  adapter: string;
+  latencyMs?: number;
+  firmware?: string;
+  serialNumber?: string;
+  isSimulated?: boolean;
+}
+
+export type HardwareEventType = 
+  | 'ACCESS_GRANTED'
+  | 'ACCESS_DENIED'
+  | 'FACE_MATCH'
+  | 'FINGERPRINT_MATCH'
+  | 'RFID_MATCH'
+  | 'QR_SCAN'
+  | 'UNKNOWN_PERSON'
+  | 'DOOR_OPENED'
+  | 'DOOR_CLOSED'
+  | 'LOCKER_OPENED'
+  | 'LOCKER_CLOSED'
+  | 'DEVICE_ONLINE'
+  | 'DEVICE_OFFLINE'
+  | 'DEVICE_ERROR'
+  | 'USER_ENROLLED'
+  | 'USER_REMOVED'
+  | 'SYNC_STARTED'
+  | 'SYNC_COMPLETED'
+  | 'SYNC_FAILED';
+
+export interface HardwareEvent {
+  id: string;
+  tenantId?: string;
+  branchId?: string;
+  deviceId: string;
+  deviceName?: string;
+  vendor?: HardwareVendor;
+  eventType: HardwareEventType;
+  timestamp: string;
+  externalUserId?: string;
+  memberId?: string;
+  memberName?: string;
+  credentialType?: 'face' | 'rfid' | 'fingerprint' | 'qr' | 'pin';
+  authenticationResult?: 'success' | 'failed' | 'unrecognized';
+  accessResult?: 'granted' | 'denied' | 'ignored_shadow_mode';
+  accessReason?: string;
+  direction?: 'entry' | 'exit';
+  rawPayload?: string;
+  normalizedPayload?: Record<string, unknown>;
+  source: 'hardware_gateway' | 'simulator' | 'webhook' | 'shadow_listener';
+  processingStatus: 'processed' | 'pending' | 'ignored';
+  correlationId?: string;
 }
 
 export interface AccessLog {
@@ -259,7 +422,7 @@ export interface AccessLog {
   studentName: string;
   deviceType: string;
   method: 'face_recognition' | 'rfid_card' | 'fingerprint' | 'qr_code' | 'manual_override';
-  result: 'granted' | 'denied_expired' | 'denied_debt' | 'denied_unknown';
+  result: 'granted' | 'denied_expired' | 'denied_debt' | 'denied_unknown' | 'denied_time_restriction' | 'denied_suspended';
   assignedLocker?: number;
   message: string;
 }
@@ -271,5 +434,211 @@ export interface ScanResult {
   message: string;
   alertType: 'success' | 'warning' | 'error';
   method: 'face_recognition' | 'rfid_card' | 'fingerprint' | 'qr_code' | 'manual_override';
+  decisionCode?: 'ALLOW' | 'DENY' | 'ALLOW_WITH_WARNING';
+  reason?: string;
 }
 
+// ----------------------------------------------------
+// ACCESS DECISION ENGINE TYPES
+// ----------------------------------------------------
+
+export type DecisionResult = 'ALLOW' | 'DENY' | 'ALLOW_WITH_WARNING';
+
+export interface AccessDecision {
+  result: DecisionResult;
+  member?: Student;
+  reasonCode: 
+    | 'ACTIVE_MEMBERSHIP'
+    | 'EXPIRED_MEMBERSHIP'
+    | 'DEBT_EXCEEDED'
+    | 'DEBT_TOLERATED_WARNING'
+    | 'SESSION_LIMIT_REACHED'
+    | 'OUTSIDE_ALLOWED_HOURS'
+    | 'SUSPENDED_MEMBER'
+    | 'UNKNOWN_IDENTITY'
+    | 'DUPLICATE_ENTRY_WARNING';
+  messageFa: string;
+  messageEn: string;
+  assignedLocker?: number;
+  requiresLocker: boolean;
+  warnings?: string[];
+  timestamp: string;
+}
+
+// ----------------------------------------------------
+// RBAC & AUDIT LOG TYPES
+// ----------------------------------------------------
+
+export type UserRole = 
+  | 'super_admin' 
+  | 'gym_owner' 
+  | 'branch_manager' 
+  | 'receptionist' 
+  | 'coach' 
+  | 'accountant' 
+  | 'hardware_tech';
+
+export interface StaffUser {
+  id: string;
+  tenantId?: string;
+  branchId?: string;
+  username: string;
+  fullName: string;
+  role: UserRole;
+  phone: string;
+  avatar?: string;
+  isActive: boolean;
+  lastLogin?: string;
+}
+
+export type PermissionKey = 
+  | 'members.view'
+  | 'members.create'
+  | 'members.edit'
+  | 'members.delete'
+  | 'finance.view'
+  | 'finance.create'
+  | 'finance.reverse'
+  | 'hardware.view'
+  | 'hardware.configure'
+  | 'hardware.test'
+  | 'hardware.control'
+  | 'lockers.open'
+  | 'lockers.masterUnlock'
+  | 'reports.view'
+  | 'settings.manage'
+  | 'audit.view'
+  | 'insights.view';
+
+export interface AuditLog {
+  id: string;
+  tenantId?: string;
+  branchId?: string;
+  userId: string;
+  userName: string;
+  userRole: UserRole;
+  action: string;
+  entityType: 'member' | 'payment' | 'locker' | 'hardware' | 'setting' | 'attendance' | 'auth';
+  entityId?: string;
+  description: string;
+  beforeState?: string;
+  afterState?: string;
+  timestamp: string;
+  ipAddress?: string;
+  correlationId?: string;
+}
+
+// ----------------------------------------------------
+// SMART INSIGHTS ENGINE (RULE-BASED INTELLIGENCE)
+// ----------------------------------------------------
+
+export type InsightType = 
+  | 'CHURN_RISK'
+  | 'LOYAL_MEMBER'
+  | 'GYM_CROWDING_BUSY'
+  | 'GYM_CROWDING_QUIET'
+  | 'MEMBERSHIP_EXPIRING'
+  | 'HIGH_DEBT_ALERT'
+  | 'PEAK_HOURS'
+  | 'LOCKER_UTILIZATION_HIGH';
+
+export interface SmartInsight {
+  id: string;
+  type: InsightType;
+  severity: 'info' | 'warning' | 'critical' | 'success';
+  titleFa: string;
+  titleEn: string;
+  descriptionFa: string;
+  descriptionEn: string;
+  targetEntity?: string;
+  targetId?: string;
+  actionLabelFa?: string;
+  actionLabelEn?: string;
+  actionTab?: NavTab;
+  valueMetric?: string | number;
+  createdAt: string;
+}
+
+// ----------------------------------------------------
+// SYNC & OFFLINE-FIRST ARCHITECTURE
+// ----------------------------------------------------
+
+export type SyncState = 'ONLINE' | 'OFFLINE' | 'SYNCING' | 'SYNC_ERROR' | 'PARTIALLY_SYNCED';
+
+export interface SyncJob {
+  id: string;
+  entityType: string;
+  entityId: string;
+  operation: 'INSERT' | 'UPDATE' | 'DELETE';
+  payload: string;
+  status: 'PENDING' | 'SYNCING' | 'SYNCED' | 'FAILED' | 'CONFLICT';
+  retries: number;
+  lastAttempt?: string;
+  errorMessage?: string;
+  createdAt: string;
+}
+
+// ----------------------------------------------------
+// MULTI-BRANCH & ORGANIZATION
+// ----------------------------------------------------
+
+export interface Branch {
+  id: string;
+  tenantId: string;
+  name: string;
+  code: string;
+  city: string;
+  address: string;
+  phone: string;
+  managerName: string;
+  isMain: boolean;
+  isActive: boolean;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  brandTitle: string;
+  licenseNumber?: string;
+  managerName: string;
+  phone: string;
+  currency: 'تومان' | 'ریال' | 'IRR' | 'USD';
+  timezone: string;
+  calendar: 'jalali' | 'gregorian';
+  integrationMode: IntegrationMode;
+}
+
+// ----------------------------------------------------
+// FEATURE VISIBILITY / CUSTOMIZATION
+// ----------------------------------------------------
+
+export interface ModuleFeature {
+  id: NavTab;
+  labelFa: string;
+  labelEn: string;
+  descriptionFa: string;
+  descriptionEn: string;
+  iconName: string;
+  isEnabled: boolean;
+  isPinned: boolean;
+  order: number;
+  category: 'core' | 'access' | 'finance' | 'planning' | 'system';
+  isFutureReady?: boolean;
+}
+
+// ----------------------------------------------------
+// PILOT DIAGNOSTICS & MISMATCH LOG
+// ----------------------------------------------------
+
+export interface PilotComparisonLog {
+  id: string;
+  timestamp: string;
+  deviceId: string;
+  deviceName: string;
+  memberId?: string;
+  memberName: string;
+  externalDecision: 'ALLOW' | 'DENY';
+  gymOsDecision: 'ALLOW' | 'DENY' | 'ALLOW_WITH_WARNING';
+  isMatch: boolean;
+  mismatchReason?: string;
+}
