@@ -668,7 +668,8 @@ export type ThemeKey =
   | 'lavender'
   | 'oled'
   | 'carbon'
-  | 'glass_neon';
+  | 'glass_neon'
+  | 'graphite';
 
 export type GlassLevel = 'subtle' | 'regular' | 'neon';
 

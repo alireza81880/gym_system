@@ -9,6 +9,8 @@ import {
   ApiImportConfig
 } from '../types';
 import { ValidationService } from './validationService';
+import { MemberService } from './memberService';
+import { DateService } from './dateService';
 
 export interface ParseResult {
   columns: string[];
@@ -476,11 +478,15 @@ export class MigrationService {
 
       // Create new member
       importedCount++;
+      const assignedMemberNum = item.mappedMember.memberNumber || MemberService.calculateNextMemberNumber(studentList);
+      const todayJalali = DateService.getTodayJalali();
+      const defaultExpireJalali = DateService.addDaysToJalali(todayJalali, 30);
+
       const newStudent: Student = {
         id: `std-imp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         tenantId: options.tenantId,
         branchId: options.branchId,
-        memberNumber: item.mappedMember.memberNumber || `${studentList.length + 1001}`,
+        memberNumber: assignedMemberNum,
         firstName: item.mappedMember.firstName || '',
         lastName: item.mappedMember.lastName || '',
         fullName: item.mappedMember.fullName || 'عضو جدید',
@@ -489,8 +495,8 @@ export class MigrationService {
         emergencyPhone: item.mappedMember.emergencyPhone,
         coachId: item.mappedMember.coachId || options.defaultCoachId || '',
         packageType: item.mappedMember.packageType || '1_month',
-        registrationDate: item.mappedMember.registrationDate || new Date().toISOString().split('T')[0],
-        expireDate: item.mappedMember.expireDate || new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+        registrationDate: item.mappedMember.registrationDate || todayJalali,
+        expireDate: item.mappedMember.expireDate || defaultExpireJalali,
         totalFee: item.mappedMember.totalFee || 0,
         paidAmount: item.mappedMember.paidAmount || 0,
         remainingDebt: item.mappedMember.remainingDebt || 0,

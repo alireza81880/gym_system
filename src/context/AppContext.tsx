@@ -59,6 +59,9 @@ import { SyncEngine } from '../services/syncService';
 import { LocalDbRepository } from '../services/localDb';
 import { ThemeEngineService } from '../services/themeEngine';
 import { MigrationService, ImportValidationItem } from '../services/migrationService';
+import { MemberService } from '../services/memberService';
+import { MoneyService } from '../services/moneyService';
+import { DateService } from '../services/dateService';
 import { getAdapterForVendor, createNormalizedHardwareEvent } from '../services/hardwareAdapters';
 
 interface CoachFinancialStats {
@@ -918,7 +921,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const totalFee = studentData.totalFee || 0;
     const remainingDebt = Math.max(0, totalFee - initialPayment);
     const newStudentId = generateUid('student');
-    const memberNum = studentData.memberNumber || `${students.length + 1001}`;
+    const memberNum = studentData.memberNumber || MemberService.calculateNextMemberNumber(students);
 
     const newStudent: Student = {
       ...studentData,

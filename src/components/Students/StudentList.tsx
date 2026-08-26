@@ -19,6 +19,9 @@ import {
 import { useApp } from '../../context/AppContext';
 import { Student, PackageType, PaymentMethod, StudentStatus } from '../../types';
 import { StudentDetailModal } from './StudentDetailModal';
+import { MemberRegistrationDrawer } from './MemberRegistrationDrawer';
+import { MoneyService } from '../../services/moneyService';
+import { DateService } from '../../services/dateService';
 
 interface StudentListProps {
   initialOpenNewModal?: boolean;
@@ -254,7 +257,7 @@ export const StudentList: React.FC<StudentListProps> = ({
       addStudent(
         {
           fullName,
-          nationalId: nationalId || `00${Math.floor(10000000 + Math.random() * 90000000)}`,
+          nationalId: nationalId.trim(),
           phone,
           emergencyPhone,
           coachId: wantsCoach ? coachId : '',
@@ -314,7 +317,8 @@ export const StudentList: React.FC<StudentListProps> = ({
     const matchesSearch = 
       st.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       st.phone.includes(searchTerm) ||
-      st.nationalId.includes(searchTerm);
+      st.nationalId.includes(searchTerm) ||
+      (st.memberNumber && st.memberNumber.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesCoach = selectedCoachId === 'all' || st.coachId === selectedCoachId;
     const matchesStatus = selectedStatus === 'all' || st.status === selectedStatus;
     const matchesDebt = 
@@ -417,13 +421,26 @@ export const StudentList: React.FC<StudentListProps> = ({
                   return (
                     <tr key={st.id} className="hover:bg-stone-50/80 dark:hover:bg-stone-800/40 transition-colors">
                       
-                      {/* Name & Phone */}
+                      {/* Name & Phone & Member Number */}
                       <td className="p-3.5">
-                        <div className="font-bold text-stone-900 dark:text-white text-sm">
-                          {st.fullName}
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-stone-900 dark:text-white text-sm">
+                            {st.fullName}
+                          </span>
+                          {st.memberNumber && (
+                            <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/25 shrink-0">
+                              #{st.memberNumber}
+                            </span>
+                          )}
                         </div>
-                        <div className="text-[11px] text-stone-400 font-mono flex items-center gap-1 mt-0.5">
+                        <div className="text-[11px] text-stone-400 font-mono flex items-center gap-2 mt-0.5">
                           <span>{st.phone}</span>
+                          {st.nationalId && (
+                            <>
+                              <span>•</span>
+                              <span>کدملی: {st.nationalId}</span>
+                            </>
+                          )}
                         </div>
                       </td>
 
@@ -579,8 +596,19 @@ export const StudentList: React.FC<StudentListProps> = ({
         </div>
       )}
 
-      {/* Add / Edit Student Modal */}
-      {isAddModalOpen && (
+      {/* Fast Member Registration Drawer for New Members */}
+      {isAddModalOpen && !editingStudent && (
+        <MemberRegistrationDrawer
+          isOpen={isAddModalOpen}
+          onClose={() => {
+            setIsAddModalOpen(false);
+            if (onModalClosed) onModalClosed();
+          }}
+        />
+      )}
+
+      {/* Edit Student Modal */}
+      {isAddModalOpen && editingStudent && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="relative w-full max-w-xl bg-white dark:bg-stone-900 rounded-2xl shadow-xl border border-stone-200 dark:border-stone-800 overflow-hidden my-8">
             <div className="p-5 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">

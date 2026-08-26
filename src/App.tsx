@@ -22,6 +22,7 @@ import { ManagerReports } from './components/Reports/ManagerReports';
 import { SettingsView } from './components/Settings/SettingsView';
 import { MigrationCenter } from './components/Migration/MigrationCenter';
 import { InstallationWizard } from './components/Setup/InstallationWizard';
+import { InitialAccessScreen } from './components/Setup/InitialAccessScreen';
 import { QuickCheckInModal } from './components/Modals/QuickCheckInModal';
 import { NewPaymentModal } from './components/Modals/NewPaymentModal';
 import { CommandPaletteModal } from './components/Modals/CommandPaletteModal';
@@ -29,7 +30,8 @@ import { EmergencyMasterUnlockModal } from './components/Modals/EmergencyMasterU
 import { OnboardingWizardModal } from './components/Modals/OnboardingWizardModal';
 
 const MainLayout: React.FC = () => {
-  const { activeTab, setActiveTab, isInstalled, isDemoMode, exitDemoMode } = useApp();
+  const { activeTab, setActiveTab, isInstalled, isDemoMode, exitDemoMode, enterDemoMode, completeInstallation } = useApp();
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isQuickCheckInOpen, setIsQuickCheckInOpen] = useState(false);
   const [isNewPaymentOpen, setIsNewPaymentOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
@@ -53,14 +55,36 @@ const MainLayout: React.FC = () => {
     setOpenStudentModalTrigger(true);
   };
 
+  const handleStartMigration = () => {
+    completeInstallation({
+      orgData: { name: 'باشگاه ورزشی' },
+      lockerCount: 60,
+      ownerData: { fullName: 'مدیر باشگاه', phone: '09120000000' }
+    });
+    setActiveTab('migration');
+  };
+
+  if (!isInstalled && !isDemoMode) {
+    if (isWizardOpen) {
+      return (
+        <InstallationWizard
+          isInitialSetup={true}
+          onClose={() => setIsWizardOpen(false)}
+        />
+      );
+    }
+    return (
+      <InitialAccessScreen
+        onStartNewGym={() => setIsWizardOpen(true)}
+        onStartMigration={handleStartMigration}
+        onEnterDemo={enterDemoMode}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-stone-100 dark:bg-stone-950 text-stone-900 dark:text-stone-100 flex flex-col font-sans transition-colors duration-200">
       
-      {/* First Run Installation Wizard if not installed */}
-      {!isInstalled && (
-        <InstallationWizard isInitialSetup={true} />
-      )}
-
       {/* Demo Sandbox Alert Banner */}
       {isDemoMode && (
         <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 px-4 py-2 text-xs font-bold flex items-center justify-between shadow-md z-30">

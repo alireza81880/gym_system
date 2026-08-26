@@ -20,6 +20,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { NavTab } from '../types';
 import { SmartInsightsEngine } from '../services/insightsService';
+import { ThemeSelectorPopover } from './common/ThemeSelectorPopover';
 
 export type { NavTab };
 
@@ -154,15 +155,19 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
           })}
         </nav>
 
+        {/* Theme Selector Popover at bottom of sidebar */}
+        <div className="pt-2">
+          <ThemeSelectorPopover />
+        </div>
+
         {/* Quick Footer inside Sidebar on desktop */}
-        <div className="hidden lg:block pt-3 mt-3 border-t border-stone-100 dark:border-stone-800 text-[11px] text-stone-400 px-3 space-y-1">
-          <div className="flex justify-between">
-            <span>وضعیت گیت‌وی:</span>
-            <span className="text-emerald-500 font-bold">متصل و فعال</span>
-          </div>
-          <div className="flex justify-between">
-            <span>پشتیبانی فنی:</span>
-            <span className="font-mono text-stone-500">021-88990000</span>
+        <div className="hidden lg:block pt-2 border-t border-slate-800 text-[11px] text-slate-400 px-2 space-y-1">
+          <div className="flex justify-between items-center text-[10px]">
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>پایگاه داده محلی</span>
+            </span>
+            <span className="text-emerald-400 font-mono font-bold">آفلاین / امن</span>
           </div>
         </div>
 

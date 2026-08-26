@@ -376,6 +376,31 @@ export const THEMES_REGISTRY: Record<ThemeKey, ThemeConfig> = {
       buttonText: '#ffffff',
     },
   },
+  graphite: {
+    id: 'graphite',
+    name: 'Graphite Titanium',
+    nameFa: 'گرافیت تیتانیوم مات',
+    category: 'special',
+    colors: {
+      bg: '#18191c',
+      surface: '#222328',
+      surfaceGlass: 'rgba(34, 35, 40, 0.85)',
+      surfaceGlassStrong: 'rgba(42, 44, 50, 0.95)',
+      border: 'rgba(255, 255, 255, 0.12)',
+      borderStrong: 'rgba(148, 163, 184, 0.45)',
+      text: '#f8fafc',
+      textMuted: '#94a3b8',
+      brand: '#64748b',
+      brandSoft: 'rgba(100, 116, 139, 0.20)',
+      neon: '#94a3b8',
+      accent: '#cbd5e1',
+      glow: '0 0 20px rgba(148, 163, 184, 0.30)',
+      sidebarBg: '#1c1d22',
+      cardBg: '#25262c',
+      buttonBg: '#64748b',
+      buttonText: '#ffffff',
+    },
+  },
 };
 
 export class ThemeEngineService {
