@@ -21,10 +21,19 @@ import {
   Calendar,
   Layers,
   Sparkles,
-  Check
+  Check,
+  Palette,
+  KeyRound,
+  Sliders,
+  PlayCircle,
+  Clock,
+  HelpCircle,
+  Tag
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { MembershipPackage, PackageType } from '../../types';
+import { MembershipPackage, PackageType, CustomField, CustomFieldType, ThemeKey } from '../../types';
+import { ThemeEngineService } from '../../services/themeEngine';
+import { InstallationWizard } from '../Setup/InstallationWizard';
 
 export const SettingsView: React.FC = () => {
   const { 
@@ -32,6 +41,19 @@ export const SettingsView: React.FC = () => {
     setLang, 
     theme, 
     setTheme, 
+    activeThemeKey,
+    setActiveThemeKey,
+    organizationInfo,
+    updateOrganizationInfo,
+    customFields,
+    saveCustomField,
+    deleteCustomField,
+    smartLockers,
+    setLockerCount,
+    isDemoMode,
+    enterDemoMode,
+    exitDemoMode,
+    resetToEmptyProduction,
     resetToInitialData, 
     exportAllDataAsJson, 
     importDataFromJson, 
@@ -44,17 +66,36 @@ export const SettingsView: React.FC = () => {
     t 
   } = useApp();
 
-  const [clubName, setClubName] = useState('باشگاه بدنسازی و فیتنس پروشات');
-  const [managerPhone, setManagerPhone] = useState('021-88776655');
-  const [clubAddress, setClubAddress] = useState('تهران، خیابان ولیعصر، نرسیده به میدان ونک، پلاک ۱۲۴');
+  // Active Sub-Tab
+  const [activeTab, setActiveTab] = useState<'theme' | 'org' | 'packages' | 'lockers' | 'custom_fields' | 'backup'>('theme');
+
+  // Org State
+  const [gymName, setGymName] = useState(organizationInfo.name);
+  const [managerName, setManagerName] = useState(organizationInfo.managerName);
+  const [managerMobile, setManagerMobile] = useState(organizationInfo.managerMobile);
+  const [phone, setPhone] = useState(organizationInfo.phone);
+  const [city, setCity] = useState(organizationInfo.city);
+  const [address, setAddress] = useState(organizationInfo.address);
+  const [memberNumberLabel, setMemberNumberLabel] = useState(organizationInfo.memberNumberLabel);
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // Lockers Resize State
+  const [newLockerCount, setNewLockerCount] = useState<number>(smartLockers.length || 100);
+  const [lockerResizeMessage, setLockerResizeMessage] = useState<string | null>(null);
+
+  // Custom Field Form State
+  const [isFieldModalOpen, setIsFieldModalOpen] = useState(false);
+  const [cfLabel, setCfLabel] = useState('');
+  const [cfKey, setCfKey] = useState('');
+  const [cfType, setCfType] = useState<CustomFieldType>('text');
+  const [cfOptions, setCfOptions] = useState('');
+  const [cfRequired, setCfRequired] = useState(false);
 
   // Package Modal State
   const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
   const [editingPackage, setEditingPackage] = useState<MembershipPackage | null>(null);
   const [pkgName, setPkgName] = useState('');
   const [pkgNameEn, setPkgNameEn] = useState('');
-  const [pkgType, setPkgType] = useState<PackageType>('1_month');
   const [pkgDurationDays, setPkgDurationDays] = useState<number>(30);
   const [pkgSessionsCount, setPkgSessionsCount] = useState<number>(24);
   const [pkgPrice, setPkgPrice] = useState<number>(2800000);
@@ -64,11 +105,66 @@ export const SettingsView: React.FC = () => {
   const [pkgIncludesWorkoutPlan, setPkgIncludesWorkoutPlan] = useState(false);
   const [pkgIsVip, setPkgIsVip] = useState(false);
 
+  // Re-run setup wizard modal
+  const [showWizardModal, setShowWizardModal] = useState(false);
+
+  const handleSaveInfo = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateOrganizationInfo({
+      name: gymName,
+      managerName,
+      managerMobile,
+      phone,
+      city,
+      address,
+      memberNumberLabel,
+    });
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 3000);
+  };
+
+  const handleApplyLockerResize = () => {
+    const res = setLockerCount(newLockerCount);
+    if (res.warning) {
+      setLockerResizeMessage(res.warning);
+    } else {
+      setLockerResizeMessage(`تعداد کمدها با موفقیت به ${newLockerCount} عدد به‌روزرسانی شد.`);
+    }
+    setTimeout(() => setLockerResizeMessage(null), 5000);
+  };
+
+  const handleSaveCustomFieldSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cfLabel.trim()) return;
+
+    const generatedKey = cfKey.trim() || `field_${Date.now()}`;
+    const optionsArray = cfType === 'select' 
+      ? cfOptions.split(/[\n,]+/).map(o => o.trim()).filter(Boolean)
+      : undefined;
+
+    const newField: CustomField = {
+      id: `cf-${Date.now()}`,
+      key: generatedKey,
+      label: cfLabel.trim(),
+      type: cfType,
+      options: optionsArray,
+      required: cfRequired,
+      visible: true,
+      category: 'general',
+    };
+
+    saveCustomField(newField);
+    setIsFieldModalOpen(false);
+    setCfLabel('');
+    setCfKey('');
+    setCfOptions('');
+    setCfRequired(false);
+  };
+
   const openAddPackageModal = () => {
     setEditingPackage(null);
     setPkgName('');
     setPkgNameEn('');
-    setPkgType(`custom_${Date.now()}` as any);
     setPkgDurationDays(30);
     setPkgSessionsCount(24);
     setPkgPrice(3000000);
@@ -84,9 +180,8 @@ export const SettingsView: React.FC = () => {
     setEditingPackage(pkg);
     setPkgName(pkg.name);
     setPkgNameEn(pkg.nameEn || '');
-    setPkgType(pkg.type);
-    setPkgDurationDays(pkg.durationDays);
-    setPkgSessionsCount(pkg.sessionsCount);
+    setPkgDurationDays(pkg.durationDays || 30);
+    setPkgSessionsCount(pkg.sessionsCount || 24);
     setPkgPrice(pkg.price);
     setPkgDescription(pkg.description || '');
     setPkgIncludesLocker(Boolean(pkg.includesLocker));
@@ -98,337 +193,739 @@ export const SettingsView: React.FC = () => {
 
   const handleSavePackageSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!pkgName || pkgPrice <= 0) return;
+    if (!pkgName.trim()) return;
+
+    const pkgData = {
+      name: pkgName.trim(),
+      nameEn: pkgNameEn.trim(),
+      price: pkgPrice,
+      durationDays: pkgDurationDays,
+      sessionsCount: pkgSessionsCount,
+      description: pkgDescription.trim(),
+      includesLocker: pkgIncludesLocker,
+      includesCoach: pkgIncludesCoach,
+      includesWorkoutPlan: pkgIncludesWorkoutPlan,
+      isVip: pkgIsVip,
+    };
 
     if (editingPackage) {
-      updatePackage(editingPackage.id, {
-        name: pkgName,
-        nameEn: pkgNameEn || pkgName,
-        type: pkgType,
-        durationDays: pkgDurationDays,
-        sessionsCount: pkgSessionsCount,
-        price: pkgPrice,
-        description: pkgDescription,
-        includesLocker: pkgIncludesLocker,
-        includesCoach: pkgIncludesCoach,
-        includesWorkoutPlan: pkgIncludesWorkoutPlan,
-        isVip: pkgIsVip,
-      });
+      updatePackage(editingPackage.id, pkgData);
     } else {
-      addPackage({
-        name: pkgName,
-        nameEn: pkgNameEn || pkgName,
-        type: pkgType,
-        durationDays: pkgDurationDays,
-        sessionsCount: pkgSessionsCount,
-        price: pkgPrice,
-        description: pkgDescription,
-        isActive: true,
-        includesLocker: pkgIncludesLocker,
-        includesCoach: pkgIncludesCoach,
-        includesWorkoutPlan: pkgIncludesWorkoutPlan,
-        isVip: pkgIsVip,
-      });
+      addPackage(pkgData);
     }
-
     setIsPackageModalOpen(false);
   };
 
-  const handleSaveInfo = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2000);
-  };
-
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileReader = new FileReader();
-    if (e.target.files && e.target.files[0]) {
-      fileReader.readAsText(e.target.files[0], "UTF-8");
-      fileReader.onload = (event) => {
-        const content = event.target?.result as string;
-        const success = importDataFromJson(content);
-        if (success) {
-          alert('اطلاعات با موفقیت بازیابی شد.');
-        } else {
-          alert('فرمت فایل پشتیبان نامعتبر است.');
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        if (text) {
+          const success = importDataFromJson(text);
+          if (success) {
+            alert('اطلاعات با موفقیت بازیابی شد.');
+          } else {
+            alert('فرمت فایل نامعتبر است.');
+          }
         }
       };
+      reader.readAsText(file);
     }
   };
 
+  const allThemes = ThemeEngineService.getAllThemes();
+  const darkThemes = allThemes.filter(t => t.category === 'dark');
+  const lightThemes = allThemes.filter(t => t.category === 'light');
+  const specialThemes = allThemes.filter(t => t.category === 'special');
+
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      
+    <div className="space-y-8 animate-fadeIn">
+      {/* Wizard Modal */}
+      {showWizardModal && (
+        <InstallationWizard onClose={() => setShowWizardModal(false)} isInitialSetup={false} />
+      )}
+
       {/* Header */}
-      <div className="bg-white dark:bg-stone-900 p-6 rounded-2xl border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-stone-900 dark:text-white flex items-center gap-2">
-            <Settings className="h-6 w-6 text-amber-500" />
-            <span>{t.settingsTitle}</span>
-          </h2>
-          <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-            تنظیمات عمومی، برندینگ، قیمت‌گذاری پکیج‌ها و تعرفه‌های خدمات
-          </p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-slate-950 shadow-lg shadow-amber-500/20">
+            <Settings className="w-7 h-7" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+              تنظیمات پیشرفته و سفارشی‌سازی
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-normal">Gym OS V2.4</span>
+            </h1>
+            <p className="text-sm text-slate-400 mt-1">
+              موتور تم‌های ۱۵ گانه، مشخصات برندینگ، کمدهای رله، فیلدهای سفارشی و بسته‌های عضویت
+            </p>
+          </div>
+        </div>
+
+        {/* Sandbox & Setup Wizard Triggers */}
+        <div className="flex flex-wrap items-center gap-2">
+          {isDemoMode ? (
+            <button
+              onClick={exitDemoMode}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold transition-all"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>خروج از محیط دمو (Sandbox)</span>
+            </button>
+          ) : (
+            <button
+              onClick={enterDemoMode}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/30 text-xs font-semibold transition-all"
+            >
+              <PlayCircle className="w-4 h-4" />
+              <span>ورود به محیط دمو</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => setShowWizardModal(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 text-xs font-semibold transition-all"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>اجرای مجدد ویزارد راه‌اندازی</span>
+          </button>
         </div>
       </div>
 
-      {/* Pricing & Packages Management (Requested by user) */}
-      <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-6 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200 dark:border-stone-800 pb-4">
-          <div>
-            <h3 className="text-base font-bold text-stone-900 dark:text-white flex items-center gap-2">
-              <Package className="h-5 w-5 text-amber-500" />
-              <span>مدیریت پکیج‌های عضویت و تعرفه‌های باشگاه</span>
-            </h3>
-            <p className="text-xs text-stone-500 mt-0.5">
-              مدیر می‌تواند تعرفه‌ها را تغییر دهد، پکیج جدید اضافه کند یا پکیج‌های فعلی را ویرایش کند.
-            </p>
-          </div>
-
-          <button
-            onClick={openAddPackageModal}
-            className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors self-start sm:self-auto"
-          >
-            <Plus className="h-4 w-4" />
-            <span>افزودن پکیج جدید</span>
-          </button>
-        </div>
-
-        {/* Package Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
-          {packages.map((pkg) => (
-            <div
-              key={pkg.id}
-              className={`p-4 rounded-xl border transition-all flex flex-col justify-between ${
-                pkg.isVip 
-                  ? 'bg-amber-500/5 border-amber-500/30' 
-                  : 'bg-stone-50 dark:bg-stone-800/40 border-stone-200 dark:border-stone-700'
+      {/* Tab Navigation */}
+      <div className="flex flex-wrap gap-2 p-1.5 rounded-2xl bg-slate-900/60 border border-slate-800">
+        {[
+          { id: 'theme', label: 'موتور تم‌های ۱۵ گانه', icon: Palette },
+          { id: 'org', label: 'مشخصات و برندینگ', icon: Building2 },
+          { id: 'packages', label: 'پکیج‌ها و تعرفه‌ها', icon: Package },
+          { id: 'lockers', label: 'ظرفیت کمدهای هوشمند', icon: KeyRound },
+          { id: 'custom_fields', label: 'فیلدهای اختصاصی پرونده', icon: Tag },
+          { id: 'backup', label: 'پشتیبان و ریست سیستم', icon: Shield },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                isActive
+                  ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
+              <Icon className="w-4 h-4" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ---------------------------------------------------- */}
+      {/* TAB 1: THEME ENGINE STUDIO                           */}
+      {/* ---------------------------------------------------- */}
+      {activeTab === 'theme' && (
+        <div className="space-y-8">
+          {/* Dark Themes */}
+          <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Moon className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-base font-bold text-white">تم‌های استودیویی تیره (Dark Themes)</h3>
+              </div>
+              <span className="text-xs text-slate-500">مخصوص محیط‌های پذیرش و مانیتورهای شبانه</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {darkThemes.map((tItem) => {
+                const isSelected = activeThemeKey === tItem.id;
+                return (
+                  <div
+                    key={tItem.id}
+                    onClick={() => setActiveThemeKey(tItem.id)}
+                    className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between h-36 ${
+                      isSelected
+                        ? 'border-amber-500 ring-2 ring-amber-500/30 bg-slate-800/90 shadow-lg'
+                        : 'border-slate-800 bg-slate-900/60 hover:border-slate-700 hover:bg-slate-800/40'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-bold text-white">{tItem.nameFa}</span>
+                        {isSelected && (
+                          <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center text-xs font-bold">
+                            ✓
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-slate-400 font-mono mt-0.5 block">{tItem.name}</span>
+                      <p className="text-[11px] text-slate-400 mt-2 line-clamp-1">{tItem.nameFa}</p>
+                    </div>
+
+                    {/* Color Swatch Preview */}
+                    <div className="flex items-center gap-1.5 pt-2 border-t border-slate-800/60">
+                      <div className="w-5 h-5 rounded-md border border-white/10" style={{ backgroundColor: tItem.colors.bg }} title="پس‌زمینه اصلی"></div>
+                      <div className="w-5 h-5 rounded-md border border-white/10" style={{ backgroundColor: tItem.colors.surface }} title="سطح کارت‌ها"></div>
+                      <div className="w-5 h-5 rounded-md border border-white/10" style={{ backgroundColor: tItem.colors.brand || tItem.colors.accent }} title="رنگ شاخص"></div>
+                      <span className="text-[10px] text-slate-500 font-mono mr-auto">{tItem.colors.brand || tItem.colors.accent}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Light Themes */}
+          <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sun className="w-5 h-5 text-amber-400" />
+                <h3 className="text-base font-bold text-white">تم‌های استاندارد روشن (Light Themes)</h3>
+              </div>
+              <span className="text-xs text-slate-500">وضوح بالا و کنتراست حداکثری برای فضاهای پرنور</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {lightThemes.map((tItem) => {
+                const isSelected = activeThemeKey === tItem.id;
+                return (
+                  <div
+                    key={tItem.id}
+                    onClick={() => setActiveThemeKey(tItem.id)}
+                    className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between h-36 ${
+                      isSelected
+                        ? 'border-amber-500 ring-2 ring-amber-500/30 bg-slate-800/90 shadow-lg'
+                        : 'border-slate-800 bg-slate-900/60 hover:border-slate-700 hover:bg-slate-800/40'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-bold text-white">{tItem.nameFa}</span>
+                        {isSelected && (
+                          <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center text-xs font-bold">
+                            ✓
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-slate-400 font-mono mt-0.5 block">{tItem.name}</span>
+                      <p className="text-[11px] text-slate-400 mt-2 line-clamp-1">{tItem.nameFa}</p>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 pt-2 border-t border-slate-800/60">
+                      <div className="w-5 h-5 rounded-md border border-white/20" style={{ backgroundColor: tItem.colors.bg }} title="پس‌زمینه اصلی"></div>
+                      <div className="w-5 h-5 rounded-md border border-white/20" style={{ backgroundColor: tItem.colors.surface }} title="سطح کارت‌ها"></div>
+                      <div className="w-5 h-5 rounded-md border border-white/20" style={{ backgroundColor: tItem.colors.brand || tItem.colors.accent }} title="رنگ شاخص"></div>
+                      <span className="text-[10px] text-slate-500 font-mono mr-auto">{tItem.colors.brand || tItem.colors.accent}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Cyber & Special Themes */}
+          <div className="p-6 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-fuchsia-400" />
+                <h3 className="text-base font-bold text-white">تم‌های نئونی و ویژه (Special / Cyberpunk)</h3>
+              </div>
+              <span className="text-xs text-slate-500">جلوه‌های نورانی و های‌تک</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {specialThemes.map((tItem) => {
+                const isSelected = activeThemeKey === tItem.id;
+                return (
+                  <div
+                    key={tItem.id}
+                    onClick={() => setActiveThemeKey(tItem.id)}
+                    className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between h-36 ${
+                      isSelected
+                        ? 'border-fuchsia-500 ring-2 ring-fuchsia-500/30 bg-slate-800/90 shadow-lg'
+                        : 'border-slate-800 bg-slate-900/60 hover:border-slate-700 hover:bg-slate-800/40'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-bold text-white">{tItem.nameFa}</span>
+                        {isSelected && (
+                          <span className="w-5 h-5 rounded-full bg-fuchsia-500 text-slate-950 flex items-center justify-center text-xs font-bold">
+                            ✓
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-slate-400 font-mono mt-0.5 block">{tItem.name}</span>
+                      <p className="text-[11px] text-slate-400 mt-2 line-clamp-1">{tItem.nameFa}</p>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 pt-2 border-t border-slate-800/60">
+                      <div className="w-5 h-5 rounded-md border border-white/10" style={{ backgroundColor: tItem.colors.bg }}></div>
+                      <div className="w-5 h-5 rounded-md border border-white/10" style={{ backgroundColor: tItem.colors.surface }}></div>
+                      <div className="w-5 h-5 rounded-md border border-white/10" style={{ backgroundColor: tItem.colors.brand || tItem.colors.accent }}></div>
+                      <span className="text-[10px] text-slate-500 font-mono mr-auto">{tItem.colors.brand || tItem.colors.accent}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* TAB 2: ORGANIZATION INFO & BRANDING                  */}
+      {/* ---------------------------------------------------- */}
+      {activeTab === 'org' && (
+        <div className="p-8 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-amber-400" />
+                مشخصات و اطلاعات سازمانی باشگاه
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">این اطلاعات روی سربرگ فاکتورها، رسیدهای تردد و پیامک‌ها درج می‌شود.</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleSaveInfo} className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div>
-                    <h4 className="font-bold text-sm text-stone-900 dark:text-white flex items-center gap-1.5">
-                      {pkg.name}
-                      {pkg.isVip && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-amber-500 text-stone-950">
-                          VIP
-                        </span>
-                      )}
-                    </h4>
-                    <span className="text-[11px] text-stone-400 font-mono">{pkg.nameEn}</span>
+                <label className="block text-xs font-semibold text-slate-300 mb-2">نام مجموعه ورزشی / باشگاه</label>
+                <input
+                  type="text"
+                  value={gymName}
+                  onChange={(e) => setGymName(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-2">نام و نام خانوادگی مدیر ارشد</label>
+                <input
+                  type="text"
+                  value={managerName}
+                  onChange={(e) => setManagerName(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-2">شماره همراه مدیریت</label>
+                <input
+                  type="text"
+                  value={managerMobile}
+                  onChange={(e) => setManagerMobile(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm text-left font-mono focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-2">تلفن ثابت پذیرش</label>
+                <input
+                  type="text"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm text-left font-mono focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-2">شهر</label>
+                <input
+                  type="text"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-2">عنوان شناسه ورزشکار در سیستم</label>
+                <input
+                  type="text"
+                  value={memberNumberLabel}
+                  onChange={(e) => setMemberNumberLabel(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold text-slate-300 mb-2">آدرس دقیق مجموعه</label>
+                <input
+                  type="text"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            </div>
+
+            {savedSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>اطلاعات باشگاه با موفقیت ذخیره شد.</span>
+              </div>
+            )}
+
+            <div className="pt-4 flex justify-end">
+              <button
+                type="submit"
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 transition-all"
+              >
+                <Save className="w-4 h-4" />
+                <span>ذخیره تغییرات مشخصات باشگاه</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* TAB 3: PACKAGES & PRICING BUILDER                    */}
+      {/* ---------------------------------------------------- */}
+      {activeTab === 'packages' && (
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-4 p-6 rounded-3xl bg-slate-900/80 border border-slate-800">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Package className="w-5 h-5 text-amber-400" />
+                تعریف و ویرایش دوره‌ها و پکیج‌های عضویت
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">تعیین شهریه، تعداد جلسات، مدت اعتبار و امکانات پکیج‌ها</p>
+            </div>
+
+            <button
+              onClick={openAddPackageModal}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>افزودن پکیج جدید</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {packages.map((pkg) => (
+              <div
+                key={pkg.id}
+                className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition-all flex flex-col justify-between space-y-4"
+              >
+                <div>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-white">{pkg.name}</h4>
+                      {pkg.nameEn && <span className="text-[11px] text-slate-500 font-mono">{pkg.nameEn}</span>}
+                    </div>
+                    <span className="text-sm font-extrabold text-emerald-400 font-mono">
+                      {formatMoney(pkg.price)}
+                    </span>
                   </div>
 
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => openEditPackageModal(pkg)}
-                      className="p-1.5 rounded-lg text-stone-400 hover:text-amber-500 hover:bg-amber-500/10 transition-colors"
-                      title="ویرایش تعرفه پکیج"
-                    >
-                      <Edit3 className="h-4 w-4" />
-                    </button>
-                    {packages.length > 1 && (
-                      <button
-                        onClick={() => {
-                          if (confirm(`آیا از حذف پکیج «${pkg.name}» اطمینان دارید؟`)) {
-                            deletePackage(pkg.id);
-                          }
-                        }}
-                        className="p-1.5 rounded-lg text-stone-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
-                        title="حذف پکیج"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                  <div className="grid grid-cols-2 gap-2 mt-4 text-xs text-slate-300">
+                    <div className="p-2 rounded-lg bg-slate-800/60">
+                      <span className="text-[10px] text-slate-500 block">مدت روز</span>
+                      <span className="font-bold">{pkg.durationDays || 30} روز</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-slate-800/60">
+                      <span className="text-[10px] text-slate-500 block">تعداد جلسات</span>
+                      <span className="font-bold">{pkg.sessionsCount || 24} جلسه</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 mt-3">
+                    {pkg.includesLocker && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                        کمد اختصاصی
+                      </span>
+                    )}
+                    {pkg.includesCoach && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                        مربی خصوصی
+                      </span>
+                    )}
+                    {pkg.isVip && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        VIP
+                      </span>
                     )}
                   </div>
                 </div>
 
-                <div className="text-lg font-black font-mono text-amber-600 dark:text-amber-400 my-2">
-                  {formatMoney(pkg.price)}
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+                  <button
+                    onClick={() => openEditPackageModal(pkg)}
+                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm(`آیا از حذف پکیج «${pkg.name}» اطمینان دارید؟`)) {
+                        deletePackage(pkg.id);
+                      }
+                    }}
+                    className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-all"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-                <div className="space-y-1 text-xs text-stone-600 dark:text-stone-300">
-                  <div className="flex items-center justify-between">
-                    <span>مدت اعتبار:</span>
-                    <span className="font-bold font-mono">{pkg.durationDays} روز</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>تعداد جلسات مجاز:</span>
-                    <span className="font-bold font-mono">{pkg.sessionsCount} جلسه</span>
-                  </div>
-                </div>
+      {/* ---------------------------------------------------- */}
+      {/* TAB 4: SMART LOCKER SIZING & RELAYS                  */}
+      {/* ---------------------------------------------------- */}
+      {activeTab === 'lockers' && (
+        <div className="p-8 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <KeyRound className="w-5 h-5 text-cyan-400" />
+                تنظیم پویای ظرفیت کمدهای هوشمند
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                تغییر تعداد کمدهای رله از ۱۰ تا ۱۰۰۰ کمد به صورت خودکار و بدون از دست رفتن سابقه کمدهای تحویل شده
+              </p>
+            </div>
+            <div className="px-4 py-2 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-mono text-sm font-bold">
+              تعداد فعلی: {smartLockers.length} کمد
+            </div>
+          </div>
 
-                {/* Badges of included services */}
-                <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-stone-200 dark:border-stone-700/60 text-[10px]">
-                  {pkg.includesLocker && (
-                    <span className="px-2 py-0.5 rounded bg-stone-200 dark:bg-stone-700 text-stone-800 dark:text-stone-200">
-                      ✓ کمد هوشمند
-                    </span>
-                  )}
-                  {pkg.includesCoach && (
-                    <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
-                      ✓ مربی اختصاصی
-                    </span>
-                  )}
-                  {pkg.includesWorkoutPlan && (
-                    <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                      ✓ برنامه تمرینی
-                    </span>
-                  )}
-                </div>
+          <div className="p-6 rounded-2xl bg-slate-800/50 border border-slate-700 space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">تعداد کل کمدهای سالن:</label>
+                <span className="text-[11px] text-slate-500">شماره ۱ تا {newLockerCount} به کنترلرهای رله متصل می‌شوند.</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={newLockerCount}
+                  onChange={(e) => setNewLockerCount(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-28 px-3 py-2 bg-slate-900 border border-cyan-500/50 rounded-xl text-white font-mono text-center text-lg font-bold focus:outline-none"
+                />
+                <button
+                  onClick={handleApplyLockerResize}
+                  className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/20 transition-all"
+                >
+                  اعمال تغییرات ظرفیت
+                </button>
               </div>
             </div>
-          ))}
+
+            <div className="flex flex-wrap gap-2 pt-2">
+              <span className="text-xs text-slate-400 self-center">تنظیم سریع:</span>
+              {[50, 80, 100, 120, 150, 200, 250, 300].map(cnt => (
+                <button
+                  key={cnt}
+                  onClick={() => setNewLockerCount(cnt)}
+                  className={`px-3 py-1 rounded-lg text-xs font-mono transition-all ${
+                    newLockerCount === cnt ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-900 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  {cnt} کمد
+                </button>
+              ))}
+            </div>
+
+            {lockerResizeMessage && (
+              <div className="p-3.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                <span>{lockerResizeMessage}</span>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Package Add/Edit Modal */}
-      {isPackageModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="relative w-full max-w-lg bg-white dark:bg-stone-900 rounded-2xl shadow-xl border border-stone-200 dark:border-stone-800 overflow-hidden my-8 p-6">
-            <h3 className="text-base font-bold text-stone-900 dark:text-white mb-4">
-              {editingPackage ? 'ویرایش پکیج و تغییر قیمت' : 'تعریف پکیج عضویت جدید'}
+      {/* ---------------------------------------------------- */}
+      {/* TAB 5: CUSTOM FIELDS SYSTEM                          */}
+      {/* ---------------------------------------------------- */}
+      {activeTab === 'custom_fields' && (
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-4 p-6 rounded-3xl bg-slate-900/80 border border-slate-800">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Tag className="w-5 h-5 text-indigo-400" />
+                مدیریت فیلدهای اختصاصی پرونده ورزشکاران
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">افزودن فیلدهای دلخواه به فرم ثبت‌نام اعضا و اکسل واردسازی</p>
+            </div>
+
+            <button
+              onClick={() => setIsFieldModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-slate-950 font-bold text-xs shadow-lg shadow-indigo-500/20 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              <span>افزودن فیلد سفارشی</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {customFields.map((field) => (
+              <div
+                key={field.id}
+                className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition-all flex flex-col justify-between space-y-3"
+              >
+                <div>
+                  <div className="flex items-start justify-between">
+                    <h4 className="text-sm font-bold text-white">{field.label}</h4>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">
+                      {field.type}
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-500 font-mono mt-1 block">کلید: {field.key}</span>
+                  {field.options && field.options.length > 0 && (
+                    <div className="text-[11px] text-slate-400 mt-2">
+                      گزینه‌ها: {field.options.join(' • ')}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+                  <span className="text-[10px] text-slate-500">
+                    {field.required ? 'الزامی' : 'اختیاری'}
+                  </span>
+                  <button
+                    onClick={() => {
+                      if (confirm(`آیا از حذف فیلد «${field.label}» اطمینان دارید؟`)) {
+                        deleteCustomField(field.id);
+                      }
+                    }}
+                    className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-all"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* TAB 6: BACKUP & SYSTEM RESET                         */}
+      {/* ---------------------------------------------------- */}
+      {activeTab === 'backup' && (
+        <div className="p-8 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-6">
+          <div>
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <Shield className="w-5 h-5 text-emerald-400" />
+              پشتیبان‌گیری کامل و بازنشانی دیتابیس
             </h3>
+            <p className="text-xs text-slate-400 mt-1">پشتیبان‌گیری رمزنگاری شده و انتقال دیتابیس کامل به سیستم دیگر</p>
+          </div>
 
-            <form onSubmit={handleSavePackageSubmit} className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                    نام پکیج (فارسی) *
-                  </label>
-                  <input
-                    type="text"
-                    value={pkgName}
-                    onChange={(e) => setPkgName(e.target.value)}
-                    placeholder="مثلاً ۳ ماهه عمومی، VIP..."
-                    className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                    نام انگلیسی / لاتین
-                  </label>
-                  <input
-                    type="text"
-                    value={pkgNameEn}
-                    onChange={(e) => setPkgNameEn(e.target.value)}
-                    placeholder="e.g. 3 Months Standard"
-                    className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm font-mono"
-                  />
-                </div>
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+            <button
+              onClick={exportAllDataAsJson}
+              className="p-5 rounded-2xl bg-slate-800/50 border border-slate-700 hover:bg-slate-800 flex flex-col items-center text-center gap-2 transition-all group"
+            >
+              <Download className="w-6 h-6 text-amber-400 group-hover:scale-110 transition-all" />
+              <span className="text-xs font-bold text-white">دانلود نسخه پشتیبان (JSON)</span>
+              <span className="text-[11px] text-slate-400">شامل تمامی اعضا، مالی و کمدها</span>
+            </button>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                    شهریه پکیج ({t.currency}) *
-                  </label>
-                  <input
-                    type="number"
-                    value={pkgPrice || ''}
-                    onChange={(e) => setPkgPrice(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg border border-amber-500/40 bg-white dark:bg-stone-800 font-mono text-sm font-bold text-amber-600"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                    مدت اعتبار (روز)
-                  </label>
-                  <input
-                    type="number"
-                    value={pkgDurationDays || ''}
-                    onChange={(e) => setPkgDurationDays(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-sm"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                    تعداد جلسات
-                  </label>
-                  <input
-                    type="number"
-                    value={pkgSessionsCount || ''}
-                    onChange={(e) => setPkgSessionsCount(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-sm"
-                    required
-                  />
-                </div>
-              </div>
+            <label className="p-5 rounded-2xl bg-slate-800/50 border border-slate-700 hover:bg-slate-800 flex flex-col items-center text-center gap-2 transition-all cursor-pointer group">
+              <Upload className="w-6 h-6 text-emerald-400 group-hover:scale-110 transition-all" />
+              <span className="text-xs font-bold text-white">بازیابی فایل پشتیبان</span>
+              <span className="text-[11px] text-slate-400">بارگذاری فایل JSON بک‌آپ قبلی</span>
+              <input type="file" accept=".json" onChange={handleFileUpload} className="hidden" />
+            </label>
 
+            <button
+              onClick={() => {
+                if (confirm('آیا از ریست کامل و اجرای دوباره ویزارد راه‌اندازی اطمینان دارید؟ تمامی داده‌های محلی پاکسازی می‌شوند.')) {
+                  resetToEmptyProduction();
+                }
+              }}
+              className="p-5 rounded-2xl bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 flex flex-col items-center text-center gap-2 transition-all group"
+            >
+              <RotateCcw className="w-6 h-6 text-red-400 group-hover:scale-110 transition-all" />
+              <span className="text-xs font-bold text-red-300">پاکسازی و راه‌اندازی از صفر</span>
+              <span className="text-[11px] text-red-400/80">ریست کامل به حالت نصب جدید</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Field Modal */}
+      {isFieldModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
+            <h3 className="text-base font-bold text-white">تعریف فیلد سفارشی جدید</h3>
+            <form onSubmit={handleSaveCustomFieldSubmit} className="space-y-4 text-xs">
               <div>
-                <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                  توضیحات و شرایط پکیج
-                </label>
+                <label className="block text-slate-300 font-semibold mb-1">عنوان فارسی فیلد *</label>
                 <input
                   type="text"
-                  value={pkgDescription}
-                  onChange={(e) => setPkgDescription(e.target.value)}
-                  placeholder="ساعت ورود آزاد، شامل استفاده از سونا و جکوزی..."
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
+                  required
+                  value={cfLabel}
+                  onChange={(e) => setCfLabel(e.target.value)}
+                  placeholder="مثال: گروه خونی / کد معرف / رشته ورزشی"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
-              {/* Package Included Features */}
-              <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700 space-y-2">
-                <div className="font-bold text-stone-800 dark:text-stone-200 mb-1">
-                  خدمات پیش‌فرض شامل شده در این پکیج:
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={pkgIncludesLocker}
-                      onChange={(e) => setPkgIncludesLocker(e.target.checked)}
-                      className="w-4 h-4 rounded text-amber-500"
-                    />
-                    <span>کمد هوشمند رایگان</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={pkgIncludesCoach}
-                      onChange={(e) => setPkgIncludesCoach(e.target.checked)}
-                      className="w-4 h-4 rounded text-amber-500"
-                    />
-                    <span>شامل مربی اختصاصی</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={pkgIncludesWorkoutPlan}
-                      onChange={(e) => setPkgIncludesWorkoutPlan(e.target.checked)}
-                      className="w-4 h-4 rounded text-amber-500"
-                    />
-                    <span>شامل برنامه تمرین</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={pkgIsVip}
-                      onChange={(e) => setPkgIsVip(e.target.checked)}
-                      className="w-4 h-4 rounded text-amber-500"
-                    />
-                    <span>پکیج VIP و سالن اختصاصی</span>
-                  </label>
-                </div>
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">نوع فیلد</label>
+                <select
+                  value={cfType}
+                  onChange={(e) => setCfType(e.target.value as CustomFieldType)}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="text">متن تک‌خطی (Text)</option>
+                  <option value="number">عدد (Number)</option>
+                  <option value="select">لیست انتخابی (Dropdown)</option>
+                  <option value="boolean">بله / خیر (Checkbox)</option>
+                  <option value="date">تاریخ (Date)</option>
+                </select>
               </div>
 
-              <div className="pt-3 flex justify-end gap-2">
+              {cfType === 'select' && (
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">گزینه‌ها (با کاما یا خط جدید جدا کنید)</label>
+                  <textarea
+                    value={cfOptions}
+                    onChange={(e) => setCfOptions(e.target.value)}
+                    placeholder="گزینه ۱, گزینه ۲, گزینه ۳"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-indigo-500 h-20"
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="cfReq"
+                  checked={cfRequired}
+                  onChange={(e) => setCfRequired(e.target.checked)}
+                  className="rounded bg-slate-800 border-slate-700 text-indigo-500"
+                />
+                <label htmlFor="cfReq" className="text-slate-300 cursor-pointer">پر کردن این فیلد در ثبت‌نام الزامی است</label>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setIsPackageModalOpen(false)}
-                  className="px-4 py-2 text-stone-600 dark:text-stone-400 hover:bg-stone-100 rounded-lg"
+                  onClick={() => setIsFieldModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700"
                 >
-                  {t.cancel}
+                  انصراف
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold rounded-lg transition-colors"
+                  className="px-5 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-slate-950 font-bold"
                 >
-                  {t.save}
+                  ذخیره فیلد
                 </button>
               </div>
             </form>
@@ -436,182 +933,101 @@ export const SettingsView: React.FC = () => {
         </div>
       )}
 
-      {/* Club Profile Card */}
-      <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-6 shadow-xs space-y-4">
-        <h3 className="text-base font-bold text-stone-900 dark:text-white flex items-center gap-2">
-          <Building2 className="h-5 w-5 text-amber-500" />
-          <span>مشخصات و برندینگ باشگاه</span>
-        </h3>
-
-        <form onSubmit={handleSaveInfo} className="space-y-4 text-xs">
-          <div>
-            <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-              نام مجموعه ورزشی
-            </label>
-            <input
-              type="text"
-              value={clubName}
-              onChange={(e) => setClubName(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-sm font-semibold"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                تلفن تماس مدیریت / پذیرش
-              </label>
-              <input
-                type="text"
-                value={managerPhone}
-                onChange={(e) => setManagerPhone(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-sm font-mono"
-              />
-            </div>
-            <div>
-              <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                واحد پول سیستم
-              </label>
-              <input
-                type="text"
-                disabled
-                value="تومان (IRR)"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-100 dark:bg-stone-900 text-sm font-mono text-stone-500"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-              آدرس باشگاه (جهت درج در فیش‌های چاپی)
-            </label>
-            <input
-              type="text"
-              value={clubAddress}
-              onChange={(e) => setClubAddress(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-sm"
-            />
-          </div>
-
-          {savedSuccess && (
-            <div className="p-2.5 rounded-lg bg-emerald-100 text-emerald-800 font-medium flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4" />
-              <span>تنظیمات باشگاه با موفقیت ذخیره شد.</span>
-            </div>
-          )}
-
-          <div className="pt-2 flex justify-end">
-            <button
-              type="submit"
-              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors"
-            >
-              <Save className="h-4 w-4" />
-              <span>ذخیره تغییرات</span>
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* Language & Theme Controls */}
-      <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-6 shadow-xs space-y-4">
-        <h3 className="text-base font-bold text-stone-900 dark:text-white">
-          تنظیمات نمایش و زبان
-        </h3>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="p-4 rounded-xl border border-stone-200 dark:border-stone-700 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Languages className="h-5 w-5 text-amber-500" />
+      {/* Package Modal */}
+      {isPackageModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
+            <h3 className="text-base font-bold text-white">
+              {editingPackage ? 'ویرایش پکیج عضویت' : 'افزودن پکیج عضویت جدید'}
+            </h3>
+            <form onSubmit={handleSavePackageSubmit} className="space-y-4 text-xs">
               <div>
-                <div className="text-sm font-bold text-stone-900 dark:text-white">زبان نرم‌افزار</div>
-                <div className="text-xs text-stone-500">فارسی (راست‌چین) / English</div>
+                <label className="block text-slate-300 font-semibold mb-1">نام پکیج *</label>
+                <input
+                  type="text"
+                  required
+                  value={pkgName}
+                  onChange={(e) => setPkgName(e.target.value)}
+                  placeholder="مثال: ۳ ماهه عمومی (۳۶ جلسه)"
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-amber-500"
+                />
               </div>
-            </div>
-            <div className="flex gap-1">
-              <button
-                onClick={() => setLang('fa')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold ${lang === 'fa' ? 'bg-amber-500 text-stone-950' : 'bg-stone-100 dark:bg-stone-800 text-stone-600'}`}
-              >
-                فارسی
-              </button>
-              <button
-                onClick={() => setLang('en')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold ${lang === 'en' ? 'bg-amber-500 text-stone-950' : 'bg-stone-100 dark:bg-stone-800 text-stone-600'}`}
-              >
-                EN
-              </button>
-            </div>
-          </div>
 
-          <div className="p-4 rounded-xl border border-stone-200 dark:border-stone-700 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {theme === 'dark' ? <Moon className="h-5 w-5 text-amber-400" /> : <Sun className="h-5 w-5 text-amber-500" />}
-              <div>
-                <div className="text-sm font-bold text-stone-900 dark:text-white">حالت شب / دارک‌مود</div>
-                <div className="text-xs text-stone-500">تم تیره و روشن</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">شهریه (تومان) *</label>
+                  <input
+                    type="number"
+                    required
+                    step={50000}
+                    value={pkgPrice}
+                    onChange={(e) => setPkgPrice(parseInt(e.target.value) || 0)}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">مدت روز *</label>
+                  <input
+                    type="number"
+                    required
+                    value={pkgDurationDays}
+                    onChange={(e) => setPkgDurationDays(parseInt(e.target.value) || 30)}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono focus:outline-none focus:border-amber-500"
+                  />
+                </div>
               </div>
-            </div>
-            <div className="flex gap-1">
-              <button
-                onClick={() => setTheme('light')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold ${theme === 'light' ? 'bg-amber-500 text-stone-950' : 'bg-stone-100 dark:bg-stone-800 text-stone-600'}`}
-              >
-                روشن
-              </button>
-              <button
-                onClick={() => setTheme('dark')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold ${theme === 'dark' ? 'bg-amber-500 text-stone-950' : 'bg-stone-100 dark:bg-stone-800 text-stone-600'}`}
-              >
-                تیره
-              </button>
-            </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">تعداد جلسات مجاز *</label>
+                <input
+                  type="number"
+                  required
+                  value={pkgSessionsCount}
+                  onChange={(e) => setPkgSessionsCount(parseInt(e.target.value) || 24)}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-white font-mono focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-4 pt-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={pkgIncludesLocker}
+                    onChange={(e) => setPkgIncludesLocker(e.target.checked)}
+                    className="rounded bg-slate-800 border-slate-700 text-amber-500"
+                  />
+                  <span className="text-slate-300">شامل کمد رله</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={pkgIsVip}
+                    onChange={(e) => setPkgIsVip(e.target.checked)}
+                    className="rounded bg-slate-800 border-slate-700 text-amber-500"
+                  />
+                  <span className="text-slate-300">پکیج VIP</span>
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPackageModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700"
+                >
+                  انصراف
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold"
+                >
+                  ذخیره پکیج
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-      </div>
-
-      {/* Backup & Restore System */}
-      <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-6 shadow-xs space-y-4">
-        <h3 className="text-base font-bold text-stone-900 dark:text-white flex items-center gap-2">
-          <Shield className="h-5 w-5 text-emerald-500" />
-          <span>پشتیبان‌گیری و بازیابی پایگاه داده (Backup / Restore)</span>
-        </h3>
-        <p className="text-xs text-stone-500">
-          تمامی داده‌های مربیان، شاگردان، پکیج‌های عضویت، کمدها، دریافتی‌ها و ترددها را در یک فایل JSON امن دانلود یا بازیابی کنید.
-        </p>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-          <button
-            onClick={exportAllDataAsJson}
-            className="p-4 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50 hover:bg-stone-100 dark:hover:bg-stone-800 flex flex-col items-center justify-center text-center gap-2 transition-all"
-          >
-            <Download className="h-5 w-5 text-amber-500" />
-            <span className="text-xs font-bold text-stone-900 dark:text-white">دانلود نسخه پشتیبان (JSON)</span>
-            <span className="text-[10px] text-stone-500">ذخیره تمام اطلاعات روی هارد</span>
-          </button>
-
-          <label className="p-4 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/50 hover:bg-stone-100 dark:hover:bg-stone-800 flex flex-col items-center justify-center text-center gap-2 transition-all cursor-pointer">
-            <Upload className="h-5 w-5 text-emerald-500" />
-            <span className="text-xs font-bold text-stone-900 dark:text-white">بازیابی فایل پشتیبان</span>
-            <span className="text-[10px] text-stone-500">بارگذاری فایل JSON قبلی</span>
-            <input type="file" accept=".json" onChange={handleFileUpload} className="hidden" />
-          </label>
-
-          <button
-            onClick={() => {
-              if (confirm('آیا مایلید تمام داده‌ها به حالت نمونه اولیه بازگردانی شوند؟')) {
-                resetToInitialData();
-                alert('داده‌ها به حالت نمونه پیش‌فرض باشگاه بازنشانی شدند.');
-              }
-            }}
-            className="p-4 rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50/50 dark:bg-rose-950/20 hover:bg-rose-100 flex flex-col items-center justify-center text-center gap-2 transition-all"
-          >
-            <RotateCcw className="h-5 w-5 text-rose-600" />
-            <span className="text-xs font-bold text-rose-700 dark:text-rose-400">بازنشانی به داده‌های نمونه</span>
-            <span className="text-[10px] text-rose-500">ریست به دیتابیس تست اولیه</span>
-          </button>
-        </div>
-      </div>
-
+      )}
     </div>
   );
 };

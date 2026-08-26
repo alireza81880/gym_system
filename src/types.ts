@@ -12,6 +12,7 @@ export type NavTab =
   | 'plans' 
   | 'insights' // Smart AI / Rule-based
   | 'reports' 
+  | 'migration' // Migration Center
   | 'features' // Module visibility center
   | 'diagnostics' // System & Pilot diagnostics
   | 'settings';
@@ -91,6 +92,9 @@ export interface Student {
   id: string;
   tenantId?: string;
   branchId?: string;
+  memberNumber?: string; // Configurable label (شماره عضویت / پرونده / ثبت)
+  firstName?: string;
+  lastName?: string;
   fullName: string;
   nationalId: string;
   phone: string;
@@ -122,6 +126,8 @@ export interface Student {
   isVip?: boolean;
   lastAccessTime?: string;
   credentials?: MemberCredential[];
+  customFields?: Record<string, any>;
+  zone?: LockerZone | string;
 }
 
 export type Member = Student; // Clean domain alias
@@ -642,3 +648,200 @@ export interface PilotComparisonLog {
   isMatch: boolean;
   mismatchReason?: string;
 }
+
+// ----------------------------------------------------
+// THEME ENGINE TOKENS & SYSTEM
+// ----------------------------------------------------
+
+export type ThemeKey = 
+  | 'obsidian'
+  | 'midnight'
+  | 'purple'
+  | 'emerald'
+  | 'rose'
+  | 'cyan'
+  | 'pearl'
+  | 'ice'
+  | 'mint'
+  | 'rose_light'
+  | 'sand'
+  | 'lavender'
+  | 'oled'
+  | 'carbon'
+  | 'glass_neon';
+
+export type GlassLevel = 'subtle' | 'regular' | 'neon';
+
+export interface ThemeColors {
+  bg: string;
+  surface: string;
+  surfaceGlass: string;
+  surfaceGlassStrong: string;
+  border: string;
+  borderStrong: string;
+  text: string;
+  textMuted: string;
+  brand: string;
+  brandSoft: string;
+  neon: string;
+  accent: string;
+  glow: string;
+  sidebarBg: string;
+  cardBg: string;
+  buttonBg: string;
+  buttonText: string;
+}
+
+export interface ThemeConfig {
+  id: ThemeKey;
+  name: string;
+  nameFa: string;
+  category: 'dark' | 'light' | 'special';
+  colors: ThemeColors;
+}
+
+// ----------------------------------------------------
+// ORGANIZATION & REAL INSTALLATION SETTINGS
+// ----------------------------------------------------
+
+export interface WorkingHoursConfig {
+  openingTime: string; // e.g. "06:00"
+  closingTime: string; // e.g. "23:30"
+  activeDays: string[]; // ['saturday', 'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+  holidaysDescription?: string;
+}
+
+export interface OrganizationInfo {
+  id: string;
+  tenantId: string;
+  name: string;
+  managerName: string;
+  managerMobile: string;
+  city: string;
+  address: string;
+  phone: string;
+  logoUrl?: string;
+  website?: string;
+  instagram?: string;
+  currency: 'تومان' | 'ریال' | 'IRR';
+  timezone: string;
+  memberNumberLabel: string; // Default: 'شماره عضویت' (Can be 'شماره پرونده', 'کد ثبت', etc.)
+  workingHours: WorkingHoursConfig;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface AccessPolicyConfig {
+  expiredMembership: 'deny' | 'warn' | 'allow';
+  debtPolicy: 'deny' | 'warn' | 'allow';
+  sessionLimit: 'enforce' | 'ignore';
+  duplicateEntrySameDay: 'allow' | 'warn' | 'block';
+  lockerRequired: boolean;
+  maxDebtAllowed: number;
+}
+
+// ----------------------------------------------------
+// DYNAMIC CUSTOM FIELDS SYSTEM
+// ----------------------------------------------------
+
+export type CustomFieldType = 'text' | 'number' | 'date' | 'select' | 'boolean' | 'phone';
+
+export interface CustomField {
+  id: string;
+  key: string;
+  label: string;
+  type: CustomFieldType;
+  options?: string[]; // For 'select' dropdown
+  required: boolean;
+  visible: boolean;
+  placeholder?: string;
+  category?: 'general' | 'medical' | 'contract';
+}
+
+// ----------------------------------------------------
+// MIGRATION & IMPORT CENTER DATA MODELS
+// ----------------------------------------------------
+
+export type MigrationSourceType = 'xlsx' | 'csv' | 'json' | 'sql' | 'api' | 'vendor';
+
+export interface ImportMappingProfile {
+  id: string;
+  name: string;
+  description?: string;
+  sourceType: MigrationSourceType;
+  sourceVendor?: string; // 'zkteco' | 'legacy_a' | 'generic'
+  mappings: Record<string, string>; // e.g. { 'نام': 'firstName', 'شماره تماس': 'phone' }
+  defaultValues?: Record<string, any>;
+  customTransforms?: Record<string, string>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MigrationErrorRecord {
+  row: number;
+  field: string;
+  message: string;
+  data?: any;
+}
+
+export interface MigrationReport {
+  id: string;
+  migrationId: string;
+  timestamp: string;
+  sourceType: string;
+  fileName?: string;
+  totalRows: number;
+  importedCount: number;
+  updatedCount: number;
+  skippedCount: number;
+  duplicatesCount: number;
+  conflictCount: number;
+  errorCount: number;
+  errors: MigrationErrorRecord[];
+  rollbackAvailable: boolean;
+}
+
+export interface MigrationSnapshot {
+  id: string;
+  timestamp: string;
+  description: string;
+  dataBackup: string; // JSON serialized state
+}
+
+export type DuplicateResolution = 'merge' | 'skip' | 'create_new' | 'keep_existing' | 'use_imported';
+
+export interface DuplicateConflict {
+  id: string;
+  incomingRecord: any;
+  existingStudent: Student;
+  matchReason: string; // 'memberNumber' | 'nationalId' | 'phone' | 'name'
+  conflicts: {
+    field: string;
+    fieldLabel: string;
+    existingValue: any;
+    incomingValue: any;
+  }[];
+  resolved: boolean;
+  resolution?: DuplicateResolution;
+}
+
+export interface ApiImportConfig {
+  endpoint: string;
+  method: 'GET' | 'POST';
+  authType: 'none' | 'api_key' | 'bearer' | 'basic' | 'custom_header';
+  apiKeyHeader?: string;
+  apiKeyValue?: string;
+  bearerToken?: string;
+  username?: string;
+  password?: string;
+  jsonPath?: string; // e.g. "data.members"
+}
+
+export interface DashboardWidgetConfig {
+  id: string;
+  name: string;
+  nameFa: string;
+  visible: boolean;
+  order: number;
+}
+

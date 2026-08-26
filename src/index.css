@@ -5,6 +5,19 @@
 @layer base {
   :root {
     --font-primary: 'Vazirmatn', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --theme-bg: #0c0e12;
+    --theme-surface: #151921;
+    --theme-surface-glass: rgba(21, 25, 33, 0.75);
+    --theme-surface-glass-strong: rgba(27, 33, 44, 0.90);
+    --theme-border: rgba(255, 255, 255, 0.08);
+    --theme-border-strong: rgba(16, 185, 129, 0.35);
+    --theme-text: #f3f4f6;
+    --theme-text-muted: #9ca3af;
+    --theme-brand: #10b981;
+    --theme-brand-soft: rgba(16, 185, 129, 0.15);
+    --theme-neon: #10b981;
+    --theme-accent: #34d399;
+    --theme-glow: 0 0 20px rgba(16, 185, 129, 0.25);
     color-scheme: light;
   }
 
@@ -16,7 +29,33 @@
     font-family: var(--font-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background-color: var(--theme-bg, #0c0e12);
+    color: var(--theme-text, #f3f4f6);
   }
+}
+
+/* Three Level Glass OS Utility Classes */
+.glass-subtle {
+  background-color: var(--theme-surface-glass, rgba(21, 25, 33, 0.65));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--theme-border, rgba(255, 255, 255, 0.08));
+}
+
+.glass-regular {
+  background-color: var(--theme-surface-glass-strong, rgba(27, 33, 44, 0.85));
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--theme-border, rgba(255, 255, 255, 0.12));
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
+}
+
+.glass-neon {
+  background: linear-gradient(135deg, var(--theme-brand-soft, rgba(16, 185, 129, 0.20)), var(--theme-surface-glass-strong, rgba(27, 33, 44, 0.90)));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--theme-border-strong, rgba(16, 185, 129, 0.45));
+  box-shadow: var(--theme-glow, 0 0 24px rgba(16, 185, 129, 0.30));
 }
 
 /* Custom Scrollbar */

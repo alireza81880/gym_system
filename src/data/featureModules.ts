@@ -122,6 +122,18 @@ export const initialModuleFeatures: ModuleFeature[] = [
     category: 'core',
   },
   {
+    id: 'migration',
+    labelFa: 'مرکز انتقال و مهاجرت اطلاعات',
+    labelEn: 'Migration Center',
+    descriptionFa: 'واردسازی داده از اکسل، CSV، JSON، دیتابیس SQL و نرم‌افزارهای ZKTeco با نگاشت خودکار و ادغام تکراری‌ها',
+    descriptionEn: 'Import members and data from Excel, CSV, JSON, SQL and ZKTeco software with merge engine',
+    iconName: 'ArrowRightLeft',
+    isEnabled: true,
+    isPinned: true,
+    order: 11,
+    category: 'system',
+  },
+  {
     id: 'diagnostics',
     labelFa: 'عیب‌یابی سامانه و پایلوت',
     labelEn: 'Diagnostics & Pilot Mode',

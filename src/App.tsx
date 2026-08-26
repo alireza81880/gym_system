@@ -20,6 +20,8 @@ import { DiagnosticsView } from './components/Diagnostics/DiagnosticsView';
 import { PlanManager } from './components/Plans/PlanManager';
 import { ManagerReports } from './components/Reports/ManagerReports';
 import { SettingsView } from './components/Settings/SettingsView';
+import { MigrationCenter } from './components/Migration/MigrationCenter';
+import { InstallationWizard } from './components/Setup/InstallationWizard';
 import { QuickCheckInModal } from './components/Modals/QuickCheckInModal';
 import { NewPaymentModal } from './components/Modals/NewPaymentModal';
 import { CommandPaletteModal } from './components/Modals/CommandPaletteModal';
@@ -27,7 +29,7 @@ import { EmergencyMasterUnlockModal } from './components/Modals/EmergencyMasterU
 import { OnboardingWizardModal } from './components/Modals/OnboardingWizardModal';
 
 const MainLayout: React.FC = () => {
-  const { activeTab, setActiveTab } = useApp();
+  const { activeTab, setActiveTab, isInstalled, isDemoMode, exitDemoMode } = useApp();
   const [isQuickCheckInOpen, setIsQuickCheckInOpen] = useState(false);
   const [isNewPaymentOpen, setIsNewPaymentOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
@@ -54,6 +56,27 @@ const MainLayout: React.FC = () => {
   return (
     <div className="min-h-screen bg-stone-100 dark:bg-stone-950 text-stone-900 dark:text-stone-100 flex flex-col font-sans transition-colors duration-200">
       
+      {/* First Run Installation Wizard if not installed */}
+      {!isInstalled && (
+        <InstallationWizard isInitialSetup={true} />
+      )}
+
+      {/* Demo Sandbox Alert Banner */}
+      {isDemoMode && (
+        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 px-4 py-2 text-xs font-bold flex items-center justify-between shadow-md z-30">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-slate-950 animate-ping"></span>
+            <span>حالت دمو و آموزشی فعال است — تغییرات روی داده‌های شبیه‌سازی شده اعمال می‌شوند.</span>
+          </div>
+          <button
+            onClick={exitDemoMode}
+            className="px-3 py-1 rounded-lg bg-slate-950 text-amber-300 hover:text-white transition-all text-[11px]"
+          >
+            خروج از دمو
+          </button>
+        </div>
+      )}
+
       {/* Top Header Bar */}
       <Header
         onOpenQuickCheckIn={() => setIsQuickCheckInOpen(true)}
@@ -104,6 +127,8 @@ const MainLayout: React.FC = () => {
           {activeTab === 'insights' && <SmartInsightsView />}
 
           {activeTab === 'reports' && <ManagerReports />}
+
+          {activeTab === 'migration' && <MigrationCenter />}
 
           {activeTab === 'features' && <FeatureCenterView />}
 

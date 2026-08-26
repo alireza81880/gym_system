@@ -16,13 +16,13 @@ export class SyncEngine {
     this.state = newState;
   }
 
-  static enqueue(entityType: string, entityId: string, operation: 'INSERT' | 'UPDATE' | 'DELETE', payload: Record<string, unknown>): SyncJob {
+  static enqueue(entityType: string, entityId: string, operation: 'INSERT' | 'UPDATE' | 'DELETE', payload: any): SyncJob {
     const job: SyncJob = {
       id: `sync-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       entityType,
       entityId,
       operation,
-      payload: JSON.stringify(payload),
+      payload: typeof payload === 'string' ? payload : JSON.stringify(payload),
       status: 'PENDING',
       retries: 0,
       createdAt: new Date().toISOString(),

@@ -30,7 +30,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   onOpenRenew,
   onOpenPayDebt,
 }) => {
-  const { students, coaches, payments, attendance, formatMoney, formatNum, t } = useApp();
+  const { students, coaches, payments, attendance, customFields, formatMoney, formatNum, t } = useApp();
 
   const student = students.find(s => s.id === studentId);
   if (!student) return null;
@@ -38,6 +38,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   const coach = coaches.find(c => c.id === student.coachId);
   const studentPayments = payments.filter(p => p.studentId === student.id);
   const studentAttendance = attendance.filter(a => a.studentId === student.id);
+  const studentCustomData = student.customFields || {};
 
   const handlePrint = () => {
     window.print();
@@ -208,6 +209,29 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Custom Dynamic Fields */}
+          {(customFields.length > 0 || Object.keys(studentCustomData).length > 0) && (
+            <div className="p-4 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900/40 space-y-3 text-xs">
+              <h4 className="font-bold text-indigo-950 dark:text-indigo-300 flex items-center gap-1.5">
+                <FileText className="h-4 w-4 text-indigo-500" />
+                <span>فیلدهای سفارشی و مشخصات تکمیلی</span>
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {customFields.map((cf) => {
+                  const val = studentCustomData[cf.key];
+                  return (
+                    <div key={cf.id} className="p-2.5 rounded-lg bg-white/80 dark:bg-stone-800/80 border border-indigo-100 dark:border-indigo-900/30">
+                      <span className="text-stone-500 text-[11px] block">{cf.label}:</span>
+                      <span className="font-semibold text-stone-900 dark:text-white mt-0.5 block">
+                        {val !== undefined && val !== null && val !== '' ? String(val) : '—'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Payment Receipts History */}
           <div className="space-y-3">

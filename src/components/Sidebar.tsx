@@ -14,7 +14,8 @@ import {
   BrainCircuit,
   Boxes,
   Activity,
-  Pin
+  Pin,
+  ArrowRightLeft
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { NavTab } from '../types';
@@ -43,6 +44,7 @@ const iconMap: Record<string, any> = {
   Activity,
   Boxes,
   Settings,
+  ArrowRightLeft,
 };
 
 export const Sidebar: React.FC<SidebarProps> = (props) => {
