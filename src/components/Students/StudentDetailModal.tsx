@@ -94,12 +94,19 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
         <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
           
           {/* Membership Card Preview */}
-          <div className="p-5 rounded-2xl bg-gradient-to-r from-stone-900 to-stone-800 text-white shadow-md relative overflow-hidden border border-stone-700">
+          <div className="p-5 rounded-2xl bg-gradient-to-r from-stone-900 via-stone-850 to-stone-900 text-white shadow-md relative overflow-hidden border border-stone-700">
             <div className="flex justify-between items-start">
               <div>
-                <span className="text-amber-400 text-xs font-bold uppercase tracking-wider">کارت عضویت باشگاه</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-amber-400 text-xs font-bold uppercase tracking-wider">کارت عضویت باشگاه</span>
+                  <span className="px-2 py-0.5 rounded-md bg-amber-500 text-stone-950 font-mono font-bold text-xs">
+                    #{student.memberNumber || student.id}
+                  </span>
+                </div>
                 <h3 className="text-xl font-black mt-1 tracking-tight">{student.fullName}</h3>
-                <span className="text-xs text-stone-400 font-mono">کد ملی: {student.nationalId}</span>
+                <span className="text-xs text-stone-400 font-mono">
+                  کد ملی: {student.nationalId ? student.nationalId : 'ثبت نشده'}
+                </span>
               </div>
               <div className="text-left rtl:text-right">
                 <span className="text-xs text-stone-400">انقضای دوره</span>
@@ -119,7 +126,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               <div>
                 <span className="text-stone-400">وضعیت مالی:</span>
                 <div className="font-semibold font-mono">
-                  {student.remainingDebt === 0 ? 'تسویه کامل' : `بدهکار: ${formatMoney(student.remainingDebt)}`}
+                  {student.remainingDebt === 0 ? 'تسویه کامل ✓' : `بدهکار: ${formatMoney(student.remainingDebt)}`}
                 </div>
               </div>
             </div>
@@ -133,7 +140,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 <div className="text-xs">
                   {student.remainingDebt > 0 && (
                     <div className="font-bold text-stone-900 dark:text-white">
-                      دارای مانده بدهی به مبلغ {formatMoney(student.remainingDebt)}
+                      بدهی فعلی: <span className="font-mono text-rose-600 dark:text-rose-400">{formatMoney(student.remainingDebt)}</span>
                     </div>
                   )}
                   {student.status !== 'active' && (
@@ -149,9 +156,9 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                       onClose();
                       onOpenPayDebt(student);
                     }}
-                    className="px-3 py-1.5 bg-stone-900 text-white dark:bg-white dark:text-stone-900 rounded-lg text-xs font-bold"
+                    className="px-3.5 py-1.5 bg-stone-900 text-white dark:bg-white dark:text-stone-900 hover:bg-stone-800 rounded-xl text-xs font-bold shadow-xs cursor-pointer"
                   >
-                    {t.payDebt}
+                    ثبت دریافت
                   </button>
                 )}
                 <button
@@ -159,7 +166,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                     onClose();
                     onOpenRenew(student);
                   }}
-                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-stone-950 rounded-lg text-xs font-bold"
+                  className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-stone-950 rounded-xl text-xs font-bold shadow-xs cursor-pointer"
                 >
                   {t.renewMembership}
                 </button>

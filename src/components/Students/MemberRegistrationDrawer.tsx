@@ -1,544 +1,696 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   UserPlus, 
   CheckCircle2, 
-  CreditCard, 
-  Calendar, 
-  Phone, 
-  IdCard, 
-  User, 
+  AlertTriangle, 
   ChevronDown, 
   ChevronUp, 
+  CreditCard, 
+  Calendar, 
+  DollarSign, 
   Sparkles, 
-  AlertCircle, 
-  Check, 
-  Coins, 
-  Clock, 
-  Flame, 
-  Layers, 
   Eye, 
-  PlusCircle, 
-  Hash,
-  FileText
+  RefreshCw, 
+  ShieldCheck, 
+  Lock, 
+  Dumbbell,
+  Clock,
+  ArrowRight
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Student, PackageType, PaymentMethod, MembershipPackage } from '../../types';
+import { PackageType, PaymentMethod, MembershipPackage, Student } from '../../types';
 import { DateService } from '../../services/dateService';
-import { MoneyService } from '../../services/moneyService';
-import { MemberService } from '../../services/memberService';
 import { ValidationService } from '../../services/validationService';
+import { MemberService, DuplicateDetectionResult } from '../../services/memberService';
+import { FinancialCalculationService } from '../../services/financialCalculationService';
 import { GlassDrawer } from '../common/GlassDrawer';
-import { GlassButton } from '../common/GlassButton';
 import { MoneyInput } from '../common/MoneyInput';
-import { GlassBadge } from '../common/GlassBadge';
 
 interface MemberRegistrationDrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  onViewStudent?: (studentId: string) => void;
+  onOpenMemberDetail?: (memberId: string) => void;
 }
 
 export const MemberRegistrationDrawer: React.FC<MemberRegistrationDrawerProps> = ({
   isOpen,
   onClose,
-  onViewStudent,
+  onOpenMemberDetail,
 }) => {
   const { 
     students, 
-    coaches, 
     packages, 
-    addStudent, 
+    coaches, 
     customFields, 
-    organizationInfo, 
+    addStudent, 
     formatMoney, 
-    formatNum 
+    formatNum, 
+    t 
   } = useApp();
 
-  // Next sequential member number
-  const nextMemberNumber = MemberService.calculateNextMemberNumber(students);
-  const memberLabel = organizationInfo.memberNumberLabel || 'شماره عضویت';
+  // Next sequential member number preview
+  const nextMemberNumber = useMemo(() => {
+    return MemberService.calculateNextMemberNumber(students);
+  }, [students]);
 
-  // Primary Info
+  // Section 1: Member Info
   const [fullName, setFullName] = useState('');
-  const [nationalId, setNationalId] = useState('');
   const [phone, setPhone] = useState('');
+  const [nationalId, setNationalId] = useState('');
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [nationalIdError, setNationalIdError] = useState<string | null>(null);
 
-  // Expandable Extra Info
-  const [showExtraInfo, setShowExtraInfo] = useState(false);
+  // Duplicate Check State
+  const [duplicateWarning, setDuplicateWarning] = useState<DuplicateDetectionResult | null>(null);
+  const [acknowledgedDuplicate, setAcknowledgedDuplicate] = useState(false);
+
+  // Expandable Accordion: Extended Profile
+  const [isExtendedOpen, setIsExtendedOpen] = useState(false);
   const [gender, setGender] = useState<'male' | 'female'>('male');
-  const [birthDate, setBirthDate] = useState('');
-  const [emergencyPhone, setEmergencyPhone] = useState('');
-  const [coachId, setCoachId] = useState('');
+  const [coachId, setCoachId] = useState<string>('');
+  const [birthDate, setBirthDate] = useState<string>('');
+  const [emergencyPhone, setEmergencyPhone] = useState<string>('');
   const [height, setHeight] = useState<number | ''>('');
   const [weight, setWeight] = useState<number | ''>('');
-  const [goal, setGoal] = useState('');
-  const [medicalNotes, setMedicalNotes] = useState('');
-  const [rfidCardUid, setRfidCardUid] = useState('');
-  const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({});
+  const [goal, setGoal] = useState<string>('تناسب اندام و هایپرتروفی');
+  const [medicalNotes, setMedicalNotes] = useState<string>('');
+  const [rfidCardNumber, setRfidCardNumber] = useState<string>('');
+  const [customData, setCustomData] = useState<Record<string, any>>({});
 
-  // Membership & Package State
-  const defaultPackage = packages[0] || {
-    id: 'pkg-default',
-    name: 'اشتراک ماهانه عمومی (۱۲ جلسه)',
-    price: 2800000,
-    durationDays: 30,
-    sessionsCount: 12,
-  };
+  // Section 2: Membership & Package
+  const activePackages = useMemo(() => {
+    return packages.filter(p => p.isActive);
+  }, [packages]);
 
-  const [selectedPackageId, setSelectedPackageId] = useState<string>(defaultPackage.id || '');
-  const [packageType, setPackageType] = useState<PackageType>(defaultPackage.type || '1_month');
-  const [packagePrice, setPackagePrice] = useState<number>(defaultPackage.price || 2800000);
-  const [sessionsTotal, setSessionsTotal] = useState<number>(defaultPackage.sessionsCount || 12);
-  const [durationDays, setDurationDays] = useState<number>(defaultPackage.durationDays || 30);
-  const [startDate, setStartDate] = useState<string>(DateService.getTodayJalali());
-  const [expireDate, setExpireDate] = useState<string>(() => DateService.addDaysToJalali(DateService.getTodayJalali(), 30));
+  const [selectedPackageId, setSelectedPackageId] = useState<string>(() => {
+    return activePackages[0]?.id || '';
+  });
 
-  // Payment State
-  const [receivedAmount, setReceivedAmount] = useState<number>(defaultPackage.price || 2800000);
+  // Keep package selection valid when packages load
+  useEffect(() => {
+    if (!selectedPackageId && activePackages.length > 0) {
+      setSelectedPackageId(activePackages[0].id);
+    }
+  }, [activePackages, selectedPackageId]);
+
+  const selectedPackage = useMemo(() => {
+    return packages.find(p => p.id === selectedPackageId) || activePackages[0] || null;
+  }, [packages, activePackages, selectedPackageId]);
+
+  // Dates
+  const [startDate, setStartDate] = useState<string>(() => DateService.getTodayJalali());
+  const [expireDate, setExpireDate] = useState<string>('');
+  const [isManualDateOverride, setIsManualDateOverride] = useState(false);
+
+  // Auto-calculate expiration date when package or startDate changes
+  useEffect(() => {
+    if (!isManualDateOverride && selectedPackage && startDate) {
+      const calculatedEnd = DateService.addDaysToJalali(startDate, selectedPackage.durationDays || 30);
+      setExpireDate(calculatedEnd);
+    }
+  }, [selectedPackage, startDate, isManualDateOverride]);
+
+  // Section 3: Financial & Payment
+  const [discountAmount, setDiscountAmount] = useState<number>(0);
+  const [receivedAmount, setReceivedAmount] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pos');
-  const [isCreditAccepted, setIsCreditAccepted] = useState(false);
+  const [recordAsCredit, setRecordAsCredit] = useState(false);
+  const [paymentNotes, setPaymentNotes] = useState('');
 
-  // Status & Validation
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Auto-update received amount to match full price when package changes, unless user modified it
+  const [hasUserModifiedPayment, setHasUserModifiedPayment] = useState(false);
+
+  const financial = useMemo(() => {
+    const basePrice = selectedPackage ? selectedPackage.price : 0;
+    return FinancialCalculationService.calculate(basePrice, receivedAmount, discountAmount);
+  }, [selectedPackage, receivedAmount, discountAmount]);
+
+  // When package changes and user hasn't manually altered received amount, set it to final price
+  useEffect(() => {
+    if (!hasUserModifiedPayment && selectedPackage) {
+      const calculated = FinancialCalculationService.calculate(selectedPackage.price, selectedPackage.price, discountAmount);
+      setReceivedAmount(calculated.finalPrice);
+    }
+  }, [selectedPackageId, discountAmount, hasUserModifiedPayment]);
+
+  // Submission & Success State
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [createdStudentResult, setCreatedStudentResult] = useState<{
-    id: string;
-    fullName: string;
+  const [successData, setSuccessData] = useState<{
     memberNumber: string;
+    studentId: string;
+    studentName: string;
     packageName: string;
+    finalPrice: number;
     receivedAmount: number;
     remainingDebt: number;
   } | null>(null);
 
-  // When selected package changes, recalculate price, duration, and dates automatically
-  const handlePackageSelect = (pkg: MembershipPackage) => {
-    setSelectedPackageId(pkg.id);
-    setPackageType(pkg.type || pkg.name);
-    setPackagePrice(pkg.price);
-    setSessionsTotal(pkg.sessionsCount || 12);
-    const dur = pkg.durationDays || (pkg.durationMonths ? pkg.durationMonths * 30 : 30);
-    setDurationDays(dur);
-    
-    // Auto-calculate end date using exact calendar arithmetic
-    const newEnd = DateService.addDaysToJalali(startDate, dur);
-    setExpireDate(newEnd);
-
-    // Update received amount default
-    setReceivedAmount(pkg.price);
-  };
-
-  // Recalculate end date if start date changes
-  const handleStartDateChange = (newStart: string) => {
-    setStartDate(newStart);
-    if (newStart.length === 10) {
-      setExpireDate(DateService.addDaysToJalali(newStart, durationDays));
-    }
-  };
-
-  // Full Payment Shortcut
-  const handleFullPayment = () => {
-    setReceivedAmount(packagePrice);
-    setIsCreditAccepted(false);
-  };
-
-  // Reset form for next member
-  const handleResetForNext = () => {
+  // Reset form helper for "ثبت عضو بعدی"
+  const handleResetForm = () => {
     setFullName('');
-    setNationalId('');
     setPhone('');
+    setNationalId('');
+    setPhoneError(null);
+    setNationalIdError(null);
+    setDuplicateWarning(null);
+    setAcknowledgedDuplicate(false);
+    setIsExtendedOpen(false);
+    setGender('male');
+    setCoachId('');
+    setBirthDate('');
     setEmergencyPhone('');
-    setMedicalNotes('');
     setHeight('');
     setWeight('');
-    setGoal('');
-    setRfidCardUid('');
-    setCustomFieldValues({});
-    setErrorMessage(null);
-    setCreatedStudentResult(null);
-    setIsCreditAccepted(false);
+    setGoal('تناسب اندام و هایپرتروفی');
+    setMedicalNotes('');
+    setRfidCardNumber('');
+    setCustomData({});
+    setDiscountAmount(0);
+    setHasUserModifiedPayment(false);
+    setIsManualDateOverride(false);
+    setStartDate(DateService.getTodayJalali());
+    if (activePackages.length > 0) {
+      setSelectedPackageId(activePackages[0].id);
+      setReceivedAmount(activePackages[0].price);
+      setExpireDate(DateService.addDaysToJalali(DateService.getTodayJalali(), activePackages[0].durationDays || 30));
+    }
+    setPaymentMethod('pos');
+    setRecordAsCredit(false);
+    setPaymentNotes('');
+    setSuccessData(null);
+    setIsSubmitting(false);
+  };
 
-    // Reset package & payment
-    if (packages.length > 0) {
-      handlePackageSelect(packages[0]);
+  // Reset on open if drawer was previously closed
+  useEffect(() => {
+    if (isOpen && !successData) {
+      // Refresh dates to current today
+      const today = DateService.getTodayJalali();
+      setStartDate(today);
+      if (selectedPackage) {
+        setExpireDate(DateService.addDaysToJalali(today, selectedPackage.durationDays || 30));
+        if (!hasUserModifiedPayment) {
+          setReceivedAmount(selectedPackage.price);
+        }
+      }
+    }
+  }, [isOpen]);
+
+  // Real-time Phone Validation
+  const handlePhoneChange = (val: string) => {
+    setPhone(val);
+    setAcknowledgedDuplicate(false);
+    if (!val) {
+      setPhoneError(null);
+      return;
+    }
+    const clean = ValidationService.normalizeMobilePhone(val);
+    if (val.length >= 10 && !ValidationService.isValidMobilePhone(clean)) {
+      setPhoneError('شماره همراه باید ۱۱ رقم با فرمت ۰۹xxxxxxxx باشد.');
     } else {
-      setReceivedAmount(packagePrice);
+      setPhoneError(null);
+    }
+    checkDuplicate({ phone: val, nationalId, fullName });
+  };
+
+  // Real-time National ID Validation
+  const handleNationalIdChange = (val: string) => {
+    setNationalId(val);
+    setAcknowledgedDuplicate(false);
+    if (!val || val.trim() === '') {
+      setNationalIdError(null);
+      return;
+    }
+    const clean = ValidationService.toEnglishDigits(val).replace(/\D/g, '');
+    if (clean.length === 10) {
+      if (!ValidationService.isValidNationalId(clean)) {
+        setNationalIdError('کد ملی وارد شده معتبر نمی‌باشد (بررسی رقم کنترل).');
+      } else {
+        setNationalIdError(null);
+      }
+    } else if (clean.length > 10) {
+      setNationalIdError('کد ملی باید دقیقاً ۱۰ رقم باشد.');
+    } else {
+      setNationalIdError(null);
+    }
+    checkDuplicate({ nationalId: val, phone, fullName });
+  };
+
+  // Duplicate Check Trigger
+  const checkDuplicate = (input: { phone?: string; nationalId?: string; fullName?: string }) => {
+    const result = MemberService.detectDuplicate(
+      {
+        phone: input.phone || phone,
+        nationalId: input.nationalId || nationalId,
+        fullName: input.fullName || fullName,
+      },
+      students
+    );
+
+    if (result.isDuplicate) {
+      setDuplicateWarning(result);
+    } else {
+      setDuplicateWarning(null);
     }
   };
 
-  // Submit Handler
+  // Handle Form Submission
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage(null);
 
-    // 1. Validation
     if (!fullName.trim()) {
-      setErrorMessage('نام و نام خانوادگی الزامی است.');
+      alert('لطفاً نام و نام خانوادگی عضو را وارد نمایید.');
       return;
     }
 
-    if (phone.trim() && !ValidationService.isValidMobilePhone(phone.trim())) {
-      setErrorMessage('فرمت شماره موبایل نامعتبر است (مثال: ۰۹۱۲۳۴۵۶۷۸۹).');
+    if (!phone.trim()) {
+      alert('لطفاً شماره موبایل عضو را وارد نمایید.');
       return;
     }
 
-    if (nationalId.trim() && !ValidationService.isValidNationalId(nationalId.trim())) {
-      setErrorMessage('کد ملی ۱۰ رقمی وارد شده نامعتبر است.');
+    const cleanPhone = ValidationService.normalizeMobilePhone(phone);
+    if (!ValidationService.isValidMobilePhone(cleanPhone)) {
+      setPhoneError('شماره موبایل وارد شده نامعتبر است.');
       return;
     }
 
-    // Check Duplicate
-    if (nationalId.trim() && MemberService.isNationalIdDuplicate(nationalId, students)) {
-      setErrorMessage(`کاربری با این کد ملی (${nationalId}) قبلاً در سامانه ثبت شده است.`);
+    if (nationalId.trim()) {
+      const cleanNat = ValidationService.toEnglishDigits(nationalId).replace(/\D/g, '');
+      if (cleanNat.length === 10 && !ValidationService.isValidNationalId(cleanNat)) {
+        setNationalIdError('کد ملی نامعتبر است.');
+        return;
+      }
+    }
+
+    // Duplicate Check Stop unless acknowledged
+    if (duplicateWarning && duplicateWarning.isDuplicate && !acknowledgedDuplicate) {
       return;
     }
 
-    // Overpayment check
-    if (receivedAmount > packagePrice && !isCreditAccepted) {
-      setErrorMessage('مبلغ دریافتی بیشتر از مبلغ قابل پرداخت است. در صورت تمایل گزینه ثبت به عنوان بستانکاری را انتخاب کنید.');
+    if (!selectedPackage) {
+      alert('لطفاً یک پکیج عضویت معتبر انتخاب کنید.');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
+      // Calculate next atomic sequential member number
+      const allocatedMemberNumber = MemberService.calculateNextMemberNumber(students);
+      MemberService.recordAllocatedNumber(parseInt(allocatedMemberNumber, 10));
+
       const { firstName, lastName } = MemberService.parseFullName(fullName);
-      const remainingDebt = Math.max(0, packagePrice - receivedAmount);
 
-      const assignedNumber = nextMemberNumber;
+      // Create Student Entity
+      const newStudent = addStudent(
+        {
+          fullName: fullName.trim(),
+          firstName,
+          lastName,
+          nationalId: nationalId.trim(),
+          phone: cleanPhone,
+          emergencyPhone: emergencyPhone.trim(),
+          memberNumber: allocatedMemberNumber,
+          gender,
+          birthDate: birthDate.trim(),
+          coachId: coachId || undefined,
+          packageType: selectedPackage.type,
+          packageId: selectedPackage.id,
+          registrationDate: startDate,
+          expireDate: expireDate || DateService.addDaysToJalali(startDate, selectedPackage.durationDays || 30),
+          totalFee: financial.finalPrice,
+          paidAmount: financial.receivedAmount,
+          status: 'active',
+          sessionsTotal: selectedPackage.sessionsCount || 12,
+          sessionsAttended: 0,
+          height: height ? Number(height) : undefined,
+          weight: weight ? Number(weight) : undefined,
+          goal: goal.trim(),
+          medicalNotes: medicalNotes.trim(),
+          rfidCardNumber: rfidCardNumber.trim() || undefined,
+          customData,
+        },
+        financial.receivedAmount,
+        paymentMethod
+      );
 
-      const studentPayload: Omit<Student, 'id' | 'remainingDebt'> = {
-        fullName: fullName.trim(),
-        firstName,
-        lastName,
-        nationalId: nationalId.trim(),
-        phone: phone.trim(),
-        emergencyPhone: emergencyPhone.trim() || undefined,
-        coachId: coachId || '',
-        packageType,
-        registrationDate: startDate,
-        expireDate,
-        totalFee: packagePrice,
-        paidAmount: receivedAmount,
-        status: 'active',
-        sessionsTotal,
-        sessionsAttended: 0,
-        memberNumber: assignedNumber,
-        height: typeof height === 'number' ? height : undefined,
-        weight: typeof weight === 'number' ? weight : undefined,
-        goal: goal.trim() || undefined,
-        medicalNotes: medicalNotes.trim() || undefined,
-        rfidCardUid: rfidCardUid.trim() || undefined,
-        customFields: Object.keys(customFieldValues).length > 0 ? customFieldValues : undefined,
-      };
-
-      addStudent(studentPayload, receivedAmount, paymentMethod);
-
-      // Find created student
-      const selectedPkgName = packages.find(p => p.id === selectedPackageId)?.name || 'عضویت انتخابی';
-
-      setCreatedStudentResult({
-        id: `created-${Date.now()}`,
-        fullName: fullName.trim(),
-        memberNumber: assignedNumber,
-        packageName: selectedPkgName,
-        receivedAmount,
-        remainingDebt,
+      // Show Success State
+      setSuccessData({
+        memberNumber: allocatedMemberNumber,
+        studentId: newStudent.id,
+        studentName: fullName.trim(),
+        packageName: selectedPackage.name,
+        finalPrice: financial.finalPrice,
+        receivedAmount: financial.receivedAmount,
+        remainingDebt: financial.remainingDebt,
       });
     } catch (err) {
-      setErrorMessage(`خطا در ثبت عضو: ${(err as Error).message}`);
+      console.error('Registration failed:', err);
+      alert('خطا در ثبت اطلاعات عضو.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const remainingDebt = Math.max(0, packagePrice - receivedAmount);
-  const isOverpaid = receivedAmount > packagePrice;
-
   return (
     <GlassDrawer
       isOpen={isOpen}
-      onClose={() => {
-        handleResetForNext();
-        onClose();
-      }}
-      title="ثبت عضو جدید و دریافت شهریه"
-      subtitle="پذیرش سریع ورزشکار در گیت و ثبت هوشمند پرونده"
-      icon={<UserPlus className="w-5 h-5" />}
-      widthClass="max-w-xl sm:max-w-2xl"
+      onClose={onClose}
+      title={successData ? 'عضویت با موفقیت صادر شد' : 'ثبت عضو جدید و صدور اشتراک'}
+      subtitle={successData ? `شماره پرونده: #${successData.memberNumber}` : 'پذیرش سریع باشگاه — ثبت مشخصات، پکیج و دریافت شهریه'}
+      icon={successData ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : <UserPlus className="w-5 h-5 text-amber-500" />}
+      widthClass="max-w-xl"
     >
-      {/* SUCCESS CONFIRMATION SCREEN */}
-      {createdStudentResult ? (
-        <div className="space-y-6 py-4 animate-in fade-in zoom-in-95 duration-200">
-          <div className="p-6 rounded-3xl bg-emerald-950/40 border border-emerald-500/40 text-center space-y-4 shadow-xl">
-            <div className="w-16 h-16 rounded-3xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 mx-auto shadow-lg shadow-emerald-500/20">
-              <CheckCircle2 className="w-9 h-9" />
+      {/* 1. SUCCESS VIEW STATE */}
+      {successData ? (
+        <div className="space-y-6 animate-fade-in" dir="rtl">
+          <div className="p-6 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-3">
+            <div className="w-14 h-14 mx-auto rounded-full bg-emerald-500/20 text-emerald-500 flex items-center justify-center">
+              <CheckCircle2 className="w-8 h-8" />
             </div>
-
-            <div>
-              <h3 className="text-xl font-bold text-white">عضو با موفقیت ثبت شد</h3>
-              <p className="text-sm text-emerald-300/80 mt-1 font-medium">
-                {createdStudentResult.fullName} به اعضای فعال باشگاه افزوده شد.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-2xl bg-slate-900/90 border border-emerald-500/20 text-right">
-              <div>
-                <span className="text-[11px] text-slate-400 block">{memberLabel}:</span>
-                <span className="text-base font-bold font-mono text-amber-400 mt-0.5 block">
-                  #{createdStudentResult.memberNumber}
-                </span>
-              </div>
-              <div>
-                <span className="text-[11px] text-slate-400 block">پکیج عضویت:</span>
-                <span className="text-xs font-bold text-white mt-0.5 block truncate">
-                  {createdStudentResult.packageName}
-                </span>
-              </div>
-              <div>
-                <span className="text-[11px] text-slate-400 block">مبلغ دریافتی:</span>
-                <span className="text-xs font-bold font-mono text-emerald-400 mt-0.5 block">
-                  {MoneyService.format(createdStudentResult.receivedAmount)}
-                </span>
-              </div>
-              <div>
-                <span className="text-[11px] text-slate-400 block">مانده بدهی:</span>
-                <span className={`text-xs font-bold font-mono mt-0.5 block ${createdStudentResult.remainingDebt > 0 ? 'text-amber-400' : 'text-slate-400'}`}>
-                  {createdStudentResult.remainingDebt > 0 ? MoneyService.format(createdStudentResult.remainingDebt) : 'تسویه کامل'}
-                </span>
-              </div>
+            <h4 className="text-lg font-bold text-stone-900 dark:text-white">
+              عضو با موفقیت در سیستم ثبت گردید!
+            </h4>
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-amber-500 text-stone-950 font-black text-sm shadow-xs">
+              <span>شماره عضویت:</span>
+              <span className="font-mono text-base">#{successData.memberNumber}</span>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <GlassButton
-              variant="primary"
-              size="lg"
-              className="flex-1"
-              icon={<PlusCircle className="w-5 h-5" />}
-              onClick={handleResetForNext}
-            >
-              ثبت عضو بعدی
-            </GlassButton>
+          {/* Registration Receipt Summary */}
+          <div className="p-4 rounded-xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 space-y-3 text-xs">
+            <div className="flex justify-between py-1.5 border-b border-stone-200 dark:border-stone-700/60">
+              <span className="text-stone-500">نام و نام خانوادگی:</span>
+              <span className="font-bold text-stone-900 dark:text-white">{successData.studentName}</span>
+            </div>
+            <div className="flex justify-between py-1.5 border-b border-stone-200 dark:border-stone-700/60">
+              <span className="text-stone-500">پکیج انتخابی:</span>
+              <span className="font-semibold text-stone-800 dark:text-stone-200">{successData.packageName}</span>
+            </div>
+            <div className="flex justify-between py-1.5 border-b border-stone-200 dark:border-stone-700/60">
+              <span className="text-stone-500">مبلغ قابل پرداخت:</span>
+              <span className="font-mono font-bold text-stone-900 dark:text-white">{formatMoney(successData.finalPrice)}</span>
+            </div>
+            <div className="flex justify-between py-1.5 border-b border-stone-200 dark:border-stone-700/60">
+              <span className="text-stone-500">مبلغ دریافتی امروز:</span>
+              <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{formatMoney(successData.receivedAmount)}</span>
+            </div>
+            <div className="flex justify-between py-1.5">
+              <span className="text-stone-500">مانده بدهی:</span>
+              <span className={`font-mono font-bold ${successData.remainingDebt > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                {successData.remainingDebt > 0 ? formatMoney(successData.remainingDebt) : 'تسویه کامل ✓'}
+              </span>
+            </div>
+          </div>
 
-            {onViewStudent && (
-              <GlassButton
-                variant="secondary"
-                size="lg"
-                className="flex-1"
-                icon={<Eye className="w-5 h-5" />}
+          {/* Next Actions */}
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <button
+              type="button"
+              onClick={handleResetForm}
+              className="flex-1 py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>ثبت عضو بعدی</span>
+            </button>
+
+            {onOpenMemberDetail && (
+              <button
+                type="button"
                 onClick={() => {
                   onClose();
-                  onViewStudent(createdStudentResult.id);
+                  onOpenMemberDetail(successData.studentId);
                 }}
+                className="py-3 px-4 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-semibold text-xs flex items-center justify-center gap-2 border border-stone-200 dark:border-stone-700 transition-colors"
               >
-                مشاهده پرونده عضو
-              </GlassButton>
+                <Eye className="w-4 h-4 text-amber-500" />
+                <span>مشاهده پرونده</span>
+              </button>
             )}
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="py-3 px-4 rounded-xl bg-stone-200/80 hover:bg-stone-300 dark:bg-stone-800/80 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 text-xs font-semibold"
+            >
+              بستن
+            </button>
           </div>
         </div>
       ) : (
-        /* FAST RECEPTION REGISTRATION FORM */
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Error Banner */}
-          {errorMessage && (
-            <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs sm:text-sm flex items-center gap-2.5 animate-shake">
-              <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
-              <span className="leading-relaxed">{errorMessage}</span>
-            </div>
-          )}
+        /* 2. REGISTRATION FORM (3 Sections) */
+        <form onSubmit={handleSubmit} className="space-y-6" dir="rtl">
+          
+          {/* ========================================================
+              SECTION 1: مشخصات عضو (Member Info)
+          ======================================================== */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-stone-200 dark:border-stone-800">
+              <h4 className="text-sm font-bold text-stone-900 dark:text-white flex items-center gap-2">
+                <span className="w-6 h-6 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center font-mono text-xs">۱</span>
+                <span>مشخصات فردی عضو</span>
+              </h4>
 
-          {/* STEP 1: COMPACT PRIMARY INFORMATION */}
-          <div className="p-4 sm:p-5 rounded-3xl bg-slate-900/90 border border-slate-800 space-y-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs">
-                  ۱
-                </div>
-                <h4 className="text-sm font-bold text-white">مشخصات اصلی ورزشکار</h4>
-              </div>
-
-              {/* Read-Only Automatic Member Number */}
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-800/80 border border-amber-500/30 text-xs">
-                <Hash className="w-3.5 h-3.5 text-amber-400" />
-                <span className="text-slate-400">{memberLabel} بعد از ثبت:</span>
-                <span className="font-mono font-bold text-amber-400">{nextMemberNumber}</span>
+              {/* Sequential Number Preview Badge */}
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-[11px]">
+                <span className="text-stone-500">شماره عضویت:</span>
+                <span className="font-mono font-bold text-amber-600 dark:text-amber-400">در حال تخصیص (پیش‌نمایش: #{nextMemberNumber})</span>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {/* Single Full Name Field for Speed */}
-              <div className="sm:col-span-3">
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                  نام و نام خانوادگی <span className="text-rose-400">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    required
-                    autoFocus
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="مثال: علی رضایی"
-                    className="w-full py-2.5 px-3.5 pl-10 rounded-xl bg-slate-950/80 border border-slate-700/80 text-white placeholder:text-slate-500 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
-                  />
-                  <User className="w-4 h-4 text-slate-500 absolute left-3 top-3 pointer-events-none" />
+            {/* Duplicate Warning Dialog */}
+            {duplicateWarning && duplicateWarning.isDuplicate && (
+              <div className="p-3.5 rounded-xl bg-amber-500/15 border border-amber-500/40 space-y-2 text-xs">
+                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>عضو مشابه در سیستم پیدا شد!</span>
+                </div>
+                <p className="text-stone-700 dark:text-stone-300 text-[11px] leading-relaxed">
+                  {duplicateWarning.reason}
+                  {duplicateWarning.matchedMember && (
+                    <span className="block mt-1 font-semibold">
+                      نام: {duplicateWarning.matchedMember.fullName} (شماره عضویت: #{duplicateWarning.matchedMember.memberNumber || duplicateWarning.matchedMember.id})
+                    </span>
+                  )}
+                </p>
+                <div className="flex items-center gap-2 pt-1">
+                  {duplicateWarning.matchedMember && onOpenMemberDetail && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onOpenMemberDetail(duplicateWarning.matchedMember!.id);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-amber-500 text-stone-950 font-bold text-[11px] hover:bg-amber-600 transition-colors"
+                    >
+                      مشاهده پرونده عضو موجود
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setAcknowledgedDuplicate(true)}
+                    className="px-2.5 py-1 rounded-lg bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 font-medium text-[11px] hover:bg-stone-300"
+                  >
+                    ادامه و ثبت عضو جدید
+                  </button>
                 </div>
               </div>
+            )}
 
-              {/* Mobile Phone */}
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                  شماره موبایل
+            {/* Full Name */}
+            <div>
+              <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
+                نام و نام خانوادگی <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                autoFocus
+                required
+                value={fullName}
+                onChange={(e) => {
+                  setFullName(e.target.value);
+                  setAcknowledgedDuplicate(false);
+                }}
+                onBlur={() => checkDuplicate({ fullName, phone, nationalId })}
+                placeholder="مثال: علی رضایی"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-white text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none"
+              />
+            </div>
+
+            {/* Phone & National ID */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
+                  شماره موبایل <span className="text-rose-500">*</span>
                 </label>
-                <div className="relative">
-                  <input
-                    type="tel"
-                    inputMode="tel"
-                    dir="ltr"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="۰۹۱۲۳۴۵۶۷۸۹"
-                    className="w-full py-2.5 px-3.5 pl-10 rounded-xl bg-slate-950/80 border border-slate-700/80 text-white placeholder:text-slate-500 text-sm font-mono text-left focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
-                  />
-                  <Phone className="w-4 h-4 text-slate-500 absolute left-3 top-3 pointer-events-none" />
-                </div>
+                <input
+                  type="tel"
+                  required
+                  value={phone}
+                  onChange={(e) => handlePhoneChange(e.target.value)}
+                  placeholder="09123456789"
+                  dir="ltr"
+                  className={`w-full px-3.5 py-2.5 rounded-xl border font-mono text-sm outline-none transition-all ${
+                    phoneError
+                      ? 'border-rose-500 bg-rose-50/20 text-rose-600 focus:ring-rose-500/20'
+                      : 'border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20'
+                  }`}
+                />
+                {phoneError && (
+                  <span className="text-[11px] text-rose-500 mt-1 block">{phoneError}</span>
+                )}
               </div>
 
-              {/* National ID */}
-              <div className="sm:col-span-1">
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                  کد ملی
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
+                  کد ملی <span className="text-stone-400 font-normal">(اختیاری)</span>
                 </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    dir="ltr"
-                    maxLength={10}
-                    value={nationalId}
-                    onChange={(e) => setNationalId(e.target.value.replace(/[^0-9]/g, ''))}
-                    placeholder="۰۰۱۲۳۴۵۶۷۸"
-                    className="w-full py-2.5 px-3.5 pl-9 rounded-xl bg-slate-950/80 border border-slate-700/80 text-white placeholder:text-slate-500 text-sm font-mono text-left focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
-                  />
-                  <IdCard className="w-4 h-4 text-slate-500 absolute left-2.5 top-3 pointer-events-none" />
-                </div>
+                <input
+                  type="text"
+                  maxLength={10}
+                  value={nationalId}
+                  onChange={(e) => handleNationalIdChange(e.target.value)}
+                  placeholder="۱۰ رقمی"
+                  dir="ltr"
+                  className={`w-full px-3.5 py-2.5 rounded-xl border font-mono text-sm outline-none transition-all ${
+                    nationalIdError
+                      ? 'border-rose-500 bg-rose-50/20 text-rose-600 focus:ring-rose-500/20'
+                      : 'border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20'
+                  }`}
+                />
+                {nationalIdError && (
+                  <span className="text-[11px] text-rose-500 mt-1 block">{nationalIdError}</span>
+                )}
               </div>
             </div>
 
-            {/* Expandable Additional Information Section */}
-            <div className="pt-2 border-t border-slate-800">
+            {/* Expandable Accordion for Extended Dossier */}
+            <div className="rounded-xl border border-stone-200 dark:border-stone-800 overflow-hidden">
               <button
                 type="button"
-                onClick={() => setShowExtraInfo(!showExtraInfo)}
-                className="w-full flex items-center justify-between py-1.5 text-xs font-medium text-slate-400 hover:text-amber-300 transition-colors"
+                onClick={() => setIsExtendedOpen(!isExtendedOpen)}
+                className="w-full px-4 py-2.5 bg-stone-50 dark:bg-stone-850 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer"
               >
-                <div className="flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  <span>اطلاعات تکمیلی و پرونده ورزشی</span>
-                  <span className="text-[10px] text-slate-500 font-mono">(اختیاری)</span>
-                </div>
-                {showExtraInfo ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                <span className="flex items-center gap-2">
+                  <Dumbbell className="w-3.5 h-3.5 text-amber-500" />
+                  <span>اطلاعات تکمیلی و پرونده ورزشی (مربی، هدف، کارت، فیلد سفارشی)</span>
+                </span>
+                {isExtendedOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
 
-              {showExtraInfo && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 animate-in fade-in duration-200">
-                  {/* Coach Selection */}
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">مربی اختصاصی</label>
-                    <select
-                      value={coachId}
-                      onChange={(e) => setCoachId(e.target.value)}
-                      className="w-full py-2 px-3 rounded-xl bg-slate-950/80 border border-slate-700 text-white text-xs outline-none focus:border-amber-500"
-                    >
-                      <option value="">بدون مربی / تمرین آزاد</option>
-                      {coaches.map(c => (
-                        <option key={c.id} value={c.id}>{c.fullName} ({c.specialty})</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Emergency Phone */}
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">تلفن تماس اضطراری</label>
-                    <input
-                      type="tel"
-                      dir="ltr"
-                      value={emergencyPhone}
-                      onChange={(e) => setEmergencyPhone(e.target.value)}
-                      placeholder="0912..."
-                      className="w-full py-2 px-3 rounded-xl bg-slate-950/80 border border-slate-700 text-white text-xs font-mono outline-none focus:border-amber-500"
-                    />
-                  </div>
-
-                  {/* Height & Weight */}
-                  <div className="grid grid-cols-2 gap-2">
+              {isExtendedOpen && (
+                <div className="p-4 bg-white dark:bg-stone-900 space-y-3.5 border-t border-stone-200 dark:border-stone-800 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[11px] text-slate-400 mb-1">قد (سانتی‌متر)</label>
+                      <label className="block text-stone-600 dark:text-stone-400 mb-1">جنسیت</label>
+                      <select
+                        value={gender}
+                        onChange={(e) => setGender(e.target.value as 'male' | 'female')}
+                        className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800"
+                      >
+                        <option value="male">آقا</option>
+                        <option value="female">خانم</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-stone-600 dark:text-stone-400 mb-1">مربی اختصاصی</label>
+                      <select
+                        value={coachId}
+                        onChange={(e) => setCoachId(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800"
+                      >
+                        <option value="">بدون مربی / تمرین آزاد</option>
+                        {coaches.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.fullName} ({c.specialty})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-stone-600 dark:text-stone-400 mb-1">قد (سانتی‌متر)</label>
                       <input
                         type="number"
                         value={height}
                         onChange={(e) => setHeight(e.target.value ? Number(e.target.value) : '')}
                         placeholder="180"
-                        className="w-full py-2 px-3 rounded-xl bg-slate-950/80 border border-slate-700 text-white text-xs font-mono outline-none"
+                        className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-left"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] text-slate-400 mb-1">وزن (کیلوگرم)</label>
+                      <label className="block text-stone-600 dark:text-stone-400 mb-1">وزن (کیلوگرم)</label>
                       <input
                         type="number"
                         value={weight}
                         onChange={(e) => setWeight(e.target.value ? Number(e.target.value) : '')}
                         placeholder="78"
-                        className="w-full py-2 px-3 rounded-xl bg-slate-950/80 border border-slate-700 text-white text-xs font-mono outline-none"
+                        className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-left"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-stone-600 dark:text-stone-400 mb-1">تلفن اضطراری</label>
+                      <input
+                        type="tel"
+                        value={emergencyPhone}
+                        onChange={(e) => setEmergencyPhone(e.target.value)}
+                        placeholder="021..."
+                        className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-left"
                       />
                     </div>
                   </div>
 
-                  {/* RFID Card UID */}
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">کارت تردد / RFID UID</label>
-                    <input
-                      type="text"
-                      dir="ltr"
-                      value={rfidCardUid}
-                      onChange={(e) => setRfidCardUid(e.target.value)}
-                      placeholder="HEX UID e.g. 94A2F10B"
-                      className="w-full py-2 px-3 rounded-xl bg-slate-950/80 border border-slate-700 text-white text-xs font-mono outline-none"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-stone-600 dark:text-stone-400 mb-1">هدف ورزشی</label>
+                      <input
+                        type="text"
+                        value={goal}
+                        onChange={(e) => setGoal(e.target.value)}
+                        placeholder="کاهش وزن، بدنسازی، فیتنس..."
+                        className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-stone-600 dark:text-stone-400 mb-1">کارت تردد / RFID UID</label>
+                      <input
+                        type="text"
+                        value={rfidCardNumber}
+                        onChange={(e) => setRfidCardNumber(e.target.value)}
+                        placeholder="شناسه کارت یا مچ‌بند..."
+                        className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-left"
+                      />
+                    </div>
                   </div>
 
-                  {/* Goal & Medical Notes */}
-                  <div className="sm:col-span-2">
-                    <label className="block text-[11px] text-slate-400 mb-1">هدف یا سابقه پزشکی / آسیب‌دیدگی</label>
+                  <div>
+                    <label className="block text-stone-600 dark:text-stone-400 mb-1">سوابق پزشکی / آسیب‌دیدگی</label>
                     <input
                       type="text"
                       value={medicalNotes}
                       onChange={(e) => setMedicalNotes(e.target.value)}
-                      placeholder="مثال: آسیب دیدگی زانو، هدف کاهش وزن"
-                      className="w-full py-2 px-3 rounded-xl bg-slate-950/80 border border-slate-700 text-white text-xs outline-none"
+                      placeholder="دیسک، جراحی قبلی یا توضیحات پزشکی..."
+                      className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800"
                     />
                   </div>
 
-                  {/* Dynamic Custom Fields */}
+                  {/* Custom Organization Fields */}
                   {customFields.length > 0 && (
-                    <div className="sm:col-span-2 pt-2 border-t border-slate-800/80 space-y-2">
-                      <span className="text-[11px] font-bold text-amber-400 flex items-center gap-1">
-                        <FileText className="w-3.5 h-3.5" />
-                        <span>فیلدهای سفارشی باشگاه</span>
-                      </span>
+                    <div className="pt-2 border-t border-stone-200 dark:border-stone-800 space-y-2">
+                      <span className="font-semibold text-stone-700 dark:text-stone-300 block">فیلدهای سفارشی باشگاه:</span>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {customFields.map((cf) => (
                           <div key={cf.id}>
-                            <label className="block text-[10px] text-slate-400 mb-1">{cf.label}</label>
+                            <label className="block text-[11px] text-stone-500 mb-1">{cf.label}</label>
                             <input
-                              type={cf.type === 'number' ? 'number' : 'text'}
-                              value={customFieldValues[cf.key] || ''}
-                              onChange={(e) => setCustomFieldValues({
-                                ...customFieldValues,
-                                [cf.key]: e.target.value,
-                              })}
+                              type="text"
+                              value={customData[cf.key] || ''}
+                              onChange={(e) => setCustomData({ ...customData, [cf.key]: e.target.value })}
                               placeholder={cf.placeholder || cf.label}
-                              className="w-full py-1.5 px-3 rounded-lg bg-slate-950/80 border border-slate-700 text-white text-xs outline-none"
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs"
                             />
                           </div>
                         ))}
@@ -550,229 +702,302 @@ export const MemberRegistrationDrawer: React.FC<MemberRegistrationDrawerProps> =
             </div>
           </div>
 
-          {/* STEP 2: MEMBERSHIP & PACKAGE SELECTION */}
-          <div className="p-4 sm:p-5 rounded-3xl bg-slate-900/90 border border-slate-800 space-y-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs">
-                  ۲
-                </div>
-                <h4 className="text-sm font-bold text-white">انتخاب بسته و دوره عضویت</h4>
-              </div>
 
-              <span className="text-xs font-mono font-bold text-emerald-400">
-                {MoneyService.format(packagePrice)}
-              </span>
+          {/* ========================================================
+              SECTION 2: انتخاب پکیج و دوره عضویت (Membership & Package)
+          ======================================================== */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-stone-200 dark:border-stone-800">
+              <h4 className="text-sm font-bold text-stone-900 dark:text-white flex items-center gap-2">
+                <span className="w-6 h-6 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center font-mono text-xs">۲</span>
+                <span>انتخاب پکیج و دوره عضویت</span>
+              </h4>
             </div>
 
             {/* Package Cards Selector */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              {packages.map((pkg) => {
-                const isSelected = selectedPackageId === pkg.id;
-                return (
-                  <div
-                    key={pkg.id}
-                    onClick={() => handlePackageSelect(pkg)}
-                    className={`p-3 rounded-2xl border cursor-pointer transition-all duration-150 relative flex flex-col justify-between ${
-                      isSelected
-                        ? 'border-emerald-400 ring-2 ring-emerald-400/30 bg-emerald-950/30 shadow-md'
-                        : 'border-slate-800 bg-slate-950/60 hover:border-slate-700 hover:bg-slate-800/40'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-white truncate max-w-[120px]">{pkg.name}</span>
+            {activePackages.length === 0 ? (
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-center text-xs text-stone-600 dark:text-stone-300 space-y-1">
+                <p className="font-semibold">هنوز پکیج فعالی در سیستم تعریف نشده است.</p>
+                <p className="text-[11px] text-stone-500">لطفاً از بخش تنظیمات نسبت به تعریف پکیج‌ها اقدام نمایید.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {activePackages.map((pkg) => {
+                  const isSelected = pkg.id === selectedPackageId;
+                  return (
+                    <button
+                      key={pkg.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedPackageId(pkg.id);
+                        setHasUserModifiedPayment(false);
+                      }}
+                      className={`p-3 rounded-xl border text-right transition-all cursor-pointer flex flex-col justify-between gap-2 relative ${
+                        isSelected
+                          ? 'bg-amber-500/15 border-amber-500 text-stone-900 dark:text-white shadow-xs ring-1 ring-amber-500'
+                          : 'bg-stone-50 dark:bg-stone-850 hover:bg-stone-100 dark:hover:bg-stone-800 border-stone-200 dark:border-stone-700/80 text-stone-700 dark:text-stone-300'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <span className="font-bold text-xs block text-stone-900 dark:text-white">
+                            {pkg.name}
+                          </span>
+                          <div className="flex items-center gap-2 mt-1 text-[11px] text-stone-500 dark:text-stone-400">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-amber-500" />
+                              <span>{pkg.durationDays} روزه</span>
+                            </span>
+                            <span>•</span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-blue-500" />
+                              <span>{pkg.sessionsCount ? `${pkg.sessionsCount} جلسه` : 'نامحدود'}</span>
+                            </span>
+                          </div>
+                        </div>
+
                         {isSelected && (
-                          <span className="w-4 h-4 rounded-full bg-emerald-400 text-slate-950 flex items-center justify-center text-[10px] font-bold">
-                            ✓
+                          <span className="w-5 h-5 rounded-full bg-amber-500 text-stone-950 flex items-center justify-center shrink-0">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
                           </span>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2 mt-2 text-[11px] text-slate-400">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-slate-500" />
-                          {pkg.durationDays || 30} روز
+                      <div className="flex items-center justify-between pt-1 border-t border-stone-200/60 dark:border-stone-700/60 text-[11px]">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${pkg.allowsLocker ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300' : 'bg-stone-200 dark:bg-stone-800 text-stone-500'}`}>
+                          {pkg.allowsLocker ? 'کمد مجاز' : 'بدون کمد'}
                         </span>
-                        <span>•</span>
-                        <span className="flex items-center gap-1">
-                          <Flame className="w-3 h-3 text-slate-500" />
-                          {pkg.sessionsCount || 12} جلسه
+                        <span className="font-mono font-bold text-xs text-stone-900 dark:text-white">
+                          {formatMoney(pkg.price)}
                         </span>
                       </div>
-                    </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
-                    <div className="pt-2 mt-2 border-t border-slate-800/80 font-mono font-bold text-xs text-emerald-300">
-                      {MoneyService.format(pkg.price)}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            {/* Date Calculation & Manual Override */}
+            <div className="p-3.5 rounded-xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 space-y-2.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-stone-800 dark:text-stone-200 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-amber-500" />
+                  <span>دوره اعتبار عضویت</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsManualDateOverride(!isManualDateOverride)}
+                  className="text-[11px] text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+                >
+                  {isManualDateOverride ? 'بازگشت به محاسبه خودکار' : 'ویرایش دستی تاریخ'}
+                </button>
+              </div>
 
-            {/* Dates Calculation (Real Calendar Jalali) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-800">
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
-                  تاریخ شروع عضویت
-                </label>
-                <div className="relative">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] text-stone-500 mb-1">تاریخ شروع</label>
                   <input
                     type="text"
-                    dir="ltr"
                     value={startDate}
-                    onChange={(e) => handleStartDateChange(e.target.value)}
-                    className="w-full py-2 px-3 pl-9 rounded-xl bg-slate-950/80 border border-slate-700 text-white text-xs font-mono outline-none focus:border-emerald-500"
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
+                      if (!isManualDateOverride && selectedPackage) {
+                        setExpireDate(DateService.addDaysToJalali(e.target.value, selectedPackage.durationDays || 30));
+                      }
+                    }}
+                    placeholder="1403/05/25"
+                    className="w-full px-3 py-1.5 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 font-mono text-xs text-center"
                   />
-                  <Calendar className="w-4 h-4 text-slate-500 absolute left-2.5 top-2.5 pointer-events-none" />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] text-stone-500 mb-1">تاریخ پایان و انقضا</label>
+                  <input
+                    type="text"
+                    value={expireDate}
+                    onChange={(e) => {
+                      setExpireDate(e.target.value);
+                      setIsManualDateOverride(true);
+                    }}
+                    placeholder="1403/06/25"
+                    className={`w-full px-3 py-1.5 rounded-lg border font-mono text-xs text-center ${
+                      isManualDateOverride
+                        ? 'border-amber-500 bg-white dark:bg-stone-900'
+                        : 'border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400'
+                    }`}
+                  />
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
-                  <span>تاریخ انقضا (محاسبه خودکار)</span>
-                  <span className="text-[10px] text-emerald-400">{durationDays} روز</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    dir="ltr"
-                    value={expireDate}
-                    onChange={(e) => setExpireDate(e.target.value)}
-                    className="w-full py-2 px-3 pl-9 rounded-xl bg-slate-950/80 border border-slate-700 text-white text-xs font-mono outline-none focus:border-emerald-500"
-                  />
-                  <Calendar className="w-4 h-4 text-emerald-500 absolute left-2.5 top-2.5 pointer-events-none" />
+              {!isManualDateOverride && selectedPackage && (
+                <div className="text-[11px] text-stone-500 flex items-center gap-1 justify-end">
+                  <Sparkles className="w-3 h-3 text-amber-500" />
+                  <span>محاسبه خودکار بر اساس {selectedPackage.durationDays} روز اعتبار</span>
                 </div>
+              )}
+            </div>
+
+            {/* Optional Discount Input */}
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <label className="text-stone-700 dark:text-stone-300 font-medium whitespace-nowrap">
+                تخفیف ویژه دوره:
+              </label>
+              <div className="w-44">
+                <MoneyInput
+                  value={discountAmount}
+                  onChange={(val) => {
+                    setDiscountAmount(val);
+                    setHasUserModifiedPayment(false);
+                  }}
+                  placeholder="مبلغ تخفیف (تومان)"
+                />
               </div>
             </div>
           </div>
 
-          {/* STEP 3: PAYMENT & FINANCIAL SETTLEMENT */}
-          <div className="p-4 sm:p-5 rounded-3xl bg-slate-900/90 border border-slate-800 space-y-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs">
-                  ۳
-                </div>
-                <h4 className="text-sm font-bold text-white">پرداخت شهریه و تسویه</h4>
-              </div>
 
-              {/* Instant Full Payment Shortcut */}
-              <button
-                type="button"
-                onClick={handleFullPayment}
-                className="flex items-center gap-1 px-3 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition-all"
-              >
-                <Coins className="w-3.5 h-3.5 text-amber-400" />
-                <span>دریافت کامل ({MoneyService.format(packagePrice)})</span>
-              </button>
+          {/* ========================================================
+              SECTION 3: پرداخت و تسویه مالی (Payment & Financial)
+          ======================================================== */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-stone-200 dark:border-stone-800">
+              <h4 className="text-sm font-bold text-stone-900 dark:text-white flex items-center gap-2">
+                <span className="w-6 h-6 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center font-mono text-xs">۳</span>
+                <span>پرداخت و تسویه مالی</span>
+              </h4>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                  مبلغ دریافتی امروز
+            {/* Financial Calculation Summary Card */}
+            <div className="p-4 rounded-xl bg-amber-500/10 dark:bg-amber-500/5 border border-amber-500/30 space-y-2.5 text-xs">
+              <div className="flex justify-between items-center text-stone-600 dark:text-stone-400">
+                <span>قیمت پایه پکیج:</span>
+                <span className="font-mono font-semibold text-stone-900 dark:text-white">{formatMoney(financial.basePrice)}</span>
+              </div>
+
+              {financial.discountAmount > 0 && (
+                <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-400 font-semibold">
+                  <span>تخفیف اعمال شده:</span>
+                  <span className="font-mono">-{formatMoney(financial.discountAmount)}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between items-center pt-2 border-t border-amber-500/20 font-bold text-stone-900 dark:text-white">
+                <span>مبلغ قابل پرداخت نهایی:</span>
+                <span className="font-mono text-sm text-amber-600 dark:text-amber-400">{formatMoney(financial.finalPrice)}</span>
+              </div>
+            </div>
+
+            {/* Money Input for Received Amount */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-stone-900 dark:text-white">
+                  مبلغ دریافتی امروز (شهریه / پیش‌پرداخت):
                 </label>
-                <MoneyInput
-                  value={receivedAmount}
-                  onChange={(val) => setReceivedAmount(val)}
-                  unit="تومان"
-                />
+                <span className="text-[11px] text-stone-500">
+                  {financial.isFullPayment ? 'تسویه کامل' : financial.isPartialPayment ? 'پرداخت اقساطی / بیعانه' : ''}
+                </span>
               </div>
 
-              {/* Payment Method Selector */}
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                  روش دریافت
-                </label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {[
-                    { id: 'pos', label: 'کارتخوان (POS)' },
-                    { id: 'cash', label: 'نقدی' },
-                    { id: 'card_transfer', label: 'انتقال/کارت' },
-                  ].map((pm) => (
-                    <button
-                      key={pm.id}
-                      type="button"
-                      onClick={() => setPaymentMethod(pm.id as PaymentMethod)}
-                      className={`py-2 px-2 rounded-xl text-xs font-medium border transition-all text-center ${
-                        paymentMethod === pm.id
-                          ? 'bg-slate-800 text-amber-300 border-amber-500/40 shadow-xs'
-                          : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:text-slate-200'
-                      }`}
-                    >
-                      {pm.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <MoneyInput
+                value={receivedAmount}
+                onChange={(val) => {
+                  setReceivedAmount(val);
+                  setHasUserModifiedPayment(true);
+                }}
+                onFullAmount={() => {
+                  setReceivedAmount(financial.finalPrice);
+                  setHasUserModifiedPayment(true);
+                }}
+                fullAmountLabel="دریافت کامل شهریه"
+                placeholder="مبلغ پرداختی امروز"
+              />
             </div>
 
-            {/* Clear Financial Balance Display */}
-            <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800/80 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-4">
-                <div>
-                  <span className="text-slate-400 text-[11px] block">قیمت پکیج:</span>
-                  <span className="font-mono font-bold text-white mt-0.5 block">
-                    {MoneyService.format(packagePrice)}
-                  </span>
-                </div>
-                <div className="text-slate-600 font-bold">−</div>
-                <div>
-                  <span className="text-slate-400 text-[11px] block">دریافتی امروز:</span>
-                  <span className="font-mono font-bold text-emerald-400 mt-0.5 block">
-                    {MoneyService.format(receivedAmount)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Result Status */}
-              <div>
-                {remainingDebt === 0 ? (
-                  <GlassBadge variant="success" icon={<Check className="w-3 h-3" />}>
-                    تسویه کامل
-                  </GlassBadge>
-                ) : remainingDebt > 0 ? (
-                  <GlassBadge variant="warning">
-                    مانده: {MoneyService.format(remainingDebt)}
-                  </GlassBadge>
-                ) : null}
-              </div>
+            {/* Live Remaining Debt Status */}
+            <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 flex items-center justify-between text-xs">
+              <span className="text-stone-600 dark:text-stone-400 font-medium">مانده بدهی عضو:</span>
+              <span className={`font-mono font-bold text-sm ${
+                financial.remainingDebt > 0 
+                  ? 'text-rose-600 dark:text-rose-400' 
+                  : 'text-emerald-600 dark:text-emerald-400'
+              }`}>
+                {financial.remainingDebt > 0 ? formatMoney(financial.remainingDebt) : 'تسویه کامل (بدون بدهی) ✓'}
+              </span>
             </div>
 
-            {/* Overpayment Warning */}
-            {isOverpaid && (
-              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs space-y-2">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-400" />
-                  <span>مبلغ دریافتی ({MoneyService.format(receivedAmount)}) بیشتر از مبلغ پکیج ({MoneyService.format(packagePrice)}) است.</span>
-                </div>
-                <label className="flex items-center gap-2 text-[11px] cursor-pointer pt-1">
+            {/* Overpayment Detection */}
+            {financial.isOverpaid && (
+              <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/30 text-xs text-blue-700 dark:text-blue-300 space-y-2">
+                <p className="font-semibold">
+                  مبلغ دریافتی {formatMoney(financial.creditAmount)} بیشتر از شهریه دوره است.
+                </p>
+                <label className="flex items-center gap-2 cursor-pointer text-[11px]">
                   <input
                     type="checkbox"
-                    checked={isCreditAccepted}
-                    onChange={(e) => setIsCreditAccepted(e.target.checked)}
-                    className="rounded border-slate-700 text-amber-500 focus:ring-amber-500"
+                    checked={recordAsCredit}
+                    onChange={(e) => setRecordAsCredit(e.target.checked)}
+                    className="w-4 h-4 rounded text-blue-600"
                   />
-                  <span>مازاد مبلغ ({MoneyService.format(receivedAmount - packagePrice)}) به عنوان بستانکاری در حساب عضو ثبت شود.</span>
+                  <span>ثبت مازاد به عنوان بستانکاری (شارژ کیف پول عضو)</span>
                 </label>
               </div>
             )}
+
+            {/* Payment Method Selector */}
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              {[
+                { id: 'pos', label: 'کارتخوان (POS)' },
+                { id: 'card_transfer', label: 'کارت به کارت' },
+                { id: 'cash', label: 'نقدی (صندوق)' },
+              ].map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setPaymentMethod(m.id as PaymentMethod)}
+                  className={`py-2 px-2.5 rounded-xl border font-bold transition-all text-center cursor-pointer ${
+                    paymentMethod === m.id
+                      ? 'bg-stone-900 text-white dark:bg-white dark:text-stone-900 border-stone-900 dark:border-white shadow-xs'
+                      : 'bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-400 border-stone-200 dark:border-stone-800 hover:bg-stone-50'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* ACTION BUTTON */}
-          <div className="pt-2">
-            <GlassButton
-              type="submit"
-              variant="primary"
-              size="lg"
-              loading={isSubmitting}
-              className="w-full"
-              icon={<CheckCircle2 className="w-5 h-5" />}
+
+          {/* ========================================================
+              DRAWER ACTIONS / FOOTER
+          ======================================================== */}
+          <div className="pt-4 border-t border-stone-200 dark:border-stone-800 flex items-center justify-end gap-3 sticky bottom-0 bg-white/95 dark:bg-stone-900/95 py-3 backdrop-blur-md">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2.5 rounded-xl text-xs font-semibold text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
             >
-              ثبت عضو و دریافت
-            </GlassButton>
+              لغو
+            </button>
+
+            <button
+              type="submit"
+              disabled={isSubmitting || (duplicateWarning?.isDuplicate && !acknowledgedDuplicate)}
+              className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-98 text-stone-950 font-bold text-sm shadow-md transition-all disabled:opacity-50 disabled:pointer-events-none flex items-center gap-2 cursor-pointer"
+            >
+              {isSubmitting ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>در حال ثبت...</span>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>ثبت عضو و دریافت</span>
+                </>
+              )}
+            </button>
           </div>
+
         </form>
       )}
     </GlassDrawer>

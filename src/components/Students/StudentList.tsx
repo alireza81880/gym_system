@@ -22,6 +22,7 @@ import { StudentDetailModal } from './StudentDetailModal';
 import { MemberRegistrationDrawer } from './MemberRegistrationDrawer';
 import { MoneyService } from '../../services/moneyService';
 import { DateService } from '../../services/dateService';
+import { MoneyInput } from '../common/MoneyInput';
 
 interface StudentListProps {
   initialOpenNewModal?: boolean;
@@ -866,26 +867,49 @@ export const StudentList: React.FC<StudentListProps> = ({
       {/* Pay Debt Modal */}
       {payDebtStudent && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="relative w-full max-w-md bg-white dark:bg-stone-900 rounded-2xl shadow-xl border border-stone-200 dark:border-stone-800 overflow-hidden my-8 p-6">
-            <h3 className="text-base font-bold text-stone-900 dark:text-white mb-2">
-              ثبت تسویه بدهی شهریه
+          <div className="relative w-full max-w-md bg-white dark:bg-stone-900 rounded-2xl shadow-xl border border-stone-200 dark:border-stone-800 overflow-hidden my-8 p-6 text-xs">
+            <h3 className="text-base font-bold text-stone-900 dark:text-white mb-2 flex items-center gap-2">
+              <DollarSign className="w-5 h-5 text-emerald-500" />
+              <span>ثبت دریافت و تسویه بدهی</span>
             </h3>
-            <p className="text-xs text-stone-500 mb-4">
-              شاگرد: <strong>{payDebtStudent.fullName}</strong> | کل بدهی معوق: <strong className="text-rose-600 font-mono">{formatMoney(payDebtStudent.remainingDebt)}</strong>
-            </p>
+            
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 mb-4 space-y-1">
+              <div className="flex justify-between">
+                <span className="text-stone-500">شاگرد:</span>
+                <span className="font-bold text-stone-900 dark:text-white">{payDebtStudent.fullName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-stone-500">بدهی فعلی:</span>
+                <span className="font-mono font-bold text-rose-600 dark:text-rose-400">{formatMoney(payDebtStudent.remainingDebt)}</span>
+              </div>
+            </div>
 
-            <form onSubmit={handleSettleDebtSubmit} className="space-y-4 text-xs">
+            <form onSubmit={handleSettleDebtSubmit} className="space-y-4">
               <div>
-                <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                  مبلغ دریافتی ({t.currency})
+                <label className="block font-bold text-stone-900 dark:text-white mb-1.5">
+                  مبلغ دریافتی امروز
                 </label>
-                <input
-                  type="number"
-                  value={debtPayAmount || ''}
-                  onChange={(e) => setDebtPayAmount(Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-sm font-bold text-emerald-600"
-                  required
+                <MoneyInput
+                  value={debtPayAmount}
+                  onChange={(val) => setDebtPayAmount(val)}
+                  onFullAmount={() => setDebtPayAmount(payDebtStudent.remainingDebt)}
+                  fullAmountLabel="دریافت کل بدهی"
+                  placeholder="مبلغ پرداختی"
                 />
+              </div>
+
+              {/* Live Remaining Balance */}
+              <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 flex justify-between items-center">
+                <span className="text-stone-500">مانده پس از دریافت:</span>
+                <span className={`font-mono font-bold ${
+                  Math.max(0, payDebtStudent.remainingDebt - debtPayAmount) > 0 
+                    ? 'text-amber-600 dark:text-amber-400' 
+                    : 'text-emerald-600 dark:text-emerald-400'
+                }`}>
+                  {Math.max(0, payDebtStudent.remainingDebt - debtPayAmount) > 0
+                    ? formatMoney(Math.max(0, payDebtStudent.remainingDebt - debtPayAmount))
+                    : 'تسویه کامل ✓'}
+                </span>
               </div>
 
               <div>
@@ -895,40 +919,41 @@ export const StudentList: React.FC<StudentListProps> = ({
                 <select
                   value={debtPayMethod}
                   onChange={(e) => setDebtPayMethod(e.target.value as PaymentMethod)}
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs"
                 >
                   <option value="pos">کارتخوان (POS)</option>
                   <option value="card_transfer">کارت به کارت</option>
-                  <option value="cash">نقدی</option>
+                  <option value="cash">نقدی (صندوق)</option>
                 </select>
               </div>
 
               <div>
                 <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                  توضیحات فیش
+                  توضیحات و بابت فیش
                 </label>
                 <input
                   type="text"
                   value={debtPayNote}
                   onChange={(e) => setDebtPayNote(e.target.value)}
                   placeholder="تسویه مانده شهریه دوره"
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs"
                 />
               </div>
 
-              <div className="pt-3 flex justify-end gap-2">
+              <div className="pt-3 flex justify-end gap-2 border-t border-stone-200 dark:border-stone-800">
                 <button
                   type="button"
                   onClick={() => setPayDebtStudent(null)}
-                  className="px-3 py-1.5 text-stone-600"
+                  className="px-3 py-1.5 text-stone-600 dark:text-stone-400 hover:bg-stone-100 rounded-lg"
                 >
                   انصراف
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg"
+                  disabled={debtPayAmount <= 0}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-xs"
                 >
-                  ثبت پرداخت و کسر بدهی
+                  ثبت دریافت و کسر بدهی
                 </button>
               </div>
             </form>
@@ -939,15 +964,16 @@ export const StudentList: React.FC<StudentListProps> = ({
       {/* Renew Membership Modal */}
       {renewStudent && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="relative w-full max-w-md bg-white dark:bg-stone-900 rounded-2xl shadow-xl border border-stone-200 dark:border-stone-800 overflow-hidden my-8 p-6">
-            <h3 className="text-base font-bold text-stone-900 dark:text-white mb-2">
-              تمدید دوره عضویت شاگرد
+          <div className="relative w-full max-w-md bg-white dark:bg-stone-900 rounded-2xl shadow-xl border border-stone-200 dark:border-stone-800 overflow-hidden my-8 p-6 text-xs">
+            <h3 className="text-base font-bold text-stone-900 dark:text-white mb-2 flex items-center gap-2">
+              <RefreshCw className="w-5 h-5 text-amber-500" />
+              <span>تمدید دوره عضویت شاگرد</span>
             </h3>
             <p className="text-xs text-stone-500 mb-4">
-              شاگرد: <strong>{renewStudent.fullName}</strong>
+              شاگرد: <strong className="text-stone-900 dark:text-white">{renewStudent.fullName}</strong> (پایان دوره فعلی: <span className="font-mono">{renewStudent.expireDate}</span>)
             </p>
 
-            <form onSubmit={handleRenewSubmit} className="space-y-4 text-xs">
+            <form onSubmit={handleRenewSubmit} className="space-y-4">
               <div>
                 <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
                   پکیج تمدید
@@ -961,7 +987,7 @@ export const StudentList: React.FC<StudentListProps> = ({
                     setRenewFee(pr);
                     setRenewPaid(pr);
                   }}
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs font-semibold"
                 >
                   {packages.map(p => (
                     <option key={p.id} value={p.type}>
@@ -976,49 +1002,59 @@ export const StudentList: React.FC<StudentListProps> = ({
                   <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
                     شهریه دوره
                   </label>
-                  <input
-                    type="number"
-                    value={renewFee || ''}
-                    onChange={(e) => setRenewFee(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-sm font-bold"
+                  <MoneyInput
+                    value={renewFee}
+                    onChange={(val) => {
+                      setRenewFee(val);
+                      setRenewPaid(val);
+                    }}
+                    placeholder="شهریه دوره"
                   />
                 </div>
                 <div>
                   <label className="block font-medium text-emerald-600 dark:text-emerald-400 mb-1">
                     مبلغ پرداختی
                   </label>
-                  <input
-                    type="number"
-                    value={renewPaid || ''}
-                    onChange={(e) => setRenewPaid(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-sm font-bold text-emerald-600"
+                  <MoneyInput
+                    value={renewPaid}
+                    onChange={(val) => setRenewPaid(val)}
+                    onFullAmount={() => setRenewPaid(renewFee)}
+                    fullAmountLabel="دریافت کامل"
+                    placeholder="مبلغ پرداختی"
                   />
                 </div>
               </div>
 
+              <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 flex justify-between items-center">
+                <span className="text-stone-500">مانده بدهی این دوره:</span>
+                <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
+                  {Math.max(0, renewFee - renewPaid) > 0 ? formatMoney(Math.max(0, renewFee - renewPaid)) : 'تسویه کامل ✓'}
+                </span>
+              </div>
+
               <div>
                 <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                  تاریخ پایان دوره جدید
+                  تاریخ انقضای دوره جدید
                 </label>
                 <input
                   type="text"
                   value={renewExpireDate}
                   onChange={(e) => setRenewExpireDate(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-sm"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-xs"
                 />
               </div>
 
-              <div className="pt-3 flex justify-end gap-2">
+              <div className="pt-3 flex justify-end gap-2 border-t border-stone-200 dark:border-stone-800">
                 <button
                   type="button"
                   onClick={() => setRenewStudent(null)}
-                  className="px-3 py-1.5 text-stone-600"
+                  className="px-3 py-1.5 text-stone-600 dark:text-stone-400 hover:bg-stone-100 rounded-lg"
                 >
                   انصراف
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold rounded-lg"
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold rounded-xl shadow-xs"
                 >
                   تایید تمدید دوره
                 </button>

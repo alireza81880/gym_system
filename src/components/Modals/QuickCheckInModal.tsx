@@ -29,8 +29,8 @@ export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ onClose })
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="relative w-full max-w-md bg-white dark:bg-stone-900 rounded-2xl shadow-xl border border-stone-200 dark:border-stone-800 p-6 space-y-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+      <div className="relative w-full max-w-md max-h-[calc(100vh-32px)] overflow-y-auto bg-white dark:bg-stone-900 rounded-2xl shadow-xl border border-stone-200 dark:border-stone-800 p-5 sm:p-6 space-y-4">
         
         <div className="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800">
           <h3 className="text-base font-bold text-stone-900 dark:text-white flex items-center gap-2">

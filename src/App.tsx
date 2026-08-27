@@ -31,6 +31,21 @@ import { OnboardingWizardModal } from './components/Modals/OnboardingWizardModal
 
 const MainLayout: React.FC = () => {
   const { activeTab, setActiveTab, isInstalled, isDemoMode, exitDemoMode, enterDemoMode, completeInstallation } = useApp();
+  
+  // Responsive Sidebar States
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('gym_sidebar_collapsed');
+      if (saved !== null) return saved === 'true';
+      return window.innerWidth < 1280;
+    } catch {
+      return false;
+    }
+  });
+
+  const [isSidebarOverlayOpen, setIsSidebarOverlayOpen] = useState(false);
+
+  // Modals
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isQuickCheckInOpen, setIsQuickCheckInOpen] = useState(false);
   const [isNewPaymentOpen, setIsNewPaymentOpen] = useState(false);
@@ -39,6 +54,7 @@ const MainLayout: React.FC = () => {
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [openStudentModalTrigger, setOpenStudentModalTrigger] = useState(false);
 
+  // Global Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
@@ -49,6 +65,41 @@ const MainLayout: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  // Responsive Window Resize Handler (Throttled via requestAnimationFrame)
+  useEffect(() => {
+    let ticking = false;
+    const handleResize = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          if (window.innerWidth >= 850 && isSidebarOverlayOpen) {
+            setIsSidebarOverlayOpen(false);
+          }
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isSidebarOverlayOpen]);
+
+  const handleToggleSidebar = () => {
+    if (window.innerWidth < 850) {
+      setIsSidebarOverlayOpen(prev => !prev);
+    } else {
+      setIsSidebarCollapsed(prev => {
+        const next = !prev;
+        try {
+          localStorage.setItem('gym_sidebar_collapsed', String(next));
+        } catch {
+          // ignore
+        }
+        return next;
+      });
+    }
+  };
 
   const handleOpenNewStudent = () => {
     setActiveTab('students');
@@ -83,86 +134,113 @@ const MainLayout: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-stone-100 dark:bg-stone-950 text-stone-900 dark:text-stone-100 flex flex-col font-sans transition-colors duration-200">
+    <div className="h-screen w-screen min-h-0 overflow-hidden flex flex-row bg-stone-100 dark:bg-stone-950 text-stone-900 dark:text-stone-100 font-sans transition-colors duration-200" dir="rtl">
       
-      {/* Demo Sandbox Alert Banner */}
-      {isDemoMode && (
-        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 px-4 py-2 text-xs font-bold flex items-center justify-between shadow-md z-30">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-slate-950 animate-ping"></span>
-            <span>حالت دمو و آموزشی فعال است — تغییرات روی داده‌های شبیه‌سازی شده اعمال می‌شوند.</span>
-          </div>
-          <button
-            onClick={exitDemoMode}
-            className="px-3 py-1 rounded-lg bg-slate-950 text-amber-300 hover:text-white transition-all text-[11px]"
-          >
-            خروج از دمو
-          </button>
-        </div>
-      )}
-
-      {/* Top Header Bar */}
-      <Header
+      {/* 1. AppShell -> Sidebar */}
+      <Sidebar
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={handleToggleSidebar}
+        isOverlayOpen={isSidebarOverlayOpen}
+        onCloseOverlay={() => setIsSidebarOverlayOpen(false)}
         onOpenQuickCheckIn={() => setIsQuickCheckInOpen(true)}
         onOpenNewStudent={handleOpenNewStudent}
-        onOpenNewPayment={() => setIsNewPaymentOpen(true)}
-        onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
-        onOpenEmergencyUnlock={() => setIsEmergencyUnlockOpen(true)}
       />
 
-      {/* Main App Container */}
-      <div className="flex-1 flex max-w-[1600px] w-full mx-auto p-4 sm:p-6 gap-6">
+      {/* 2. AppShell -> MainArea */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 h-screen overflow-hidden">
         
-        {/* Navigation Sidebar */}
-        <Sidebar
+        {/* Demo Sandbox Alert Banner */}
+        {isDemoMode && (
+          <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 px-4 py-2 text-xs font-bold flex items-center justify-between shadow-md z-30 shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-slate-950 animate-ping"></span>
+              <span>حالت دمو و آموزشی فعال است — تغییرات روی داده‌های شبیه‌سازی شده اعمال می‌شوند.</span>
+            </div>
+            <button
+              onClick={exitDemoMode}
+              className="px-3 py-1 rounded-lg bg-slate-950 text-amber-300 hover:text-white transition-all text-[11px] cursor-pointer"
+            >
+              خروج از دمو
+            </button>
+          </div>
+        )}
+
+        {/* Top Header */}
+        <Header
+          onToggleSidebar={handleToggleSidebar}
+          isSidebarCollapsed={isSidebarCollapsed}
           onOpenQuickCheckIn={() => setIsQuickCheckInOpen(true)}
           onOpenNewStudent={handleOpenNewStudent}
+          onOpenNewPayment={() => setIsNewPaymentOpen(true)}
+          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+          onOpenEmergencyUnlock={() => setIsEmergencyUnlockOpen(true)}
         />
 
-        {/* Dynamic Page Views */}
-        <main className="flex-1 min-w-0 pb-12">
-          {activeTab === 'dashboard' && (
-            <Dashboard
-              onOpenNewStudent={handleOpenNewStudent}
-              onOpenNewPayment={() => setIsNewPaymentOpen(true)}
-              onOpenCheckIn={() => setIsQuickCheckInOpen(true)}
-            />
-          )}
+        {/* Scrollable Main Content Viewport */}
+        <div className="flex-1 min-w-0 min-h-0 overflow-y-auto overflow-x-hidden p-3 sm:p-5 lg:p-6 scrollbar-thin">
+          <main className="w-full max-w-7xl mx-auto space-y-6 pb-8 min-w-0">
+            {activeTab === 'dashboard' && (
+              <Dashboard
+                onOpenNewStudent={handleOpenNewStudent}
+                onOpenNewPayment={() => setIsNewPaymentOpen(true)}
+                onOpenCheckIn={() => setIsQuickCheckInOpen(true)}
+              />
+            )}
 
-          {(activeTab === 'smartLockers' || activeTab === 'smart_lockers') && <SmartLockerHub />}
+            {(activeTab === 'smartLockers' || activeTab === 'smart_lockers') && <SmartLockerHub />}
 
-          {activeTab === 'hardware_hub' && <HardwareHubView />}
+            {activeTab === 'hardware_hub' && <HardwareHubView />}
 
-          {activeTab === 'coaches' && <CoachList />}
+            {activeTab === 'coaches' && <CoachList />}
 
-          {activeTab === 'students' && (
-            <StudentList
-              initialOpenNewModal={openStudentModalTrigger}
-              onModalClosed={() => setOpenStudentModalTrigger(false)}
-            />
-          )}
+            {activeTab === 'students' && (
+              <StudentList
+                initialOpenNewModal={openStudentModalTrigger}
+                onModalClosed={() => setOpenStudentModalTrigger(false)}
+              />
+            )}
 
-          {activeTab === 'attendance' && <AttendanceManager />}
+            {activeTab === 'attendance' && <AttendanceManager />}
 
-          {activeTab === 'finances' && <FinancialLedger />}
+            {activeTab === 'finances' && <FinancialLedger />}
 
-          {activeTab === 'plans' && <PlanManager />}
+            {activeTab === 'plans' && <PlanManager />}
 
-          {activeTab === 'insights' && <SmartInsightsView />}
+            {activeTab === 'insights' && <SmartInsightsView />}
 
-          {activeTab === 'reports' && <ManagerReports />}
+            {activeTab === 'reports' && <ManagerReports />}
 
-          {activeTab === 'migration' && <MigrationCenter />}
+            {activeTab === 'migration' && <MigrationCenter />}
 
-          {activeTab === 'features' && <FeatureCenterView />}
+            {activeTab === 'features' && <FeatureCenterView />}
 
-          {activeTab === 'diagnostics' && <DiagnosticsView />}
+            {activeTab === 'diagnostics' && <DiagnosticsView />}
 
-          {activeTab === 'settings' && <SettingsView />}
-        </main>
+            {activeTab === 'settings' && <SettingsView />}
+          </main>
+
+          {/* Compact In-Content Footer */}
+          <footer className="w-full max-w-7xl mx-auto border-t border-stone-200 dark:border-stone-800/80 pt-4 pb-6 mt-8 text-xs text-stone-500 dark:text-stone-400 no-print flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div className="flex items-center space-x-2 rtl:space-x-reverse">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="font-semibold text-stone-800 dark:text-stone-200">سامانه جامع مدیریت هوشمند باشگاه و مربیان (Gym OS)</span>
+            </div>
+            <div className="font-mono text-[11px] flex items-center gap-3">
+              <button
+                onClick={() => setIsOnboardingOpen(true)}
+                className="text-amber-600 dark:text-amber-400 hover:underline font-bold"
+              >
+                راهنمای راه‌اندازی سریع (Wizard)
+              </button>
+              <span>•</span>
+              <span>نسخه ۲.۴.۰ • آفلاین / امن</span>
+            </div>
+          </footer>
+        </div>
+
       </div>
 
-      {/* Global Quick Action & Command Modals */}
+      {/* 3. Global Overlays & Modals */}
       {isQuickCheckInOpen && (
         <QuickCheckInModal onClose={() => setIsQuickCheckInOpen(false)} />
       )}
@@ -185,26 +263,6 @@ const MainLayout: React.FC = () => {
         isOpen={isOnboardingOpen}
         onClose={() => setIsOnboardingOpen(false)}
       />
-
-      {/* Footer */}
-      <footer className="border-t border-stone-200 dark:border-stone-800 bg-white/70 dark:bg-stone-900/70 py-4 no-print">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-stone-500 dark:text-stone-400 gap-2">
-          <div className="flex items-center space-x-2 rtl:space-x-reverse">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span className="font-semibold text-stone-800 dark:text-stone-200">سامانه جامع مدیریت هوشمند باشگاه و مربیان (Gym OS)</span>
-          </div>
-          <div className="font-mono text-[11px] flex items-center gap-3">
-            <button
-              onClick={() => setIsOnboardingOpen(true)}
-              className="text-amber-600 dark:text-amber-400 hover:underline font-bold"
-            >
-              راهنمای راه‌اندازی سریع (Wizard)
-            </button>
-            <span>•</span>
-            <span>نسخه ۲.۴.۰ • پشتیبانی از دیتابیس محلی پایدار و سخت‌افزار IoT</span>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 };

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, DollarSign, CheckCircle2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { PaymentMethod, TransactionType } from '../../types';
+import { MoneyInput } from '../common/MoneyInput';
 
 interface NewPaymentModalProps {
   onClose: () => void;
@@ -16,6 +17,8 @@ export const NewPaymentModal: React.FC<NewPaymentModalProps> = ({ onClose }) => 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pos');
   const [description, setDescription] = useState('');
   const [success, setSuccess] = useState(false);
+
+  const currentSelectedStudent = students.find(s => s.id === selectedStudentId);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,15 +44,15 @@ export const NewPaymentModal: React.FC<NewPaymentModalProps> = ({ onClose }) => 
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="relative w-full max-w-md bg-white dark:bg-stone-900 rounded-2xl shadow-xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 text-xs">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+      <div className="relative w-full max-w-md max-h-[calc(100vh-32px)] overflow-y-auto bg-white dark:bg-stone-900 rounded-2xl shadow-xl border border-stone-200 dark:border-stone-800 p-5 sm:p-6 space-y-4 text-xs">
         
         <div className="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800">
           <h3 className="text-base font-bold text-stone-900 dark:text-white flex items-center gap-2">
             <DollarSign className="h-5 w-5 text-emerald-500" />
             <span>ثبت سریع تراکنش دریافتی جدید</span>
           </h3>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-600">
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 cursor-pointer">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -59,10 +62,10 @@ export const NewPaymentModal: React.FC<NewPaymentModalProps> = ({ onClose }) => 
             <button
               type="button"
               onClick={() => setPayTarget('student_tuition')}
-              className={`flex-1 py-2 rounded-xl font-bold border transition-all ${
+              className={`flex-1 py-2 rounded-xl font-bold border transition-all cursor-pointer ${
                 payTarget === 'student_tuition'
-                  ? 'bg-amber-500 text-stone-950 border-amber-500'
-                  : 'bg-stone-50 dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600'
+                  ? 'bg-amber-500 text-stone-950 border-amber-500 shadow-xs'
+                  : 'bg-stone-50 dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400'
               }`}
             >
               شهریه شاگرد
@@ -70,10 +73,10 @@ export const NewPaymentModal: React.FC<NewPaymentModalProps> = ({ onClose }) => 
             <button
               type="button"
               onClick={() => setPayTarget('supplement_buffet')}
-              className={`flex-1 py-2 rounded-xl font-bold border transition-all ${
+              className={`flex-1 py-2 rounded-xl font-bold border transition-all cursor-pointer ${
                 payTarget === 'supplement_buffet'
-                  ? 'bg-emerald-600 text-white border-emerald-600'
-                  : 'bg-stone-50 dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600'
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                  : 'bg-stone-50 dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400'
               }`}
             >
               بوفه / مکمل
@@ -81,12 +84,18 @@ export const NewPaymentModal: React.FC<NewPaymentModalProps> = ({ onClose }) => 
           </div>
 
           {payTarget === 'student_tuition' && (
-            <div>
+            <div className="space-y-2">
               <label className="block font-medium mb-1">انتخاب شاگرد</label>
               <select
                 value={selectedStudentId}
-                onChange={(e) => setSelectedStudentId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
+                onChange={(e) => {
+                  setSelectedStudentId(e.target.value);
+                  const st = students.find(s => s.id === e.target.value);
+                  if (st && st.remainingDebt > 0) {
+                    setAmount(st.remainingDebt);
+                  }
+                }}
+                className="w-full px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs font-semibold"
               >
                 {students.map(st => (
                   <option key={st.id} value={st.id}>
@@ -94,32 +103,42 @@ export const NewPaymentModal: React.FC<NewPaymentModalProps> = ({ onClose }) => 
                   </option>
                 ))}
               </select>
+
+              {currentSelectedStudent && currentSelectedStudent.remainingDebt > 0 && (
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex justify-between items-center text-xs">
+                  <span className="text-stone-500">بدهی فعلی شاگرد:</span>
+                  <span className="font-mono font-bold text-rose-600 dark:text-rose-400">{formatMoney(currentSelectedStudent.remainingDebt)}</span>
+                </div>
+              )}
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block font-medium mb-1">مبلغ دریافتی ({t.currency}) *</label>
-              <input
-                type="number"
-                value={amount || ''}
-                onChange={(e) => setAmount(Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-sm font-bold text-emerald-600"
-                required
-              />
-            </div>
-            <div>
-              <label className="block font-medium mb-1">روش پرداخت</label>
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                className="w-full px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
-              >
-                <option value="pos">کارتخوان (POS)</option>
-                <option value="card_transfer">کارت به کارت</option>
-                <option value="cash">نقدی</option>
-              </select>
-            </div>
+          <div>
+            <label className="block font-medium mb-1">مبلغ دریافتی ({t.currency}) *</label>
+            <MoneyInput
+              value={amount}
+              onChange={(val) => setAmount(val)}
+              onFullAmount={
+                payTarget === 'student_tuition' && currentSelectedStudent && currentSelectedStudent.remainingDebt > 0
+                  ? () => setAmount(currentSelectedStudent.remainingDebt)
+                  : undefined
+              }
+              fullAmountLabel="دریافت کل بدهی"
+              placeholder="مبلغ پرداختی"
+            />
+          </div>
+
+          <div>
+            <label className="block font-medium mb-1">روش پرداخت</label>
+            <select
+              value={paymentMethod}
+              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+              className="w-full px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs"
+            >
+              <option value="pos">کارتخوان (POS)</option>
+              <option value="card_transfer">کارت به کارت</option>
+              <option value="cash">نقدی (صندوق)</option>
+            </select>
           </div>
 
           <div>
@@ -129,28 +148,29 @@ export const NewPaymentModal: React.FC<NewPaymentModalProps> = ({ onClose }) => 
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="بابت شهریه، خرید پروتئین وی، بوفه..."
-              className="w-full px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
+              className="w-full px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs"
             />
           </div>
 
           {success && (
-            <div className="p-3 rounded-xl bg-emerald-100 text-emerald-800 font-bold flex items-center gap-2">
+            <div className="p-3 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4" />
               <span>تراکنش با موفقیت در سیستم ثبت گردید.</span>
             </div>
           )}
 
-          <div className="pt-2 flex justify-end gap-2">
+          <div className="pt-2 flex justify-end gap-2 border-t border-stone-200 dark:border-stone-800">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 text-stone-600"
+              className="px-3 py-1.5 text-stone-600 dark:text-stone-400 hover:bg-stone-100 rounded-lg"
             >
               انصراف
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+              disabled={amount <= 0}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-xs"
             >
               ثبت و ذخیره دریافتی
             </button>

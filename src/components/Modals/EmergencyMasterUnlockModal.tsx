@@ -36,12 +36,12 @@ export const EmergencyMasterUnlockModal: React.FC<EmergencyMasterUnlockModalProp
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/80 backdrop-blur-sm animate-in fade-in">
-      <div className="w-full max-w-lg bg-white dark:bg-stone-900 rounded-3xl border border-rose-200 dark:border-rose-900/60 shadow-2xl overflow-hidden p-6 relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/80 backdrop-blur-xs animate-in fade-in">
+      <div className="w-full max-w-lg max-h-[calc(100vh-32px)] overflow-y-auto bg-white dark:bg-stone-900 rounded-3xl border border-rose-200 dark:border-rose-900/60 shadow-2xl p-6 relative">
         
         <button
           onClick={onClose}
-          className="absolute top-4 left-4 rtl:left-auto rtl:right-4 p-2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 rounded-full hover:bg-stone-100 dark:hover:bg-stone-800"
+          className="absolute top-4 left-4 rtl:left-auto rtl:right-4 p-2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 rounded-full hover:bg-stone-100 dark:hover:bg-stone-800 cursor-pointer"
         >
           <X className="h-5 w-5" />
         </button>

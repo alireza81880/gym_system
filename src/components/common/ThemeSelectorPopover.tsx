@@ -4,7 +4,11 @@ import { useApp } from '../../context/AppContext';
 import { THEMES_REGISTRY, ThemeEngineService } from '../../services/themeEngine';
 import { ThemeKey, ThemeConfig } from '../../types';
 
-export const ThemeSelectorPopover: React.FC = () => {
+interface ThemeSelectorPopoverProps {
+  compact?: boolean;
+}
+
+export const ThemeSelectorPopover: React.FC<ThemeSelectorPopoverProps> = ({ compact = false }) => {
   const { activeThemeKey, setActiveThemeKey } = useApp();
   const [isOpen, setIsOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<'dark' | 'light' | 'special'>('dark');
@@ -31,33 +35,59 @@ export const ThemeSelectorPopover: React.FC = () => {
   return (
     <div className="relative w-full" ref={popoverRef}>
       {/* Trigger Button at bottom of sidebar */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3 py-2.5 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-slate-200 hover:text-white transition-all text-xs font-medium group cursor-pointer shadow-xs"
-        title="تغییر تم و پوسته سامانه"
-      >
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div
-            className="w-5 h-5 rounded-full border border-white/30 flex items-center justify-center shrink-0 shadow-xs"
-            style={{ backgroundColor: currentTheme.colors.brand || currentTheme.colors.accent }}
+      {compact ? (
+        <div className="relative group flex justify-center">
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="w-11 h-11 rounded-2xl bg-slate-800/90 hover:bg-slate-700 border border-slate-700/80 text-slate-200 hover:text-white flex items-center justify-center transition-all cursor-pointer shadow-xs relative"
+            aria-label="تغییر تم و پوسته"
           >
-            <Palette className="w-3 h-3 text-slate-950" />
-          </div>
-          <div className="text-right truncate">
-            <span className="block font-bold text-[12px] truncate">{currentTheme.nameFa}</span>
-            <span className="block text-[10px] text-slate-400 font-mono">🎨 تغییر پوسته</span>
-          </div>
-        </div>
+            <div
+              className="w-5 h-5 rounded-full border border-white/40 flex items-center justify-center shadow-xs"
+              style={{ backgroundColor: currentTheme.colors.brand || currentTheme.colors.accent }}
+            >
+              <Palette className="w-3 h-3 text-slate-950" />
+            </div>
+            <span
+              className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full ring-2 ring-slate-900"
+              style={{ backgroundColor: currentTheme.colors.brand }}
+            />
+          </button>
 
-        <div className="flex items-center gap-1 shrink-0">
-          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: currentTheme.colors.brand }} />
+          {/* Tooltip for compact button in RTL */}
+          <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-slate-900 border border-slate-700 text-white text-xs font-medium rounded-xl shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap hidden sm:block">
+            {currentTheme.nameFa} (پوسته)
+          </div>
         </div>
-      </button>
+      ) : (
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="w-full flex items-center justify-between px-3 py-2.5 rounded-2xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-slate-200 hover:text-white transition-all text-xs font-medium group cursor-pointer shadow-xs"
+          title="تغییر تم و پوسته سامانه"
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div
+              className="w-5 h-5 rounded-full border border-white/30 flex items-center justify-center shrink-0 shadow-xs"
+              style={{ backgroundColor: currentTheme.colors.brand || currentTheme.colors.accent }}
+            >
+              <Palette className="w-3 h-3 text-slate-950" />
+            </div>
+            <div className="text-right truncate">
+              <span className="block font-bold text-[12px] truncate">{currentTheme.nameFa}</span>
+              <span className="block text-[10px] text-slate-400 font-mono">🎨 تغییر پوسته</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: currentTheme.colors.brand }} />
+          </div>
+        </button>
+      )}
 
       {/* Compact Floating Popover */}
       {isOpen && (
         <div
-          className="absolute bottom-full right-0 mb-3 w-80 sm:w-96 bg-slate-900/95 border border-slate-700/90 rounded-3xl shadow-2xl backdrop-blur-xl p-4 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200"
+          className={`absolute bottom-full ${compact ? 'right-0 sm:right-auto sm:left-0' : 'right-0'} mb-3 w-80 sm:w-96 bg-slate-900/95 border border-slate-700/90 rounded-3xl shadow-2xl backdrop-blur-xl p-4 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200`}
           dir="rtl"
         >
           {/* Header */}

@@ -1,3 +1,5 @@
+import { ValidationService } from './validationService';
+
 /**
  * Jalali / Persian & Gregorian Date Service
  * Accurate calendar arithmetic, leap year calculation, and Jalali conversions
@@ -28,7 +30,8 @@ export class DateService {
    */
   static formatJalaliReadable(jalaliDateStr: string): string {
     if (!jalaliDateStr) return '';
-    const parts = jalaliDateStr.split(/[/ -]/);
+    const cleanStr = ValidationService.toEnglishDigits(jalaliDateStr);
+    const parts = cleanStr.split(/[/ -]/);
     if (parts.length < 3) return jalaliDateStr;
 
     const months = [
@@ -107,10 +110,11 @@ export class DateService {
    * Algorithm: Jalali to Gregorian Date object
    */
   static jalaliToGregorianDate(jalaliStr: string): Date {
-    const parts = jalaliStr.split(/[/ -]/);
-    const jy = parseInt(parts[0], 10);
-    const jm = parseInt(parts[1], 10);
-    const jd = parseInt(parts[2], 10);
+    const cleanStr = ValidationService.toEnglishDigits(jalaliStr);
+    const parts = cleanStr.split(/[/ -]/);
+    const jy = parseInt(parts[0], 10) || 1403;
+    const jm = parseInt(parts[1], 10) || 1;
+    const jd = parseInt(parts[2], 10) || 1;
 
     let jy2 = jy + 1595;
     let days = -355668 + (365 * jy2) + (Math.floor(jy2 / 33) * 8) + Math.floor(((jy2 % 33) + 3) / 4) + jd + ((jm < 7) ? ((jm - 1) * 31) : (((jm - 7) * 30) + 186));
