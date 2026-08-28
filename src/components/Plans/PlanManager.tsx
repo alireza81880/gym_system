@@ -14,6 +14,11 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { WorkoutPlan, DietPlan } from '../../types';
+import { GlassPageHeader } from '../common/GlassPageHeader';
+import { GlassCard } from '../common/GlassCard';
+import { GlassButton } from '../common/GlassButton';
+import { GlassBadge } from '../common/GlassBadge';
+import { GlassModal } from '../common/GlassModal';
 
 export const PlanManager: React.FC = () => {
   const { 
@@ -126,44 +131,41 @@ export const PlanManager: React.FC = () => {
     <div className="space-y-6">
       
       {/* Header */}
-      <div className="bg-white dark:bg-stone-900 p-6 rounded-2xl border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-stone-900 dark:text-white flex items-center gap-2">
-            <FileText className="h-6 w-6 text-amber-500" />
-            <span>{t.plansTitle}</span>
-          </h2>
-          <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-            {t.plansDesc}
-          </p>
-        </div>
+      <GlassPageHeader
+        title={t.plansTitle}
+        subtitle={t.plansDesc}
+        icon={<FileText className="w-6 h-6 text-[var(--gym-brand,#10b981)]" />}
+        actions={
+          <div className="flex items-center gap-2">
+            <GlassButton
+              variant="neon"
+              size="md"
+              icon={<Dumbbell className="h-4 w-4" />}
+              onClick={() => setIsWorkoutModalOpen(true)}
+            >
+              {t.createWorkoutPlan}
+            </GlassButton>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsWorkoutModalOpen(true)}
-            className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-xs"
-          >
-            <Dumbbell className="h-4 w-4" />
-            <span>{t.createWorkoutPlan}</span>
-          </button>
-
-          <button
-            onClick={() => setIsDietModalOpen(true)}
-            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-xs"
-          >
-            <Apple className="h-4 w-4" />
-            <span>{t.createDietPlan}</span>
-          </button>
-        </div>
-      </div>
+            <GlassButton
+              variant="secondary"
+              size="md"
+              icon={<Apple className="h-4 w-4 text-emerald-400" />}
+              onClick={() => setIsDietModalOpen(true)}
+            >
+              {t.createDietPlan}
+            </GlassButton>
+          </div>
+        }
+      />
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-stone-200 dark:border-stone-800 pb-2">
+      <div className="flex gap-2 p-1.5 glass-subtle rounded-2xl border border-[var(--gym-border)] w-fit">
         <button
           onClick={() => setActiveTab('workout')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
             activeTab === 'workout'
-              ? 'bg-amber-500 text-stone-950'
-              : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
+              ? 'bg-[var(--gym-brand,#10b981)] text-stone-950 shadow-xs'
+              : 'text-[var(--gym-text-secondary)] hover:text-[var(--gym-text)]'
           }`}
         >
           <Dumbbell className="h-4 w-4" />
@@ -172,10 +174,10 @@ export const PlanManager: React.FC = () => {
 
         <button
           onClick={() => setActiveTab('diet')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
             activeTab === 'diet'
-              ? 'bg-emerald-600 text-white'
-              : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
+              ? 'bg-emerald-500 text-stone-950 shadow-xs'
+              : 'text-[var(--gym-text-secondary)] hover:text-[var(--gym-text)]'
           }`}
         >
           <Apple className="h-4 w-4" />
@@ -187,19 +189,20 @@ export const PlanManager: React.FC = () => {
       {activeTab === 'workout' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {workoutPlans.map((wp) => (
-            <div
+            <GlassCard
               key={wp.id}
-              className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-5 shadow-xs space-y-4"
+              variant="regular"
+              className="p-5 space-y-4"
             >
               <div className="flex items-start justify-between">
                 <div>
-                  <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase">
+                  <GlassBadge variant="warning" size="sm">
                     شاگرد: {wp.studentName}
-                  </span>
-                  <h3 className="text-base font-bold text-stone-900 dark:text-white mt-0.5">
+                  </GlassBadge>
+                  <h3 className="text-base font-bold text-[var(--gym-text,#fff)] mt-1">
                     {wp.title}
                   </h3>
-                  <div className="text-xs text-stone-500 mt-1 flex items-center gap-2">
+                  <div className="text-xs text-[var(--gym-text-muted)] mt-1 flex items-center gap-2">
                     <span>مربی: {wp.coachName}</span>
                     <span>•</span>
                     <span>تاریخ: {wp.createdAt}</span>
@@ -212,14 +215,14 @@ export const PlanManager: React.FC = () => {
                       setSelectedPlanForPrint(wp);
                       setTimeout(() => window.print(), 200);
                     }}
-                    className="p-1.5 rounded-lg border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-300"
+                    className="p-1.5 rounded-lg text-[var(--gym-text-muted)] hover:text-[var(--gym-text)] hover:bg-[var(--gym-surface-glass)] cursor-pointer transition-colors"
                     title="چاپ برنامه"
                   >
                     <Printer className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => deleteWorkoutPlan(wp.id)}
-                    className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600"
+                    className="p-1.5 rounded-lg text-[var(--gym-text-muted)] hover:text-rose-400 hover:bg-rose-500/15 cursor-pointer transition-colors"
                     title="حذف"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -230,15 +233,15 @@ export const PlanManager: React.FC = () => {
               {/* Days Accordion / Preview */}
               <div className="space-y-3 pt-2">
                 {wp.days.map((day) => (
-                  <div key={day.id} className="p-3 rounded-xl bg-stone-50 dark:bg-stone-800/50 border border-stone-100 dark:border-stone-800 text-xs">
-                    <h4 className="font-bold text-stone-900 dark:text-white mb-2 text-xs">
+                  <div key={day.id} className="p-3 rounded-xl glass-subtle border border-[var(--gym-border)] text-xs">
+                    <h4 className="font-bold text-[var(--gym-text,#fff)] mb-2 text-xs">
                       {day.dayTitle}
                     </h4>
                     <div className="space-y-1.5">
                       {day.exercises.map((ex) => (
-                        <div key={ex.id} className="flex justify-between items-center py-1 border-b border-stone-200 dark:border-stone-700/50 text-[11px]">
-                          <span className="font-medium text-stone-800 dark:text-stone-200">{ex.name}</span>
-                          <span className="font-mono text-stone-500">{ex.sets} ست × {ex.reps}</span>
+                        <div key={ex.id} className="flex justify-between items-center py-1 border-b border-[var(--gym-border)] text-[11px]">
+                          <span className="font-medium text-[var(--gym-text-secondary)]">{ex.name}</span>
+                          <span className="font-mono text-[var(--gym-brand,#10b981)] font-bold">{ex.sets} ست × {ex.reps}</span>
                         </div>
                       ))}
                     </div>
@@ -247,11 +250,11 @@ export const PlanManager: React.FC = () => {
               </div>
 
               {wp.coachNotes && (
-                <div className="text-xs text-stone-600 dark:text-stone-400 p-2.5 rounded-lg bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/40">
-                  <strong>نکات مربی:</strong> {wp.coachNotes}
+                <div className="text-xs text-[var(--gym-text-secondary)] p-2.5 rounded-xl glass-subtle border border-amber-500/30 bg-amber-500/5">
+                  <strong className="text-amber-400">نکات مربی:</strong> {wp.coachNotes}
                 </div>
               )}
-            </div>
+            </GlassCard>
           ))}
         </div>
       )}
@@ -260,22 +263,23 @@ export const PlanManager: React.FC = () => {
       {activeTab === 'diet' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {dietPlans.map((dp) => (
-            <div
+            <GlassCard
               key={dp.id}
-              className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-5 shadow-xs space-y-4"
+              variant="regular"
+              className="p-5 space-y-4"
             >
               <div className="flex items-start justify-between">
                 <div>
-                  <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">
+                  <GlassBadge variant="success" size="sm">
                     ورزشکار: {dp.studentName}
-                  </span>
-                  <h3 className="text-base font-bold text-stone-900 dark:text-white mt-0.5">
+                  </GlassBadge>
+                  <h3 className="text-base font-bold text-[var(--gym-text,#fff)] mt-1">
                     {dp.title}
                   </h3>
-                  <div className="text-xs text-stone-500 mt-1 flex items-center gap-2">
+                  <div className="text-xs text-[var(--gym-text-muted)] mt-1 flex items-center gap-2">
                     <span>مربی: {dp.coachName}</span>
                     <span>•</span>
-                    <span className="font-mono font-bold text-emerald-600">{dp.dailyCaloriesTarget} kcal</span>
+                    <span className="font-mono font-bold text-emerald-400">{dp.dailyCaloriesTarget} kcal</span>
                   </div>
                 </div>
 
@@ -285,14 +289,14 @@ export const PlanManager: React.FC = () => {
                       setSelectedPlanForPrint(dp);
                       setTimeout(() => window.print(), 200);
                     }}
-                    className="p-1.5 rounded-lg border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-300"
+                    className="p-1.5 rounded-lg text-[var(--gym-text-muted)] hover:text-[var(--gym-text)] hover:bg-[var(--gym-surface-glass)] cursor-pointer transition-colors"
                     title="چاپ رژیم"
                   >
                     <Printer className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => deleteDietPlan(dp.id)}
-                    className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600"
+                    className="p-1.5 rounded-lg text-[var(--gym-text-muted)] hover:text-rose-400 hover:bg-rose-500/15 cursor-pointer transition-colors"
                     title="حذف"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -303,194 +307,197 @@ export const PlanManager: React.FC = () => {
               {/* Meals List */}
               <div className="space-y-2 pt-2">
                 {dp.meals.map((m) => (
-                  <div key={m.id} className="p-3 rounded-xl bg-stone-50 dark:bg-stone-800/50 border border-stone-100 dark:border-stone-800 text-xs">
-                    <div className="flex justify-between font-bold text-stone-900 dark:text-white mb-1">
+                  <div key={m.id} className="p-3 rounded-xl glass-subtle border border-[var(--gym-border)] text-xs">
+                    <div className="flex justify-between font-bold text-[var(--gym-text,#fff)] mb-1">
                       <span>{m.mealName}</span>
-                      <span className="font-mono text-emerald-600">{m.caloriesEstimate} kcal</span>
+                      <span className="font-mono text-emerald-400 font-bold">{m.caloriesEstimate} kcal</span>
                     </div>
-                    <p className="text-stone-600 dark:text-stone-400 text-[11px] leading-relaxed">
+                    <p className="text-[var(--gym-text-secondary)] text-[11px] leading-relaxed">
                       {m.items}
                     </p>
                   </div>
                 ))}
               </div>
 
-              <div className="text-xs text-stone-600 dark:text-stone-400 p-2.5 rounded-lg bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/50 dark:border-emerald-900/40">
-                <div><strong>مصرف آب روزانه:</strong> {dp.waterIntakeLiters} لیتر</div>
-                {dp.supplementsNotes && <div className="mt-1"><strong>مکمل‌ها:</strong> {dp.supplementsNotes}</div>}
+              <div className="text-xs text-[var(--gym-text-secondary)] p-2.5 rounded-xl glass-subtle border border-emerald-500/30 bg-emerald-500/5">
+                <div><strong className="text-emerald-400">مصرف آب روزانه:</strong> {dp.waterIntakeLiters} لیتر</div>
+                {dp.supplementsNotes && <div className="mt-1"><strong className="text-emerald-400">مکمل‌ها:</strong> {dp.supplementsNotes}</div>}
               </div>
-            </div>
+            </GlassCard>
           ))}
         </div>
       )}
 
       {/* New Workout Modal */}
       {isWorkoutModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="relative w-full max-w-lg bg-white dark:bg-stone-900 rounded-2xl shadow-xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 text-xs">
-            <h3 className="text-base font-bold text-stone-900 dark:text-white">
-              {t.createWorkoutPlan}
-            </h3>
+        <GlassModal
+          isOpen={isWorkoutModalOpen}
+          onClose={() => setIsWorkoutModalOpen(false)}
+          title={t.createWorkoutPlan}
+          subtitle="طراحی برنامه تمرینی اختصاصی و سیستم ست‌ها"
+          icon={<Dumbbell className="w-5 h-5 text-[var(--gym-brand,#10b981)]" />}
+        >
+          <form onSubmit={handleCreateWorkoutPlan} className="space-y-4 text-xs">
+            <div>
+              <label className="block font-semibold text-[var(--gym-text-secondary)] mb-1">انتخاب شاگرد *</label>
+              <select
+                value={wpStudentId}
+                onChange={(e) => setWpStudentId(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl glass-subtle border border-[var(--gym-border)] text-sm text-[var(--gym-text)] bg-[var(--gym-surface)]"
+              >
+                {students.map(s => (
+                  <option key={s.id} value={s.id} className="bg-stone-900 text-white">{s.fullName} ({s.goal || 'بدون هدف'})</option>
+                ))}
+              </select>
+            </div>
 
-            <form onSubmit={handleCreateWorkoutPlan} className="space-y-4">
-              <div>
-                <label className="block font-medium mb-1">انتخاب شاگرد *</label>
-                <select
-                  value={wpStudentId}
-                  onChange={(e) => setWpStudentId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
-                >
-                  {students.map(s => (
-                    <option key={s.id} value={s.id}>{s.fullName} ({s.goal || 'بدون هدف'})</option>
-                  ))}
-                </select>
-              </div>
+            <div>
+              <label className="block font-semibold text-[var(--gym-text-secondary)] mb-1">عنوان برنامه</label>
+              <input
+                type="text"
+                value={wpTitle}
+                onChange={(e) => setWpTitle(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl glass-subtle border border-[var(--gym-border)] text-sm text-[var(--gym-text)] focus:border-[var(--gym-brand,#10b981)] outline-none"
+                required
+              />
+            </div>
 
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block font-medium mb-1">عنوان برنامه</label>
+                <label className="block font-semibold text-[var(--gym-text-secondary)] mb-1">هدف برنامه</label>
                 <input
                   type="text"
-                  value={wpTitle}
-                  onChange={(e) => setWpTitle(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
-                  required
+                  value={wpGoal}
+                  onChange={(e) => setWpGoal(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl glass-subtle border border-[var(--gym-border)] text-sm text-[var(--gym-text)]"
                 />
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-medium mb-1">هدف برنامه</label>
-                  <input
-                    type="text"
-                    value={wpGoal}
-                    onChange={(e) => setWpGoal(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block font-medium mb-1">تعداد جلسات در هفته</label>
-                  <input
-                    type="text"
-                    defaultValue="۳ الی ۴ روز"
-                    className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
-                  />
-                </div>
-              </div>
-
               <div>
-                <label className="block font-medium mb-1">توضیحات و نکات مربی</label>
-                <textarea
-                  rows={2}
-                  value={wpNotes}
-                  onChange={(e) => setWpNotes(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
+                <label className="block font-semibold text-[var(--gym-text-secondary)] mb-1">تعداد جلسات در هفته</label>
+                <input
+                  type="text"
+                  defaultValue="۳ الی ۴ روز"
+                  className="w-full px-3 py-2 rounded-xl glass-subtle border border-[var(--gym-border)] text-sm text-[var(--gym-text)]"
                 />
               </div>
+            </div>
 
-              <div className="pt-3 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsWorkoutModalOpen(false)}
-                  className="px-3 py-1.5 text-stone-600"
-                >
-                  انصراف
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold rounded-lg"
-                >
-                  تولید و ثبت برنامه تمرینی
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div>
+              <label className="block font-semibold text-[var(--gym-text-secondary)] mb-1">توضیحات و نکات مربی</label>
+              <textarea
+                rows={2}
+                value={wpNotes}
+                onChange={(e) => setWpNotes(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl glass-subtle border border-[var(--gym-border)] text-sm text-[var(--gym-text)]"
+              />
+            </div>
+
+            <div className="pt-3 flex justify-end gap-2 border-t border-[var(--gym-border)]">
+              <GlassButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsWorkoutModalOpen(false)}
+              >
+                انصراف
+              </GlassButton>
+              <GlassButton
+                variant="neon"
+                size="sm"
+                type="submit"
+              >
+                تولید و ثبت برنامه تمرینی
+              </GlassButton>
+            </div>
+          </form>
+        </GlassModal>
       )}
 
       {/* New Diet Modal */}
       {isDietModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="relative w-full max-w-lg bg-white dark:bg-stone-900 rounded-2xl shadow-xl border border-stone-200 dark:border-stone-800 p-6 space-y-4 text-xs">
-            <h3 className="text-base font-bold text-stone-900 dark:text-white">
-              {t.createDietPlan}
-            </h3>
+        <GlassModal
+          isOpen={isDietModalOpen}
+          onClose={() => setIsDietModalOpen(false)}
+          title={t.createDietPlan}
+          subtitle="محاسبه کالری روزانه، رژیم غذایی و مکمل‌های ورزشی"
+          icon={<Apple className="w-5 h-5 text-emerald-400" />}
+        >
+          <form onSubmit={handleCreateDietPlan} className="space-y-4 text-xs">
+            <div>
+              <label className="block font-semibold text-[var(--gym-text-secondary)] mb-1">انتخاب شاگرد *</label>
+              <select
+                value={dpStudentId}
+                onChange={(e) => setDpStudentId(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl glass-subtle border border-[var(--gym-border)] text-sm text-[var(--gym-text)] bg-[var(--gym-surface)]"
+              >
+                {students.map(s => (
+                  <option key={s.id} value={s.id} className="bg-stone-900 text-white">{s.fullName} ({s.goal || 'عمومی'})</option>
+                ))}
+              </select>
+            </div>
 
-            <form onSubmit={handleCreateDietPlan} className="space-y-4">
-              <div>
-                <label className="block font-medium mb-1">انتخاب شاگرد *</label>
-                <select
-                  value={dpStudentId}
-                  onChange={(e) => setDpStudentId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
-                >
-                  {students.map(s => (
-                    <option key={s.id} value={s.id}>{s.fullName} ({s.goal || 'عمومی'})</option>
-                  ))}
-                </select>
-              </div>
+            <div>
+              <label className="block font-semibold text-[var(--gym-text-secondary)] mb-1">عنوان رژیم</label>
+              <input
+                type="text"
+                value={dpTitle}
+                onChange={(e) => setDpTitle(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl glass-subtle border border-[var(--gym-border)] text-sm text-[var(--gym-text)] focus:border-[var(--gym-brand,#10b981)] outline-none"
+                required
+              />
+            </div>
 
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block font-medium mb-1">عنوان رژیم</label>
+                <label className="block font-semibold text-[var(--gym-text-secondary)] mb-1">هدف کالری روزانه (kcal)</label>
                 <input
-                  type="text"
-                  value={dpTitle}
-                  onChange={(e) => setDpTitle(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
-                  required
+                  type="number"
+                  value={dpCalories || ''}
+                  onChange={(e) => setDpCalories(Number(e.target.value))}
+                  className="w-full px-3 py-2 rounded-xl glass-subtle border border-[var(--gym-border)] font-mono text-sm text-emerald-400 font-bold"
                 />
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-medium mb-1">هدف کالری روزانه (kcal)</label>
-                  <input
-                    type="number"
-                    value={dpCalories || ''}
-                    onChange={(e) => setDpCalories(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block font-medium mb-1">مصرف آب روزانه (لیتر)</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={dpWater || ''}
-                    onChange={(e) => setDpWater(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-sm"
-                  />
-                </div>
-              </div>
-
               <div>
-                <label className="block font-medium mb-1">مکمل‌های پیشنهادی</label>
+                <label className="block font-semibold text-[var(--gym-text-secondary)] mb-1">مصرف آب روزانه (لیتر)</label>
                 <input
-                  type="text"
-                  value={dpSupplements}
-                  onChange={(e) => setDpSupplements(e.target.value)}
-                  placeholder="پروتئین وی، کراتین، مولتی ویتامین..."
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
+                  type="number"
+                  step="0.5"
+                  value={dpWater || ''}
+                  onChange={(e) => setDpWater(Number(e.target.value))}
+                  className="w-full px-3 py-2 rounded-xl glass-subtle border border-[var(--gym-border)] font-mono text-sm text-blue-400 font-bold"
                 />
               </div>
+            </div>
 
-              <div className="pt-3 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsDietModalOpen(false)}
-                  className="px-3 py-1.5 text-stone-600"
-                >
-                  انصراف
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg"
-                >
-                  ثبت رژیم غذایی
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div>
+              <label className="block font-semibold text-[var(--gym-text-secondary)] mb-1">مکمل‌های پیشنهادی</label>
+              <input
+                type="text"
+                value={dpSupplements}
+                onChange={(e) => setDpSupplements(e.target.value)}
+                placeholder="پروتئین وی، کراتین، مولتی ویتامین..."
+                className="w-full px-3 py-2 rounded-xl glass-subtle border border-[var(--gym-border)] text-sm text-[var(--gym-text)]"
+              />
+            </div>
+
+            <div className="pt-3 flex justify-end gap-2 border-t border-[var(--gym-border)]">
+              <GlassButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsDietModalOpen(false)}
+              >
+                انصراف
+              </GlassButton>
+              <GlassButton
+                variant="secondary"
+                size="sm"
+                className="!bg-emerald-600 hover:!bg-emerald-500 !text-white"
+                type="submit"
+              >
+                ثبت رژیم غذایی
+              </GlassButton>
+            </div>
+          </form>
+        </GlassModal>
       )}
 
     </div>

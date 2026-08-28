@@ -1,14 +1,14 @@
-import { Student, MembershipPackage, AccessDecision } from '../types';
+import { Student, MembershipPackage, AccessDecision, AccessPolicyConfig } from '../types';
 
-export interface AccessPolicyConfig {
-  allowEntryWithDebt: boolean;
-  maxAllowedDebtTolerated: number; // e.g. 500,000 Tomans
-  enforceHoursWindow: boolean;
-  allowSameDayMultipleEntries: boolean;
-  enforceSessionLimit: boolean;
-}
+export type { AccessPolicyConfig };
 
 export const defaultAccessPolicyConfig: AccessPolicyConfig = {
+  expiredMembership: 'deny',
+  debtPolicy: 'warn',
+  sessionLimit: 'enforce',
+  duplicateEntrySameDay: 'allow',
+  lockerRequired: true,
+  maxDebtAllowed: 500000,
   allowEntryWithDebt: true,
   maxAllowedDebtTolerated: 500000,
   enforceHoursWindow: true,

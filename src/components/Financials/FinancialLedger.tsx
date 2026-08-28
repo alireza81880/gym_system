@@ -1,22 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   ReceiptText, 
   Plus, 
   ArrowUpRight, 
   ArrowDownRight, 
   DollarSign, 
-  TrendingUp, 
-  TrendingDown, 
-  Printer, 
   Download, 
-  Filter, 
   Trash2,
-  Building,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  TrendingUp,
   CreditCard,
-  Layers
+  Building,
+  ShoppingBag
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { ExpenseCategory, PaymentMethod, TransactionType } from '../../types';
+import { ExpenseCategory, PaymentMethod, TransactionType, PaymentRecord, ExpenseRecord } from '../../types';
+import { GlassPageHeader } from '../common/GlassPageHeader';
+import { GlassCard } from '../common/GlassCard';
+import { GlassStatCard } from '../common/GlassStatCard';
+import { GlassButton } from '../common/GlassButton';
+import { GlassBadge } from '../common/GlassBadge';
+import { GlassModal } from '../common/GlassModal';
+
+interface UnifiedLedgerItem {
+  id: string;
+  kind: 'income' | 'expense' | 'coach_settlement';
+  title: string;
+  subtitle?: string;
+  amount: number;
+  date: string;
+  paymentMethod: string;
+  receiptNumber: string;
+  rawType: string;
+}
+
+const PAGE_SIZE = 15;
 
 export const FinancialLedger: React.FC = () => {
   const { 
@@ -26,16 +46,14 @@ export const FinancialLedger: React.FC = () => {
     deleteExpense, 
     addPayment, 
     deletePayment, 
-    coaches, 
-    students, 
     formatMoney, 
     formatNum, 
     t, 
-    lang 
   } = useApp();
 
   const [activeSubTab, setActiveSubTab] = useState<'all' | 'incomes' | 'expenses' | 'coach_payouts'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   
   // Modals
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
@@ -55,18 +73,86 @@ export const FinancialLedger: React.FC = () => {
   const [incDesc, setIncDesc] = useState('');
   const [incMethod, setIncMethod] = useState<PaymentMethod>('pos');
 
-  // Overall Financial stats
-  const totalIncomes = payments
-    .filter(p => p.type !== 'coach_settlement')
-    .reduce((sum, p) => sum + p.amount, 0);
+  // Overall Financial stats with memoization
+  const { totalIncomes, totalCoachPayouts, totalExpensesAll, netBalance } = useMemo(() => {
+    let inc = 0;
+    let coachPay = 0;
+    for (const p of payments) {
+      if (p.type === 'coach_settlement') {
+        coachPay += p.amount;
+      } else {
+        inc += p.amount;
+      }
+    }
+    let opExp = 0;
+    for (const e of expenses) {
+      opExp += e.amount;
+    }
+    const totalExp = opExp + coachPay;
+    return {
+      totalIncomes: inc,
+      totalCoachPayouts: coachPay,
+      totalExpensesAll: totalExp,
+      netBalance: inc - totalExp,
+    };
+  }, [payments, expenses]);
 
-  const totalCoachPayouts = payments
-    .filter(p => p.type === 'coach_settlement')
-    .reduce((sum, p) => sum + p.amount, 0);
+  // Unified items list memoized for fast filtering and pagination
+  const filteredItems = useMemo(() => {
+    const list: UnifiedLedgerItem[] = [];
 
-  const totalOperationalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const totalExpensesAll = totalOperationalExpenses + totalCoachPayouts;
-  const netBalance = totalIncomes - totalExpensesAll;
+    if (activeSubTab === 'all' || activeSubTab === 'incomes' || activeSubTab === 'coach_payouts') {
+      for (const p of payments) {
+        const isPayout = p.type === 'coach_settlement';
+        if (activeSubTab === 'incomes' && isPayout) continue;
+        if (activeSubTab === 'coach_payouts' && !isPayout) continue;
+
+        list.push({
+          id: p.id,
+          kind: isPayout ? 'coach_settlement' : 'income',
+          title: p.studentName || p.coachName || p.description,
+          subtitle: p.description,
+          amount: p.amount,
+          date: p.date,
+          paymentMethod: p.paymentMethod,
+          receiptNumber: p.receiptNumber,
+          rawType: p.type,
+        });
+      }
+    }
+
+    if (activeSubTab === 'all' || activeSubTab === 'expenses') {
+      for (const e of expenses) {
+        list.push({
+          id: e.id,
+          kind: 'expense',
+          title: e.title,
+          subtitle: `پرداخت به: ${e.paidTo} (${e.category})`,
+          amount: e.amount,
+          date: e.date,
+          paymentMethod: e.paymentMethod,
+          receiptNumber: e.receiptNumber || '--',
+          rawType: 'expense',
+        });
+      }
+    }
+
+    if (!searchTerm.trim()) return list;
+
+    const term = searchTerm.trim().toLowerCase();
+    return list.filter(item => 
+      item.title.toLowerCase().includes(term) ||
+      (item.subtitle && item.subtitle.toLowerCase().includes(term)) ||
+      item.receiptNumber.toLowerCase().includes(term) ||
+      item.date.includes(term)
+    );
+  }, [payments, expenses, activeSubTab, searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE));
+  const paginatedItems = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredItems.slice(start, start + PAGE_SIZE);
+  }, [filteredItems, currentPage]);
 
   const handleAddExpenseSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,134 +214,147 @@ export const FinancialLedger: React.FC = () => {
     document.body.removeChild(link);
   };
 
+  const handleDeleteItem = (item: UnifiedLedgerItem) => {
+    if (confirm('آیا از حذف این تراکنش اطمینان دارید؟')) {
+      if (item.kind === 'expense') {
+        deleteExpense(item.id);
+      } else {
+        deletePayment(item.id);
+      }
+    }
+  };
+
   return (
     <div className="space-y-6">
       
-      {/* Header */}
-      <div className="bg-white dark:bg-stone-900 p-6 rounded-2xl border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-stone-900 dark:text-white flex items-center gap-2">
-            <ReceiptText className="h-6 w-6 text-amber-500" />
-            <span>{t.financesTitle}</span>
-          </h2>
-          <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-            {t.financesDesc}
-          </p>
-        </div>
+      {/* Page Header */}
+      <GlassPageHeader
+        title={t.financesTitle}
+        subtitle={t.financesDesc}
+        icon={<ReceiptText className="w-6 h-6 text-[var(--gym-brand,#10b981)]" />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <GlassButton
+              variant="secondary"
+              size="md"
+              icon={<Download className="h-4 w-4" />}
+              onClick={handleExportCsv}
+            >
+              {t.exportCsv}
+            </GlassButton>
+            <GlassButton
+              variant="secondary"
+              size="md"
+              icon={<Plus className="h-4 w-4 text-rose-400" />}
+              onClick={() => setIsExpenseModalOpen(true)}
+            >
+              {t.addExpense}
+            </GlassButton>
+            <GlassButton
+              variant="neon"
+              size="md"
+              icon={<Plus className="h-4 w-4" />}
+              onClick={() => setIsIncomeModalOpen(true)}
+            >
+              {t.addIncome}
+            </GlassButton>
+          </div>
+        }
+      />
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={handleExportCsv}
-            className="px-3.5 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 text-xs font-semibold hover:bg-stone-100 flex items-center gap-1.5"
-          >
-            <Download className="h-4 w-4" />
-            <span>{t.exportCsv}</span>
-          </button>
-          <button
-            onClick={() => setIsExpenseModalOpen(true)}
-            className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
-          >
-            <Plus className="h-4 w-4" />
-            <span>{t.addExpense}</span>
-          </button>
-          <button
-            onClick={() => setIsIncomeModalOpen(true)}
-            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
-          >
-            <Plus className="h-4 w-4" />
-            <span>{t.addIncome}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Summary Cards */}
+      {/* Summary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-stone-900 p-5 rounded-2xl border border-stone-200 dark:border-stone-800 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-xs font-semibold text-stone-500 uppercase">{t.totalIncomes}</span>
-            <div className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-mono mt-1">
-              {formatMoney(totalIncomes)}
-            </div>
-          </div>
-          <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950 text-emerald-600">
-            <ArrowUpRight className="h-6 w-6" />
-          </div>
-        </div>
+        <GlassStatCard
+          title={t.totalIncomes}
+          value={formatMoney(totalIncomes)}
+          icon={<ArrowUpRight className="h-6 w-6 text-emerald-400" />}
+          badge={{ text: 'شهریه و بوفه', variant: 'success' }}
+        />
 
-        <div className="bg-white dark:bg-stone-900 p-5 rounded-2xl border border-stone-200 dark:border-stone-800 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-xs font-semibold text-stone-500 uppercase">{t.totalExpenses} (جاری + مربیان)</span>
-            <div className="text-xl font-black text-rose-600 dark:text-rose-400 font-mono mt-1">
-              {formatMoney(totalExpensesAll)}
-            </div>
-          </div>
-          <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950 text-rose-600">
-            <ArrowDownRight className="h-6 w-6" />
-          </div>
-        </div>
+        <GlassStatCard
+          title={`${t.totalExpenses} (جاری + مربیان)`}
+          value={formatMoney(totalExpensesAll)}
+          icon={<ArrowDownRight className="h-6 w-6 text-rose-400" />}
+          badge={{ text: 'مخارج باشگاه', variant: 'danger' }}
+        />
 
-        <div className="bg-white dark:bg-stone-900 p-5 rounded-2xl border border-stone-200 dark:border-stone-800 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-xs font-semibold text-stone-500 uppercase">{t.balanceNet}</span>
-            <div className={`text-xl font-black font-mono mt-1 ${netBalance >= 0 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600'}`}>
-              {formatMoney(netBalance)}
-            </div>
-          </div>
-          <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950 text-amber-600">
-            <DollarSign className="h-6 w-6" />
-          </div>
-        </div>
+        <GlassStatCard
+          title={t.balanceNet}
+          value={formatMoney(netBalance)}
+          icon={<DollarSign className="h-6 w-6 text-[var(--gym-brand,#10b981)]" />}
+          neonAccent={netBalance >= 0}
+          badge={{
+            text: netBalance >= 0 ? 'سود خالص ✓' : 'کسری تراز',
+            variant: netBalance >= 0 ? 'success' : 'danger'
+          }}
+        />
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex items-center gap-2 border-b border-stone-200 dark:border-stone-800 pb-2">
-        <button
-          onClick={() => setActiveSubTab('all')}
-          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-            activeSubTab === 'all'
-              ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900'
-              : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
-          }`}
-        >
-          کلیه تراکنش‌ها ({payments.length + expenses.length})
-        </button>
-        <button
-          onClick={() => setActiveSubTab('incomes')}
-          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-            activeSubTab === 'incomes'
-              ? 'bg-emerald-600 text-white'
-              : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
-          }`}
-        >
-          درآمدها و شهریه‌ها ({payments.filter(p => p.type !== 'coach_settlement').length})
-        </button>
-        <button
-          onClick={() => setActiveSubTab('expenses')}
-          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-            activeSubTab === 'expenses'
-              ? 'bg-rose-600 text-white'
-              : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
-          }`}
-        >
-          هزینه‌های جاری باشگاه ({expenses.length})
-        </button>
-        <button
-          onClick={() => setActiveSubTab('coach_payouts')}
-          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-            activeSubTab === 'coach_payouts'
-              ? 'bg-blue-600 text-white'
-              : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800'
-          }`}
-        >
-          تسویه مربیان ({payments.filter(p => p.type === 'coach_settlement').length})
-        </button>
-      </div>
+      {/* Filter Tabs & Search Bar */}
+      <GlassCard variant="subtle" className="p-4 space-y-4">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              onClick={() => { setActiveSubTab('all'); setCurrentPage(1); }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeSubTab === 'all'
+                  ? 'bg-[var(--gym-brand,#10b981)] text-stone-950 shadow-xs'
+                  : 'glass-subtle text-[var(--gym-text-secondary)] hover:text-[var(--gym-text)]'
+              }`}
+            >
+              کلیه تراکنش‌ها ({payments.length + expenses.length})
+            </button>
+            <button
+              onClick={() => { setActiveSubTab('incomes'); setCurrentPage(1); }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeSubTab === 'incomes'
+                  ? 'bg-emerald-500 text-stone-950 shadow-xs'
+                  : 'glass-subtle text-[var(--gym-text-secondary)] hover:text-[var(--gym-text)]'
+              }`}
+            >
+              درآمدها ({payments.filter(p => p.type !== 'coach_settlement').length})
+            </button>
+            <button
+              onClick={() => { setActiveSubTab('expenses'); setCurrentPage(1); }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeSubTab === 'expenses'
+                  ? 'bg-rose-500 text-white shadow-xs'
+                  : 'glass-subtle text-[var(--gym-text-secondary)] hover:text-[var(--gym-text)]'
+              }`}
+            >
+              هزینه‌های جاری ({expenses.length})
+            </button>
+            <button
+              onClick={() => { setActiveSubTab('coach_payouts'); setCurrentPage(1); }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeSubTab === 'coach_payouts'
+                  ? 'bg-blue-500 text-white shadow-xs'
+                  : 'glass-subtle text-[var(--gym-text-secondary)] hover:text-[var(--gym-text)]'
+              }`}
+            >
+              تسویه مربیان ({payments.filter(p => p.type === 'coach_settlement').length})
+            </button>
+          </div>
+
+          {/* Search */}
+          <div className="relative min-w-[200px] sm:w-64">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--gym-text-muted)]" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+              placeholder="جستجو شرح، شماره پیگیری..."
+              className="w-full pr-8 pl-3 py-1.5 text-xs rounded-xl glass-subtle border-[var(--gym-border)] text-[var(--gym-text)] focus:border-[var(--gym-brand,#10b981)] focus:ring-1 focus:ring-[var(--gym-brand,#10b981)] outline-none"
+            />
+          </div>
+        </div>
+      </GlassCard>
 
       {/* Ledger Table */}
-      <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 overflow-hidden shadow-xs">
+      <GlassCard variant="regular" className="overflow-hidden p-0">
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-right">
-            <thead className="bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 font-semibold">
+            <thead className="glass-subtle text-[var(--gym-text-secondary)] font-semibold border-b border-[var(--gym-border)]">
               <tr>
                 <th className="p-3.5">نوع</th>
                 <th className="p-3.5">شرح / طرف حساب</th>
@@ -266,268 +365,257 @@ export const FinancialLedger: React.FC = () => {
                 <th className="p-3.5 text-center">عملیات</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-stone-200 dark:divide-stone-800">
-              
-              {/* Render Payments */}
-              {(activeSubTab === 'all' || activeSubTab === 'incomes' || activeSubTab === 'coach_payouts') &&
-                payments
-                  .filter(p => {
-                    if (activeSubTab === 'incomes') return p.type !== 'coach_settlement';
-                    if (activeSubTab === 'coach_payouts') return p.type === 'coach_settlement';
-                    return true;
-                  })
-                  .map((p) => {
-                    const isPayout = p.type === 'coach_settlement';
-                    return (
-                      <tr key={p.id} className="hover:bg-stone-50/80 dark:hover:bg-stone-800/40">
-                        <td className="p-3.5">
-                          <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                            isPayout 
-                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300' 
-                              : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                          }`}>
-                            {isPayout ? 'تسویه مربی' : 'درآمد / شهریه'}
-                          </span>
-                        </td>
-                        <td className="p-3.5">
-                          <div className="font-bold text-stone-900 dark:text-white">
-                            {p.studentName || p.coachName || p.description}
-                          </div>
-                          <div className="text-[10px] text-stone-400">{p.description}</div>
-                        </td>
-                        <td className={`p-3.5 font-mono font-bold text-sm ${
-                          isPayout ? 'text-blue-600 dark:text-blue-400' : 'text-emerald-600 dark:text-emerald-400'
-                        }`}>
-                          {isPayout ? '-' : '+'}{formatMoney(p.amount)}
-                        </td>
-                        <td className="p-3.5 text-stone-600 dark:text-stone-400">{p.paymentMethod}</td>
-                        <td className="p-3.5 text-stone-600 dark:text-stone-400">{p.date}</td>
-                        <td className="p-3.5 font-mono text-stone-500">{p.receiptNumber}</td>
-                        <td className="p-3.5 text-center">
-                          <button
-                            onClick={() => {
-                              if (confirm('آیا از حذف این تراکنش اطمینان دارید؟')) {
-                                deletePayment(p.id);
-                              }
-                            }}
-                            className="p-1 rounded text-stone-400 hover:text-rose-600"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-              {/* Render Expenses */}
-              {(activeSubTab === 'all' || activeSubTab === 'expenses') &&
-                expenses.map((e) => (
-                  <tr key={e.id} className="hover:bg-stone-50/80 dark:hover:bg-stone-800/40">
-                    <td className="p-3.5">
-                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
-                        هزینه جاری
-                      </span>
-                    </td>
-                    <td className="p-3.5">
-                      <div className="font-bold text-stone-900 dark:text-white">{e.title}</div>
-                      <div className="text-[10px] text-stone-400">پرداخت به: {e.paidTo} ({e.category})</div>
-                    </td>
-                    <td className="p-3.5 font-mono font-bold text-sm text-rose-600 dark:text-rose-400">
-                      -{formatMoney(e.amount)}
-                    </td>
-                    <td className="p-3.5 text-stone-600 dark:text-stone-400">{e.paymentMethod}</td>
-                    <td className="p-3.5 text-stone-600 dark:text-stone-400">{e.date}</td>
-                    <td className="p-3.5 font-mono text-stone-500">{e.receiptNumber || '--'}</td>
-                    <td className="p-3.5 text-center">
-                      <button
-                        onClick={() => {
-                          if (confirm('آیا از حذف این هزینه اطمینان دارید؟')) {
-                            deleteExpense(e.id);
-                          }
-                        }}
-                        className="p-1 rounded text-stone-400 hover:text-rose-600"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-
+            <tbody className="divide-y divide-[var(--gym-border)]">
+              {paginatedItems.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-[var(--gym-text-muted)]">
+                    هیچ تراکنشی با معیارهای فعلی یافت نشد.
+                  </td>
+                </tr>
+              ) : (
+                paginatedItems.map((item) => {
+                  const isExpense = item.kind === 'expense';
+                  const isPayout = item.kind === 'coach_settlement';
+                  return (
+                    <tr key={item.id} className="hover:bg-[var(--gym-surface-glass)] transition-colors">
+                      <td className="p-3.5">
+                        <GlassBadge
+                          variant={isExpense ? 'danger' : isPayout ? 'info' : 'success'}
+                          size="sm"
+                        >
+                          {isExpense ? 'هزینه جاری' : isPayout ? 'تسویه مربی' : 'درآمد / شهریه'}
+                        </GlassBadge>
+                      </td>
+                      <td className="p-3.5">
+                        <div className="font-bold text-[var(--gym-text,#fff)]">
+                          {item.title}
+                        </div>
+                        {item.subtitle && (
+                          <div className="text-[10px] text-[var(--gym-text-muted)]">{item.subtitle}</div>
+                        )}
+                      </td>
+                      <td className={`p-3.5 font-mono font-bold text-sm ${
+                        isExpense || isPayout ? 'text-rose-400' : 'text-emerald-400'
+                      }`}>
+                        {isExpense || isPayout ? '-' : '+'}{formatMoney(item.amount)}
+                      </td>
+                      <td className="p-3.5 text-[var(--gym-text-secondary)]">{item.paymentMethod}</td>
+                      <td className="p-3.5 text-[var(--gym-text-secondary)]">{item.date}</td>
+                      <td className="p-3.5 font-mono text-[var(--gym-text-muted)]">{item.receiptNumber}</td>
+                      <td className="p-3.5 text-center">
+                        <button
+                          onClick={() => handleDeleteItem(item)}
+                          className="p-1 rounded-lg text-[var(--gym-text-muted)] hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                          title="حذف تراکنش"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
-      </div>
+
+        {/* Pagination bar */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between p-3.5 border-t border-[var(--gym-border)] text-xs text-[var(--gym-text-muted)]">
+            <span>صفحه {formatNum(currentPage)} از {formatNum(totalPages)} ({formatNum(filteredItems.length)} تراکنش)</span>
+            <div className="flex items-center gap-1.5">
+              <button
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                className="p-1.5 rounded-lg border border-[var(--gym-border)] glass-subtle disabled:opacity-40 cursor-pointer text-[var(--gym-text)]"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+              <button
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                className="p-1.5 rounded-lg border border-[var(--gym-border)] glass-subtle disabled:opacity-40 cursor-pointer text-[var(--gym-text)]"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
+      </GlassCard>
 
       {/* Add Expense Modal */}
       {isExpenseModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="relative w-full max-w-md bg-white dark:bg-stone-900 rounded-2xl shadow-xl border border-stone-200 dark:border-stone-800 overflow-hidden my-8 p-6">
-            <h3 className="text-base font-bold text-stone-900 dark:text-white mb-4">
-              {t.addExpense}
-            </h3>
+        <GlassModal
+          isOpen={isExpenseModalOpen}
+          onClose={() => setIsExpenseModalOpen(false)}
+          title={t.addExpense}
+          subtitle="ثبت هزینه جدید جاری، تعمیرات، اجاره، تجهیزات یا قبوض"
+          icon={<ArrowDownRight className="w-5 h-5 text-rose-400" />}
+        >
+          <form onSubmit={handleAddExpenseSubmit} className="space-y-4 text-xs">
+            <div>
+              <label className="block font-medium text-[var(--gym-text-secondary)] mb-1">عنوان هزینه *</label>
+              <input
+                type="text"
+                value={expTitle}
+                onChange={(e) => setExpTitle(e.target.value)}
+                placeholder="اجاره، تعمیر دستگاه، قبوض و..."
+                className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-[var(--gym-text)] text-sm focus:border-[var(--gym-brand,#10b981)] outline-none"
+                required
+              />
+            </div>
 
-            <form onSubmit={handleAddExpenseSubmit} className="space-y-4 text-xs">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block font-medium mb-1">عنوان هزینه *</label>
+                <label className="block font-medium text-[var(--gym-text-secondary)] mb-1">دسته‌بندی</label>
+                <select
+                  value={expCategory}
+                  onChange={(e) => setExpCategory(e.target.value as ExpenseCategory)}
+                  className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-[var(--gym-text)] bg-[var(--gym-surface)] text-sm"
+                >
+                  <option value="rent" className="bg-stone-900 text-white">{t.catRent}</option>
+                  <option value="salary" className="bg-stone-900 text-white">{t.catSalary}</option>
+                  <option value="utility" className="bg-stone-900 text-white">{t.catUtility}</option>
+                  <option value="equipment" className="bg-stone-900 text-white">{t.catEquipment}</option>
+                  <option value="maintenance" className="bg-stone-900 text-white">{t.catMaintenance}</option>
+                  <option value="buffet_stock" className="bg-stone-900 text-white">{t.catBuffet}</option>
+                  <option value="other" className="bg-stone-900 text-white">{t.catOther}</option>
+                </select>
+              </div>
+              <div>
+                <label className="block font-medium text-[var(--gym-text-secondary)] mb-1">مبلغ ({t.currency}) *</label>
                 <input
-                  type="text"
-                  value={expTitle}
-                  onChange={(e) => setExpTitle(e.target.value)}
-                  placeholder="اجاره، تعمیر دستگاه، قبوض و..."
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
+                  type="number"
+                  value={expAmount || ''}
+                  onChange={(e) => setExpAmount(Number(e.target.value))}
+                  className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] font-mono text-sm font-bold text-rose-400"
                   required
                 />
               </div>
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-medium mb-1">دسته‌بندی</label>
-                  <select
-                    value={expCategory}
-                    onChange={(e) => setExpCategory(e.target.value as ExpenseCategory)}
-                    className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
-                  >
-                    <option value="rent">{t.catRent}</option>
-                    <option value="salary">{t.catSalary}</option>
-                    <option value="utility">{t.catUtility}</option>
-                    <option value="equipment">{t.catEquipment}</option>
-                    <option value="maintenance">{t.catMaintenance}</option>
-                    <option value="buffet_stock">{t.catBuffet}</option>
-                    <option value="other">{t.catOther}</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-medium mb-1">مبلغ ({t.currency}) *</label>
-                  <input
-                    type="number"
-                    value={expAmount || ''}
-                    onChange={(e) => setExpAmount(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-sm font-bold text-rose-600"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-medium mb-1">پرداخت شده به</label>
-                  <input
-                    type="text"
-                    value={expPaidTo}
-                    onChange={(e) => setExpPaidTo(e.target.value)}
-                    placeholder="مالک، تکنسین، فروشنده..."
-                    className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block font-medium mb-1">روش پرداخت</label>
-                  <select
-                    value={expMethod}
-                    onChange={(e) => setExpMethod(e.target.value as PaymentMethod)}
-                    className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
-                  >
-                    <option value="card_transfer">کارت به کارت</option>
-                    <option value="pos">کارتخوان</option>
-                    <option value="cash">نقدی</option>
-                  </select>
-                </div>
-              </div>
-
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block font-medium mb-1">توضیحات بیشتر</label>
+                <label className="block font-medium text-[var(--gym-text-secondary)] mb-1">پرداخت شده به</label>
                 <input
                   type="text"
-                  value={expDesc}
-                  onChange={(e) => setExpDesc(e.target.value)}
-                  placeholder="بابت فاکتور شماره..."
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
+                  value={expPaidTo}
+                  onChange={(e) => setExpPaidTo(e.target.value)}
+                  placeholder="مالک، تکنسین، فروشنده..."
+                  className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-[var(--gym-text)] text-sm"
                 />
               </div>
-
-              <div className="pt-3 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsExpenseModalOpen(false)}
-                  className="px-3 py-1.5 text-stone-600"
+              <div>
+                <label className="block font-medium text-[var(--gym-text-secondary)] mb-1">روش پرداخت</label>
+                <select
+                  value={expMethod}
+                  onChange={(e) => setExpMethod(e.target.value as PaymentMethod)}
+                  className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-[var(--gym-text)] bg-[var(--gym-surface)] text-sm"
                 >
-                  انصراف
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg"
-                >
-                  ثبت هزینه
-                </button>
+                  <option value="card_transfer" className="bg-stone-900 text-white">کارت به کارت</option>
+                  <option value="pos" className="bg-stone-900 text-white">کارتخوان</option>
+                  <option value="cash" className="bg-stone-900 text-white">نقدی</option>
+                </select>
               </div>
-            </form>
-          </div>
-        </div>
+            </div>
+
+            <div>
+              <label className="block font-medium text-[var(--gym-text-secondary)] mb-1">توضیحات بیشتر</label>
+              <input
+                type="text"
+                value={expDesc}
+                onChange={(e) => setExpDesc(e.target.value)}
+                placeholder="بابت فاکتور شماره..."
+                className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-[var(--gym-text)] text-sm"
+              />
+            </div>
+
+            <div className="pt-3 flex justify-end gap-2">
+              <GlassButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsExpenseModalOpen(false)}
+              >
+                انصراف
+              </GlassButton>
+              <GlassButton
+                variant="secondary"
+                size="sm"
+                className="!bg-rose-600 hover:!bg-rose-500 !text-white"
+                type="submit"
+              >
+                ثبت هزینه
+              </GlassButton>
+            </div>
+          </form>
+        </GlassModal>
       )}
 
       {/* Add Income Modal */}
       {isIncomeModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="relative w-full max-w-md bg-white dark:bg-stone-900 rounded-2xl shadow-xl border border-stone-200 dark:border-stone-800 overflow-hidden my-8 p-6">
-            <h3 className="text-base font-bold text-stone-900 dark:text-white mb-4">
-              {t.addIncome} (بوفه / مکمل / سایر)
-            </h3>
-
-            <form onSubmit={handleAddIncomeSubmit} className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-medium mb-1">نوع درآمد</label>
-                  <select
-                    value={incType}
-                    onChange={(e) => setIncType(e.target.value as TransactionType)}
-                    className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
-                  >
-                    <option value="supplement_sale">فروش مکمل ورزشی</option>
-                    <option value="buffet">درآمد بوفه و نوشیدنی</option>
-                    <option value="other_income">سایر درآمدهای متفرقه</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-medium mb-1">مبلغ ({t.currency}) *</label>
-                  <input
-                    type="number"
-                    value={incAmount || ''}
-                    onChange={(e) => setIncAmount(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-sm font-bold text-emerald-600"
-                    required
-                  />
-                </div>
-              </div>
-
+        <GlassModal
+          isOpen={isIncomeModalOpen}
+          onClose={() => setIsIncomeModalOpen(false)}
+          title={`${t.addIncome} (بوفه / مکمل / سایر)`}
+          subtitle="ثبت درآمد آزاد فروشگاه، بوفه یا درآمدهای متفرقه باشگاه"
+          icon={<ArrowUpRight className="w-5 h-5 text-emerald-400" />}
+        >
+          <form onSubmit={handleAddIncomeSubmit} className="space-y-4 text-xs">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block font-medium mb-1">شرح و توضیحات</label>
+                <label className="block font-medium text-[var(--gym-text-secondary)] mb-1">نوع درآمد</label>
+                <select
+                  value={incType}
+                  onChange={(e) => setIncType(e.target.value as TransactionType)}
+                  className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-[var(--gym-text)] bg-[var(--gym-surface)] text-sm"
+                >
+                  <option value="supplement_sale" className="bg-stone-900 text-white">فروش مکمل ورزشی</option>
+                  <option value="buffet" className="bg-stone-900 text-white">درآمد بوفه و نوشیدنی</option>
+                  <option value="other_income" className="bg-stone-900 text-white">سایر درآمدهای متفرقه</option>
+                </select>
+              </div>
+              <div>
+                <label className="block font-medium text-[var(--gym-text-secondary)] mb-1">مبلغ ({t.currency}) *</label>
                 <input
-                  type="text"
-                  value={incDesc}
-                  onChange={(e) => setIncDesc(e.target.value)}
-                  placeholder="فروش پروتئین وی، آبمیوه طبیعی و..."
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
+                  type="number"
+                  value={incAmount || ''}
+                  onChange={(e) => setIncAmount(Number(e.target.value))}
+                  className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] font-mono text-sm font-bold text-emerald-400"
                   required
                 />
               </div>
+            </div>
 
-              <div className="pt-3 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsIncomeModalOpen(false)}
-                  className="px-3 py-1.5 text-stone-600"
-                >
-                  انصراف
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg"
-                >
-                  ثبت درآمد
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div>
+              <label className="block font-medium text-[var(--gym-text-secondary)] mb-1">شرح و توضیحات</label>
+              <input
+                type="text"
+                value={incDesc}
+                onChange={(e) => setIncDesc(e.target.value)}
+                placeholder="فروش پروتئین وی، آبمیوه طبیعی و..."
+                className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-[var(--gym-text)] text-sm"
+                required
+              />
+            </div>
+
+            <div className="pt-3 flex justify-end gap-2">
+              <GlassButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsIncomeModalOpen(false)}
+              >
+                انصراف
+              </GlassButton>
+              <GlassButton
+                variant="neon"
+                size="sm"
+                type="submit"
+              >
+                ثبت درآمد
+              </GlassButton>
+            </div>
+          </form>
+        </GlassModal>
       )}
 
     </div>

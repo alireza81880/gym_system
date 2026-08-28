@@ -19,12 +19,14 @@ import {
   X,
   ShieldCheck,
   ArrowRightLeft,
-  Sparkles
+  Sparkles,
+  Zap
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { NavTab } from '../types';
 import { SmartInsightsEngine } from '../services/insightsService';
 import { ThemeSelectorPopover } from './common/ThemeSelectorPopover';
+import { GlassBadge } from './common/GlassBadge';
 
 export type { NavTab };
 
@@ -92,16 +94,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const getBadgeForFeature = (featureId: NavTab) => {
     switch (featureId) {
       case 'smart_lockers':
-        return { text: `${formatNum(availableLockersCount)} آزاد`, compactText: `${formatNum(availableLockersCount)}`, color: 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300' };
+        return { text: `${formatNum(availableLockersCount)} آزاد`, compactText: `${formatNum(availableLockersCount)}`, variant: 'success' as const };
       case 'hardware_hub':
-        return { text: `${formatNum(onlineDevicesCount)} آنلاین`, compactText: `${formatNum(onlineDevicesCount)}`, color: 'bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300' };
+        return { text: `${formatNum(onlineDevicesCount)} آنلاین`, compactText: `${formatNum(onlineDevicesCount)}`, variant: 'info' as const };
       case 'students':
-        return { text: formatNum(activeStudentsCount), compactText: formatNum(activeStudentsCount), color: debtorsCount > 0 ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300' : 'bg-stone-200 dark:bg-stone-700' };
+        return { text: formatNum(activeStudentsCount), compactText: formatNum(activeStudentsCount), variant: debtorsCount > 0 ? ('warning' as const) : ('neutral' as const) };
       case 'coaches':
-        return { text: formatNum(activeCoachesCount), compactText: formatNum(activeCoachesCount), color: 'bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300' };
+        return { text: formatNum(activeCoachesCount), compactText: formatNum(activeCoachesCount), variant: 'neutral' as const };
       case 'insights':
         if (churnRiskCount > 0) {
-          return { text: `${formatNum(churnRiskCount)} ریزش`, compactText: `${formatNum(churnRiskCount)}!`, color: 'bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300' };
+          return { text: `${formatNum(churnRiskCount)} ریزش`, compactText: `${formatNum(churnRiskCount)}!`, variant: 'danger' as const };
         }
         return undefined;
       default:
@@ -120,24 +122,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <div className="flex flex-col h-full select-none">
       
       {/* Sidebar Header */}
-      <div className="p-3 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between shrink-0">
+      <div className="p-3.5 border-b border-[var(--gym-border)] flex items-center justify-between shrink-0 bg-[var(--gym-surface-glass-strong)]">
         {!compactMode ? (
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-amber-500 text-stone-950 flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
-                ⚡
+              <div className="w-9 h-9 rounded-2xl bg-[var(--gym-brand-soft)] border border-[var(--gym-border-strong)] text-[var(--gym-brand,#10b981)] flex items-center justify-center font-bold text-base shrink-0 shadow-xs">
+                <Zap className="w-5 h-5 fill-current" />
               </div>
               <div className="truncate">
-                <span className="block font-bold text-xs text-stone-900 dark:text-white truncate">Gym OS Desk</span>
-                <span className="block text-[10px] text-stone-400 font-mono">ماژول‌های پذیرش</span>
+                <span className="block font-bold text-xs sm:text-sm text-[var(--gym-text,#fff)] tracking-tight truncate">Gym OS Desk</span>
+                <span className="block text-[10px] text-[var(--gym-text-muted,#9ca3af)] font-mono">ماژول مدیریت باشگاه</span>
               </div>
             </div>
 
             {onToggleCollapse && (
               <button
                 onClick={onToggleCollapse}
-                className="hidden lg:flex w-7 h-7 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-500 hover:text-stone-900 dark:hover:text-white items-center justify-center transition-colors cursor-pointer"
-                title="جمع کردن سایدبار (Compact)"
+                className="hidden lg:flex w-7 h-7 rounded-xl glass-subtle hover:border-[var(--gym-border-strong)] text-[var(--gym-text-muted)] hover:text-[var(--gym-text)] items-center justify-center transition-colors cursor-pointer"
+                title="جمع کردن سایدبار"
                 aria-label="جمع کردن سایدبار"
               >
                 <ChevronRight className="w-4 h-4 rtl:rotate-0" />
@@ -147,7 +149,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {onCloseOverlay && isOverlayOpen && (
               <button
                 onClick={onCloseOverlay}
-                className="lg:hidden w-7 h-7 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-500 hover:text-stone-900 dark:hover:text-white flex items-center justify-center transition-colors"
+                className="lg:hidden w-7 h-7 rounded-xl glass-subtle text-[var(--gym-text-muted)] hover:text-[var(--gym-text)] flex items-center justify-center transition-colors"
                 aria-label="بستن منو"
               >
                 <X className="w-4 h-4" />
@@ -156,14 +158,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center w-full gap-2">
-            <div className="w-8 h-8 rounded-xl bg-amber-500 text-stone-950 flex items-center justify-center font-bold text-sm shadow-xs">
-              ⚡
+            <div className="w-9 h-9 rounded-2xl bg-[var(--gym-brand-soft)] border border-[var(--gym-border-strong)] text-[var(--gym-brand,#10b981)] flex items-center justify-center font-bold text-base shadow-xs">
+              <Zap className="w-5 h-5 fill-current" />
             </div>
             {onToggleCollapse && (
               <button
                 onClick={onToggleCollapse}
-                className="w-7 h-7 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-500 hover:text-stone-900 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer"
-                title="باز کردن سایدبار (Expand)"
+                className="w-7 h-7 rounded-xl glass-subtle hover:border-[var(--gym-border-strong)] text-[var(--gym-text-muted)] hover:text-[var(--gym-text)] flex items-center justify-center transition-colors cursor-pointer"
+                title="باز کردن سایدبار"
                 aria-label="باز کردن سایدبار"
               >
                 <ChevronLeft className="w-4 h-4 rtl:rotate-0" />
@@ -190,17 +192,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   id={`nav-item-${item.id}`}
                   onClick={() => handleSelectTab(item.id)}
                   aria-label={label}
-                  className={`w-11 h-11 rounded-2xl font-medium flex items-center justify-center transition-all cursor-pointer relative ${
+                  className={`w-10 h-10 rounded-2xl font-medium flex items-center justify-center transition-all cursor-pointer relative ${
                     isActive
-                      ? 'bg-amber-500 text-stone-950 shadow-md shadow-amber-500/25 ring-2 ring-amber-400'
-                      : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-white'
+                      ? 'bg-[var(--gym-brand,#10b981)] text-stone-950 shadow-md shadow-[var(--gym-glow)] border border-[var(--gym-border-strong)]'
+                      : 'text-[var(--gym-text-secondary,#d1d5db)] hover:bg-[var(--gym-surface-glass)] hover:text-[var(--gym-text,#fff)]'
                   }`}
                 >
-                  <Icon className={`h-5 w-5 shrink-0 ${isActive ? 'text-stone-950 stroke-[2.4]' : ''}`} />
+                  <Icon className={`h-4.5 w-4.5 shrink-0 ${isActive ? 'text-stone-950 stroke-[2.4]' : ''}`} />
                   
                   {/* Mini badge indicator in compact mode */}
                   {badgeInfo && (
-                    <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full text-[9px] font-mono font-bold bg-stone-950 text-amber-400 ring-1 ring-amber-500/50 flex items-center justify-center">
+                    <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full text-[9px] font-mono font-bold bg-[var(--gym-surface)] text-[var(--gym-brand,#10b981)] border border-[var(--gym-border-strong)] flex items-center justify-center">
                       {badgeInfo.compactText}
                     </span>
                   )}
@@ -209,13 +211,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   )}
                 </button>
 
-                {/* Floating Tooltip in RTL (appears to the left of the button) */}
-                <div className="absolute right-full mr-2.5 top-1/2 -translate-y-1/2 px-2.5 py-1.5 bg-stone-900 border border-stone-700 text-white text-xs font-semibold rounded-xl shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap hidden sm:flex items-center gap-1.5">
+                {/* Floating Tooltip in RTL */}
+                <div className="absolute right-full mr-2.5 top-1/2 -translate-y-1/2 px-2.5 py-1.5 glass-regular border border-[var(--gym-border-strong)] text-[var(--gym-text,#fff)] text-xs font-semibold rounded-xl shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap hidden sm:flex items-center gap-1.5">
                   <span>{label}</span>
                   {badgeInfo && (
-                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-mono">
+                    <GlassBadge variant={badgeInfo.variant} size="sm">
                       {badgeInfo.text}
-                    </span>
+                    </GlassBadge>
                   )}
                 </div>
               </div>
@@ -230,16 +232,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
               aria-label={label}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-2xl font-medium text-xs sm:text-sm transition-all group cursor-pointer ${
                 isActive
-                  ? 'bg-amber-500 text-stone-950 font-bold shadow-md shadow-amber-500/20'
-                  : 'text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-white'
+                  ? 'nav-item-active font-bold border border-[var(--gym-border-strong)] shadow-xs'
+                  : 'text-[var(--gym-text-secondary,#d1d5db)] hover:bg-[var(--gym-surface-glass)] hover:text-[var(--gym-text,#fff)]'
               }`}
             >
               <div className="flex items-center space-x-2.5 rtl:space-x-reverse min-w-0">
                 <Icon
                   className={`h-4 w-4 shrink-0 transition-colors ${
                     isActive
-                      ? 'text-stone-950'
-                      : 'text-stone-500 dark:text-stone-400 group-hover:text-stone-900 dark:group-hover:text-white'
+                      ? 'text-[var(--gym-brand,#10b981)]'
+                      : 'text-[var(--gym-text-muted,#9ca3af)] group-hover:text-[var(--gym-text,#fff)]'
                   }`}
                 />
                 <span className="truncate">{label}</span>
@@ -247,18 +249,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
               <div className="flex items-center gap-1.5 mr-2 rtl:mr-0 rtl:ml-2 shrink-0">
                 {badgeInfo && (
-                  <span
-                    className={`text-[10px] px-2 py-0.5 rounded-full font-bold transition-colors ${
-                      isActive
-                        ? 'bg-stone-950 text-amber-400'
-                        : badgeInfo.color
-                    }`}
-                  >
+                  <GlassBadge variant={badgeInfo.variant} size="sm">
                     {badgeInfo.text}
-                  </span>
+                  </GlassBadge>
                 )}
                 {isFinancesDebt && !isActive && (
-                  <span className="h-2 w-2 rounded-full bg-rose-500" title="دارای بدهی معوق"></span>
+                  <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" title="دارای بدهی معوق"></span>
                 )}
               </div>
             </button>
@@ -267,26 +263,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </nav>
 
       {/* Sticky Bottom Utilities Section */}
-      <div className="shrink-0 p-2.5 border-t border-stone-200 dark:border-stone-800 bg-stone-50/50 dark:bg-stone-900/50 space-y-2">
+      <div className="shrink-0 p-2.5 border-t border-[var(--gym-border)] bg-[var(--gym-surface-glass-strong)] space-y-2">
         
-        {/* Theme Selector Popover (Compact or Full) */}
+        {/* Theme Selector Popover */}
         <ThemeSelectorPopover compact={compactMode} />
 
         {/* System Status Indicator */}
         {!compactMode ? (
-          <div className="pt-1.5 border-t border-stone-200 dark:border-stone-800 text-[11px] text-stone-500 dark:text-stone-400 px-1 space-y-1">
+          <div className="pt-1.5 border-t border-[var(--gym-border)] text-[11px] text-[var(--gym-text-muted,#9ca3af)] px-1 space-y-1">
             <div className="flex justify-between items-center text-[10px]">
               <span className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span>دیتابیس محلی (پایدار)</span>
+                <span>دیتابیس پایدار محلی</span>
               </span>
-              <span className="text-emerald-500 font-mono font-bold">فعال</span>
+              <span className="text-[var(--gym-brand,#10b981)] font-mono font-bold">فعال</span>
             </div>
           </div>
         ) : (
           <div className="flex justify-center pt-1 group relative">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse cursor-help" />
-            <div className="absolute right-full mr-2.5 bottom-0 px-2 py-1 bg-stone-900 border border-stone-700 text-white text-[10px] font-mono rounded-lg shadow-lg pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 hidden sm:block">
+            <div className="absolute right-full mr-2.5 bottom-0 px-2 py-1 glass-regular border border-[var(--gym-border-strong)] text-[var(--gym-text)] text-[10px] font-mono rounded-lg shadow-lg pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 hidden sm:block">
               دیتابیس محلی فعال
             </div>
           </div>
@@ -301,8 +297,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <>
       {/* 1. Desktop / Windowed Fixed Sidebar */}
       <aside
-        className={`hidden md:flex flex-col h-full bg-white dark:bg-stone-900 border-l border-stone-200 dark:border-stone-800 shrink-0 transition-all duration-200 z-20 ${
-          isCollapsed ? 'w-20' : 'w-64'
+        className={`hidden md:flex flex-col h-full glass-regular border-l border-[var(--gym-border)] shrink-0 transition-all duration-200 z-20 ${
+          isCollapsed ? 'w-18' : 'w-64'
         }`}
       >
         {renderSidebarContent(isCollapsed)}
@@ -314,12 +310,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Backdrop */}
           <div
             onClick={onCloseOverlay}
-            className="absolute inset-0 bg-stone-950/60 backdrop-blur-xs transition-opacity animate-in fade-in"
+            className="fixed inset-0 bg-stone-950/70 backdrop-blur-xs transition-opacity animate-in fade-in"
           />
 
           {/* Sliding Drawer */}
           <aside
-            className="absolute inset-y-0 right-0 w-72 max-w-[85vw] bg-white dark:bg-stone-900 border-l border-stone-200 dark:border-stone-800 shadow-2xl z-10 flex flex-col transform transition-transform duration-200 ease-out animate-in slide-in-from-right"
+            className="absolute inset-y-0 right-0 w-72 max-w-[85vw] glass-regular border-l border-[var(--gym-border-strong)] shadow-2xl z-10 flex flex-col transform transition-transform duration-200 ease-out animate-in slide-in-from-right"
             dir="rtl"
           >
             {renderSidebarContent(false)}
@@ -329,3 +325,4 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </>
   );
 };
+

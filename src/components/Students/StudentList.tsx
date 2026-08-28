@@ -1,43 +1,230 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, memo } from 'react';
 import { 
   GraduationCap, 
   Plus, 
   Search, 
-  Phone, 
-  CreditCard, 
   DollarSign, 
   Edit3, 
   Trash2, 
   ExternalLink, 
-  CheckCircle, 
-  AlertTriangle, 
   RefreshCw, 
-  Calendar,
-  Filter,
-  UserCheck
+  UserCheck,
+  ChevronRight,
+  ChevronLeft,
+  ChevronsRight,
+  ChevronsLeft,
+  Users
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Student, PackageType, PaymentMethod, StudentStatus } from '../../types';
+import { Student, PackageType, PaymentMethod } from '../../types';
 import { StudentDetailModal } from './StudentDetailModal';
 import { MemberRegistrationDrawer } from './MemberRegistrationDrawer';
-import { MoneyService } from '../../services/moneyService';
-import { DateService } from '../../services/dateService';
 import { MoneyInput } from '../common/MoneyInput';
+import { usePaginatedMembers } from '../../stores/memberStore';
+import { GlassCard } from '../common/GlassCard';
+import { GlassButton } from '../common/GlassButton';
+import { GlassBadge } from '../common/GlassBadge';
+import { GlassPageHeader } from '../common/GlassPageHeader';
+import { GlassModal } from '../common/GlassModal';
 
 interface StudentListProps {
   initialOpenNewModal?: boolean;
   onModalClosed?: () => void;
 }
 
+// Memoized Individual Member Row for Maximum Render Performance
+interface MemberRowProps {
+  student: Student;
+  coachName?: string;
+  packageName: string;
+  onSelectDetail: (id: string) => void;
+  onOpenPayDebt: (student: Student) => void;
+  onOpenRenew: (student: Student) => void;
+  onOpenEdit: (student: Student) => void;
+  onDelete: (id: string, name: string) => void;
+  formatMoney: (amount: number) => string;
+  t: Record<string, string>;
+}
+
+const MemberRow = memo<MemberRowProps>(({
+  student: st,
+  coachName,
+  packageName,
+  onSelectDetail,
+  onOpenPayDebt,
+  onOpenRenew,
+  onOpenEdit,
+  onDelete,
+  formatMoney,
+  t,
+}) => {
+  const hasDebt = st.remainingDebt > 0;
+
+  return (
+    <tr className="hover:bg-[var(--gym-surface-glass)] transition-colors border-b border-[var(--gym-border)]">
+      {/* Name & Phone & Member Number */}
+      <td className="p-3.5">
+        <div className="flex items-center gap-2">
+          <span className="font-bold text-[var(--gym-text,#fff)] text-sm">
+            {st.fullName}
+          </span>
+          {st.memberNumber && (
+            <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-[var(--gym-brand,#10b981)]/15 text-[var(--gym-brand,#10b981)] border border-[var(--gym-brand,#10b981)]/30 shrink-0">
+              #{st.memberNumber}
+            </span>
+          )}
+        </div>
+        <div className="text-[11px] text-[var(--gym-text-muted,#9ca3af)] font-mono flex items-center gap-2 mt-0.5">
+          <span>{st.phone}</span>
+          {st.nationalId && (
+            <>
+              <span>•</span>
+              <span>کدملی: {st.nationalId}</span>
+            </>
+          )}
+        </div>
+      </td>
+
+      {/* Coach */}
+      <td className="p-3.5">
+        {coachName ? (
+          <span className="px-2 py-1 rounded-xl bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-semibold text-xs inline-flex items-center gap-1">
+            <UserCheck className="w-3.5 h-3.5 text-cyan-400" />
+            {coachName}
+          </span>
+        ) : (
+          <span className="px-2 py-0.5 rounded-xl glass-subtle text-[var(--gym-text-muted)] font-normal text-xs">
+            بدون مربی (آزاد)
+          </span>
+        )}
+        
+        {/* Optional Plans Indicators */}
+        {(st.wantsWorkoutPlan || st.wantsDietPlan) && (
+          <div className="flex items-center gap-1 mt-1">
+            {st.wantsWorkoutPlan && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-lg bg-blue-500/15 text-blue-300 border border-blue-500/30 font-bold" title="دارای برنامه تمرینی">
+                تمرین
+              </span>
+            )}
+            {st.wantsDietPlan && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold" title="دارای برنامه تغذیه">
+                رژیم
+              </span>
+            )}
+          </div>
+        )}
+      </td>
+
+      {/* Package */}
+      <td className="p-3.5 text-[var(--gym-text-secondary,#d1d5db)] font-medium">
+        {packageName}
+      </td>
+
+      {/* Total Fee */}
+      <td className="p-3.5 font-mono font-semibold text-[var(--gym-text,#fff)]">
+        {formatMoney(st.totalFee)}
+      </td>
+
+      {/* Paid */}
+      <td className="p-3.5 font-mono text-emerald-400 font-medium">
+        {formatMoney(st.paidAmount)}
+      </td>
+
+      {/* Debt */}
+      <td className="p-3.5">
+        {hasDebt ? (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-lg font-mono font-bold text-xs bg-rose-500/15 text-rose-300 border border-rose-500/30">
+            {formatMoney(st.remainingDebt)}
+          </span>
+        ) : (
+          <span className="text-emerald-400 text-xs font-semibold">
+            تسویه ✓
+          </span>
+        )}
+      </td>
+
+      {/* Sessions / Expire */}
+      <td className="p-3.5 text-[var(--gym-text-muted,#9ca3af)]">
+        <div className="font-mono text-[var(--gym-text-secondary)]">{st.expireDate}</div>
+        <div className="text-[10px] font-mono text-[var(--gym-text-muted)]">
+          {st.sessionsAttended} / {st.sessionsTotal} جلسه
+        </div>
+      </td>
+
+      {/* Status */}
+      <td className="p-3.5">
+        <GlassBadge
+          variant={st.status === 'active' ? 'success' : 'danger'}
+          dot
+        >
+          {st.status === 'active' ? t.active : t.expired}
+        </GlassBadge>
+      </td>
+
+      {/* Actions */}
+      <td className="p-3.5 text-center">
+        <div className="flex items-center justify-center gap-1">
+          {/* Settle Debt Button */}
+          {hasDebt && (
+            <button
+              onClick={() => onOpenPayDebt(st)}
+              className="p-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 hover:bg-amber-500/25 text-amber-300 font-bold transition-all cursor-pointer"
+              title={t.payDebt}
+            >
+              <DollarSign className="h-4 w-4" />
+            </button>
+          )}
+
+          {/* Renew Button */}
+          <button
+            onClick={() => onOpenRenew(st)}
+            className="p-1.5 rounded-xl text-[var(--gym-text-muted)] hover:text-emerald-400 hover:bg-[var(--gym-surface-glass-strong)] transition-all cursor-pointer"
+            title={t.renewMembership}
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
+
+          {/* View Detail Button */}
+          <button
+            onClick={() => onSelectDetail(st.id)}
+            className="p-1.5 rounded-xl text-[var(--gym-text-muted)] hover:text-[var(--gym-text,#fff)] hover:bg-[var(--gym-surface-glass-strong)] transition-all cursor-pointer"
+            title="پرونده شاگرد"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </button>
+
+          {/* Edit Button */}
+          <button
+            onClick={() => onOpenEdit(st)}
+            className="p-1.5 rounded-xl text-[var(--gym-text-muted)] hover:text-[var(--gym-text,#fff)] hover:bg-[var(--gym-surface-glass-strong)] transition-all cursor-pointer"
+            title={t.edit}
+          >
+            <Edit3 className="h-4 w-4" />
+          </button>
+
+          {/* Delete Button */}
+          <button
+            onClick={() => onDelete(st.id, st.fullName)}
+            className="p-1.5 rounded-xl text-[var(--gym-text-muted)] hover:text-rose-400 hover:bg-[var(--gym-surface-glass-strong)] transition-all cursor-pointer"
+            title={t.delete}
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+});
+
+MemberRow.displayName = 'MemberRow';
+
 export const StudentList: React.FC<StudentListProps> = ({ 
   initialOpenNewModal = false,
   onModalClosed
 }) => {
   const { 
-    students, 
     coaches, 
     packages,
-    addStudent, 
     updateStudent, 
     deleteStudent, 
     recordStudentPayment, 
@@ -45,13 +232,48 @@ export const StudentList: React.FC<StudentListProps> = ({
     formatMoney, 
     formatNum, 
     t, 
-    lang 
   } = useApp();
 
-  const [searchTerm, setSearchTerm] = useState('');
+  // Search and Filter State with Debouncing
+  const [searchInput, setSearchInput] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedCoachId, setSelectedCoachId] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
-  const [selectedDebtFilter, setSelectedDebtFilter] = useState('all'); // all, with_debt, settled
+  const [selectedDebtFilter, setSelectedDebtFilter] = useState<'all' | 'with_debt' | 'settled'>('all');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
+  // Debounce search input (200ms)
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchInput);
+      setPage(1);
+    }, 200);
+    return () => clearTimeout(handler);
+  }, [searchInput]);
+
+  // Fast paginated query from indexed repository
+  const paginatedResult = usePaginatedMembers({
+    page,
+    pageSize,
+    search: debouncedSearch,
+    status: selectedStatus,
+    coachId: selectedCoachId,
+    debtFilter: selectedDebtFilter,
+  });
+
+  // Fast O(1) Coach & Package Lookup Maps
+  const coachMap = useMemo(() => {
+    const map = new Map<string, string>();
+    coaches.forEach(c => map.set(c.id, c.fullName));
+    return map;
+  }, [coaches]);
+
+  const packageMap = useMemo(() => {
+    const map = new Map<string, string>();
+    packages.forEach(p => map.set(p.type, p.name));
+    return map;
+  }, [packages]);
 
   const [selectedStudentForDetail, setSelectedStudentForDetail] = useState<string | null>(null);
 
@@ -73,219 +295,74 @@ export const StudentList: React.FC<StudentListProps> = ({
   const [renewPayMethod, setRenewPayMethod] = useState<PaymentMethod>('pos');
   const [renewExpireDate, setRenewExpireDate] = useState('1403/07/25');
 
-  // Add/Edit Form Fields
+  // Edit Form Fields
   const [fullName, setFullName] = useState('');
-  const [nationalId, setNationalId] = useState('');
   const [phone, setPhone] = useState('');
-  const [emergencyPhone, setEmergencyPhone] = useState('');
   const [coachId, setCoachId] = useState('');
   const [packageType, setPackageType] = useState<PackageType>('1_month');
-  const [registrationDate, setRegistrationDate] = useState('1403/05/25');
   const [expireDate, setExpireDate] = useState('1403/06/25');
   const [totalFee, setTotalFee] = useState<number>(2800000);
   const [initialPayment, setInitialPayment] = useState<number>(2800000);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pos');
-  const [sessionsTotal, setSessionsTotal] = useState<number>(12);
-  const [height, setHeight] = useState<number>(175);
-  const [weight, setWeight] = useState<number>(75);
   const [goal, setGoal] = useState('افزایش حجم و تناسب اندام');
   const [medicalNotes, setMedicalNotes] = useState('');
-
-  // Optional Services State
   const [wantsCoach, setWantsCoach] = useState(false);
   const [wantsWorkoutPlan, setWantsWorkoutPlan] = useState(false);
   const [wantsDietPlan, setWantsDietPlan] = useState(false);
   const [coachFee, setCoachFee] = useState<number>(0);
   const [workoutPlanFee, setWorkoutPlanFee] = useState<number>(500000);
-  const [dietPlanFee, setDietPlanFee] = useState<number>(400000);
 
-  const getPackagePrice = (pkg: PackageType): number => {
-    const found = packages.find(p => p.type === pkg);
-    if (found) return found.price;
-    const defaults: Record<PackageType, number> = {
-      '1_month': 2800000,
-      '3_months': 6800000,
-      '6_months': 12000000,
-      '12_months': 22000000,
-      'vip_personal': 4500000,
-      '12_sessions': 2400000,
-      '24_sessions': 4200000,
-    };
-    return defaults[pkg] || 2500000;
-  };
-
-  const getPackageSessions = (pkg: PackageType): number => {
-    const found = packages.find(p => p.type === pkg);
-    if (found) return found.sessionsCount;
-    if (pkg === '12_sessions') return 12;
-    if (pkg === '24_sessions') return 24;
-    if (pkg === '3_months') return 36;
-    return 24;
-  };
-
-  const recalculateTotal = (
-    pkg: PackageType, 
-    withCoach: boolean, 
-    withWorkout: boolean, 
-    withDiet: boolean, 
-    cId?: string
-  ) => {
-    const base = getPackagePrice(pkg);
-    const selectedCoach = coaches.find(c => c.id === (cId !== undefined ? cId : coachId));
-    const cFee = withCoach ? (selectedCoach?.baseSalary ? Math.round(selectedCoach.baseSalary / 20) : 1000000) : 0;
-    const wFee = withWorkout ? 500000 : 0;
-    const dFee = withDiet ? 400000 : 0;
-    
-    setCoachFee(cFee);
-    const sum = base + cFee + wFee + dFee;
-    setTotalFee(sum);
-    setInitialPayment(sum);
-  };
-
-  const handlePackageChange = (pkg: PackageType) => {
-    setPackageType(pkg);
-    setSessionsTotal(getPackageSessions(pkg));
-    recalculateTotal(pkg, wantsCoach, wantsWorkoutPlan, wantsDietPlan);
-  };
-
-  const handleCoachChange = (cId: string) => {
-    setCoachId(cId);
-    if (cId === '' || cId === 'none') {
-      setWantsCoach(false);
-      recalculateTotal(packageType, false, wantsWorkoutPlan, wantsDietPlan, '');
-    } else {
-      setWantsCoach(true);
-      recalculateTotal(packageType, true, wantsWorkoutPlan, wantsDietPlan, cId);
-    }
-  };
-
-  const handleToggleCoach = (checked: boolean) => {
-    setWantsCoach(checked);
-    if (!checked) {
-      setCoachId('');
-    } else if (!coachId && coaches[0]) {
-      setCoachId(coaches[0].id);
-    }
-    recalculateTotal(packageType, checked, wantsWorkoutPlan, wantsDietPlan, checked ? coachId || coaches[0]?.id : '');
-  };
-
-  const handleToggleWorkoutPlan = (checked: boolean) => {
-    setWantsWorkoutPlan(checked);
-    recalculateTotal(packageType, wantsCoach, checked, wantsDietPlan);
-  };
-
-  const handleToggleDietPlan = (checked: boolean) => {
-    setWantsDietPlan(checked);
-    recalculateTotal(packageType, wantsCoach, wantsWorkoutPlan, checked);
+  const getPackagePrice = (type: string) => {
+    const pkg = packages.find(p => p.type === type);
+    return pkg ? pkg.price : 2800000;
   };
 
   const openAddModal = () => {
     setEditingStudent(null);
-    setFullName('');
-    setNationalId('');
-    setPhone('');
-    setEmergencyPhone('');
-    setCoachId('');
-    setWantsCoach(false);
-    setWantsWorkoutPlan(false);
-    setWantsDietPlan(false);
-    setPackageType('1_month');
-    const base = getPackagePrice('1_month');
-    setTotalFee(base);
-    setInitialPayment(base);
-    setPaymentMethod('pos');
-    setSessionsTotal(getPackageSessions('1_month'));
-    setRegistrationDate('1403/05/25');
-    setExpireDate('1403/06/25');
-    setHeight(175);
-    setWeight(75);
-    setGoal('تناسب اندام و هایپرتروفی');
-    setMedicalNotes('');
     setIsAddModalOpen(true);
   };
 
-  const openEditModal = (st: Student) => {
-    setEditingStudent(st);
-    setFullName(st.fullName);
-    setNationalId(st.nationalId);
-    setPhone(st.phone);
-    setEmergencyPhone(st.emergencyPhone || '');
-    setCoachId(st.coachId || '');
-    setWantsCoach(Boolean(st.wantsCoach || (st.coachId && st.coachId !== '')));
-    setWantsWorkoutPlan(Boolean(st.wantsWorkoutPlan));
-    setWantsDietPlan(Boolean(st.wantsDietPlan));
-    setPackageType(st.packageType);
-    setTotalFee(st.totalFee);
-    setInitialPayment(st.paidAmount);
-    setSessionsTotal(st.sessionsTotal);
-    setRegistrationDate(st.registrationDate);
-    setExpireDate(st.expireDate);
-    setHeight(st.height || 175);
-    setWeight(st.weight || 75);
-    setGoal(st.goal || '');
-    setMedicalNotes(st.medicalNotes || '');
+  const openEditModal = (student: Student) => {
+    setEditingStudent(student);
+    setFullName(student.fullName);
+    setPhone(student.phone);
+    setCoachId(student.coachId || '');
+    setPackageType((student.packageType as PackageType) || '1_month');
+    setExpireDate(student.expireDate);
+    setTotalFee(student.totalFee);
+    setInitialPayment(student.paidAmount);
+    setGoal(student.goal || 'فیتنس و سلامت');
+    setMedicalNotes(student.medicalNotes || '');
+    setWantsCoach(Boolean(student.wantsCoach));
+    setWantsWorkoutPlan(Boolean(student.wantsWorkoutPlan));
+    setWantsDietPlan(Boolean(student.wantsDietPlan));
+    setCoachFee(student.coachFee || 0);
+    setWorkoutPlanFee(student.planFee || 500000);
     setIsAddModalOpen(true);
   };
 
-  const handleSaveStudent = (e: React.FormEvent) => {
+  const handleEditStudentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName || !phone) return;
+    if (!editingStudent) return;
 
-    if (editingStudent) {
-      updateStudent(editingStudent.id, {
-        fullName,
-        nationalId,
-        phone,
-        emergencyPhone,
-        coachId: wantsCoach ? coachId : '',
-        packageType,
-        totalFee,
-        paidAmount: initialPayment,
-        sessionsTotal,
-        registrationDate,
-        expireDate,
-        height,
-        weight,
-        goal,
-        medicalNotes,
-        wantsCoach,
-        wantsWorkoutPlan,
-        wantsDietPlan,
-        coachFee: wantsCoach ? coachFee : 0,
-        planFee: (wantsWorkoutPlan ? workoutPlanFee : 0) + (wantsDietPlan ? dietPlanFee : 0),
-      });
-    } else {
-      addStudent(
-        {
-          fullName,
-          nationalId: nationalId.trim(),
-          phone,
-          emergencyPhone,
-          coachId: wantsCoach ? coachId : '',
-          packageType,
-          registrationDate,
-          expireDate,
-          totalFee,
-          paidAmount: initialPayment,
-          status: 'active',
-          sessionsTotal,
-          sessionsAttended: 0,
-          height,
-          weight,
-          goal,
-          medicalNotes,
-          wantsCoach,
-          wantsWorkoutPlan,
-          wantsDietPlan,
-          coachFee: wantsCoach ? coachFee : 0,
-          planFee: (wantsWorkoutPlan ? workoutPlanFee : 0) + (wantsDietPlan ? dietPlanFee : 0),
-        },
-        initialPayment,
-        paymentMethod
-      );
-    }
+    updateStudent(editingStudent.id, {
+      fullName,
+      phone,
+      coachId: wantsCoach ? coachId : '',
+      packageType,
+      expireDate,
+      totalFee,
+      paidAmount: initialPayment,
+      remainingDebt: Math.max(0, totalFee - initialPayment),
+      goal,
+      medicalNotes,
+      wantsCoach,
+      coachFee: wantsCoach ? coachFee : 0,
+      wantsWorkoutPlan,
+      wantsDietPlan,
+    });
 
     setIsAddModalOpen(false);
+    setEditingStudent(null);
     if (onModalClosed) onModalClosed();
   };
 
@@ -293,9 +370,16 @@ export const StudentList: React.FC<StudentListProps> = ({
     e.preventDefault();
     if (!payDebtStudent || debtPayAmount <= 0) return;
 
-    recordStudentPayment(payDebtStudent.id, debtPayAmount, debtPayMethod, debtPayNote);
+    recordStudentPayment(
+      payDebtStudent.id,
+      debtPayAmount,
+      debtPayMethod,
+      debtPayNote || `تسویه مانده شهریه (${payDebtStudent.fullName})`
+    );
+
     setPayDebtStudent(null);
     setDebtPayAmount(0);
+    setDebtPayNote('');
   };
 
   const handleRenewSubmit = (e: React.FormEvent) => {
@@ -313,96 +397,137 @@ export const StudentList: React.FC<StudentListProps> = ({
     setRenewStudent(null);
   };
 
-  // Filters
-  const filteredStudents = students.filter(st => {
-    const matchesSearch = 
-      st.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      st.phone.includes(searchTerm) ||
-      st.nationalId.includes(searchTerm) ||
-      (st.memberNumber && st.memberNumber.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesCoach = selectedCoachId === 'all' || st.coachId === selectedCoachId;
-    const matchesStatus = selectedStatus === 'all' || st.status === selectedStatus;
-    const matchesDebt = 
-      selectedDebtFilter === 'all' 
-        ? true 
-        : selectedDebtFilter === 'with_debt' 
-        ? st.remainingDebt > 0 
-        : st.remainingDebt === 0;
-
-    return matchesSearch && matchesCoach && matchesStatus && matchesDebt;
-  });
+  const handleDeleteStudent = (id: string, name: string) => {
+    if (confirm(`آیا از حذف پرونده ورزشی «${name}» اطمینان دارید؟`)) {
+      deleteStudent(id);
+    }
+  };
 
   return (
     <div className="space-y-6">
       
       {/* Top Header */}
-      <div className="bg-white dark:bg-stone-900 p-6 rounded-2xl border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-stone-900 dark:text-white flex items-center gap-2">
-            <GraduationCap className="h-6 w-6 text-amber-500" />
-            <span>{t.studentsTitle}</span>
-          </h2>
-          <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 max-w-2xl">
-            {t.studentsDesc}
-          </p>
-        </div>
-
-        <button
-          id="add-student-btn"
-          onClick={openAddModal}
-          className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold rounded-xl text-sm shadow-xs transition-colors flex items-center justify-center gap-2 flex-shrink-0"
-        >
-          <Plus className="h-4 w-4" />
-          <span>{t.newStudent}</span>
-        </button>
-      </div>
+      <GlassPageHeader
+        title={t.studentsTitle}
+        subtitle={`بانک اطلاعات اعضا، وضعیت پکیج‌ها، مانده مطالبات و سوابق ورزشی (مجموع ${formatNum(paginatedResult.total)} پرونده)`}
+        icon={<GraduationCap className="h-6 w-6 text-[var(--gym-brand,#10b981)]" />}
+        actions={
+          <GlassButton
+            id="add-student-btn"
+            variant="neon"
+            icon={<Plus className="h-4 w-4" />}
+            onClick={openAddModal}
+          >
+            {t.newStudent}
+          </GlassButton>
+        }
+      />
 
       {/* Search and Advanced Filters */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <div className="relative sm:col-span-2">
-          <Search className="absolute right-3 rtl:right-3 rtl:left-auto left-auto top-3 h-4 w-4 text-stone-400" />
+          <Search className="absolute right-3 rtl:right-3 rtl:left-auto left-auto top-3 h-4 w-4 text-[var(--gym-text-muted)]" />
           <input
             id="student-search-input"
             type="text"
-            placeholder="جستجوی نام، تلفن یا کدملی شاگرد..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-4 pr-10 rtl:pr-10 rtl:pl-4 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-sm text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+            placeholder="جستجوی سریع بر اساس نام، موبایل، کدملی یا شماره عضویت..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="w-full pl-4 pr-10 rtl:pr-10 rtl:pl-4 py-2.5 rounded-2xl glass-subtle border-[var(--gym-border)] text-sm text-[var(--gym-text,#fff)] focus:outline-none focus:ring-2 focus:ring-[var(--gym-brand,#10b981)]"
           />
+          {searchInput && (
+            <button
+              onClick={() => setSearchInput('')}
+              className="absolute left-3 rtl:left-3 rtl:right-auto top-2.5 text-[var(--gym-text-muted)] hover:text-[var(--gym-text)] text-xs px-1.5 py-0.5 rounded cursor-pointer"
+            >
+              پاک کردن
+            </button>
+          )}
         </div>
 
         <select
           value={selectedCoachId}
-          onChange={(e) => setSelectedCoachId(e.target.value)}
-          className="px-3.5 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-sm text-stone-700 dark:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
+          onChange={(e) => {
+            setSelectedCoachId(e.target.value);
+            setPage(1);
+          }}
+          className="px-3.5 py-2.5 rounded-2xl glass-subtle border-[var(--gym-border)] text-xs sm:text-sm text-[var(--gym-text,#fff)] focus:outline-none focus:ring-2 focus:ring-[var(--gym-brand,#10b981)] bg-[var(--gym-surface)]"
         >
-          <option value="all">تمامی مربیان</option>
+          <option value="all" className="bg-stone-900 text-white">تمامی مربیان</option>
           {coaches.map(c => (
-            <option key={c.id} value={c.id}>{c.fullName}</option>
+            <option key={c.id} value={c.id} className="bg-stone-900 text-white">{c.fullName}</option>
           ))}
         </select>
 
         <select
           value={selectedDebtFilter}
-          onChange={(e) => setSelectedDebtFilter(e.target.value)}
-          className="px-3.5 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-sm text-stone-700 dark:text-stone-300 focus:outline-none focus:ring-2 focus:ring-amber-500"
+          onChange={(e) => {
+            setSelectedDebtFilter(e.target.value as 'all' | 'with_debt' | 'settled');
+            setPage(1);
+          }}
+          className="px-3.5 py-2.5 rounded-2xl glass-subtle border-[var(--gym-border)] text-xs sm:text-sm text-[var(--gym-text,#fff)] focus:outline-none focus:ring-2 focus:ring-[var(--gym-brand,#10b981)] bg-[var(--gym-surface)]"
         >
-          <option value="all">تمامی وضعیت‌های مالی</option>
-          <option value="with_debt">فقط بدهکاران شهریه</option>
-          <option value="settled">تسویه شده و بدون بدهی</option>
+          <option value="all" className="bg-stone-900 text-white">تمامی وضعیت‌های مالی</option>
+          <option value="with_debt" className="bg-stone-900 text-white">فقط بدهکاران شهریه</option>
+          <option value="settled" className="bg-stone-900 text-white">تسویه شده و بدون بدهی</option>
         </select>
       </div>
 
-      {/* Students Table */}
-      {filteredStudents.length === 0 ? (
-        <div className="bg-white dark:bg-stone-900 p-12 text-center rounded-2xl border border-stone-200 dark:border-stone-800 text-stone-500">
-          {t.noStudentsFound}
+      {/* Quick Status Chips */}
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="text-[var(--gym-text-muted)]">فیلتر وضعیت:</span>
+          {(['all', 'active', 'pending_renewal', 'expired'] as const).map(st => (
+            <button
+              key={st}
+              onClick={() => {
+                setSelectedStatus(st);
+                setPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-xl font-medium transition-all cursor-pointer ${
+                selectedStatus === st
+                  ? 'glass-neon font-bold text-white'
+                  : 'glass-subtle text-[var(--gym-text-muted)] hover:text-white'
+              }`}
+            >
+              {st === 'all' ? 'همه' : st === 'active' ? 'فعال' : st === 'pending_renewal' ? 'رو به انقضا' : 'منقضی شده'}
+            </button>
+          ))}
         </div>
+
+        <div className="flex items-center gap-2 text-[var(--gym-text-muted)]">
+          <span>نمایش در هر صفحه:</span>
+          {[25, 50, 100].map(sz => (
+            <button
+              key={sz}
+              onClick={() => {
+                setPageSize(sz);
+                setPage(1);
+              }}
+              className={`px-2.5 py-1 rounded-xl font-mono text-xs cursor-pointer transition-all ${
+                pageSize === sz
+                  ? 'bg-[var(--gym-brand,#10b981)] text-stone-950 font-bold'
+                  : 'glass-subtle text-[var(--gym-text-muted)] hover:text-white'
+              }`}
+            >
+              {sz}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Students Table */}
+      {paginatedResult.items.length === 0 ? (
+        <GlassCard className="p-12 text-center text-[var(--gym-text-muted)] space-y-2">
+          <Users className="w-8 h-8 mx-auto text-[var(--gym-text-muted)] mb-2 opacity-50" />
+          <p className="font-bold text-[var(--gym-text,#fff)]">{t.noStudentsFound}</p>
+          <p className="text-xs text-[var(--gym-text-muted)]">با تغییر عبارت جستجو یا فیلترها، مجدداً بررسی کنید.</p>
+        </GlassCard>
       ) : (
-        <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 overflow-hidden shadow-xs">
+        <GlassCard padding="none" className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-right rtl:text-right">
-              <thead className="bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 font-semibold border-b border-stone-200 dark:border-stone-700">
+              <thead className="glass-subtle text-[var(--gym-text-secondary)] font-semibold border-b border-[var(--gym-border)]">
                 <tr>
                   <th className="p-3.5">نام شاگرد / کدملی</th>
                   <th className="p-3.5">مربی اختصاصی</th>
@@ -415,186 +540,77 @@ export const StudentList: React.FC<StudentListProps> = ({
                   <th className="p-3.5 text-center">عملیات</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-200 dark:divide-stone-800">
-                {filteredStudents.map((st) => {
-                  const coach = coaches.find(c => c.id === st.coachId);
-                  const hasDebt = st.remainingDebt > 0;
-                  return (
-                    <tr key={st.id} className="hover:bg-stone-50/80 dark:hover:bg-stone-800/40 transition-colors">
-                      
-                      {/* Name & Phone & Member Number */}
-                      <td className="p-3.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-stone-900 dark:text-white text-sm">
-                            {st.fullName}
-                          </span>
-                          {st.memberNumber && (
-                            <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-400 border border-amber-500/25 shrink-0">
-                              #{st.memberNumber}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[11px] text-stone-400 font-mono flex items-center gap-2 mt-0.5">
-                          <span>{st.phone}</span>
-                          {st.nationalId && (
-                            <>
-                              <span>•</span>
-                              <span>کدملی: {st.nationalId}</span>
-                            </>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Coach */}
-                      <td className="p-3.5">
-                        {coach ? (
-                          <span className="px-2 py-1 rounded-lg bg-amber-500/15 text-amber-900 dark:text-amber-300 font-semibold text-xs inline-flex items-center gap-1">
-                            <UserCheck className="w-3.5 h-3.5 text-amber-500" />
-                            {coach.fullName.split(' ')[0] + ' ' + (coach.fullName.split(' ')[1] || '')}
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-lg bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 font-normal text-xs">
-                            بدون مربی (آزاد)
-                          </span>
-                        )}
-                        
-                        {/* Optional Plans Indicators */}
-                        {(st.wantsWorkoutPlan || st.wantsDietPlan) && (
-                          <div className="flex items-center gap-1 mt-1">
-                            {st.wantsWorkoutPlan && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 font-bold" title="دارای برنامه تمرینی">
-                                برنامه تمرین
-                              </span>
-                            )}
-                            {st.wantsDietPlan && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold" title="دارای برنامه تغذیه">
-                                رژیم
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Package */}
-                      <td className="p-3.5 text-stone-700 dark:text-stone-300 font-medium">
-                        {packages.find(p => p.type === st.packageType)?.name || st.packageType}
-                      </td>
-
-                      {/* Total Fee */}
-                      <td className="p-3.5 font-mono font-semibold text-stone-800 dark:text-stone-200">
-                        {formatMoney(st.totalFee)}
-                      </td>
-
-                      {/* Paid */}
-                      <td className="p-3.5 font-mono text-emerald-600 dark:text-emerald-400 font-medium">
-                        {formatMoney(st.paidAmount)}
-                      </td>
-
-                      {/* Debt */}
-                      <td className="p-3.5">
-                        {hasDebt ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded font-mono font-bold text-xs bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
-                            {formatMoney(st.remainingDebt)}
-                          </span>
-                        ) : (
-                          <span className="text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
-                            تسویه ✓
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Sessions / Expire */}
-                      <td className="p-3.5 text-stone-600 dark:text-stone-400">
-                        <div className="font-mono">{st.expireDate}</div>
-                        <div className="text-[10px] text-stone-400 font-mono">
-                          {st.sessionsAttended} / {st.sessionsTotal} جلسه
-                        </div>
-                      </td>
-
-                      {/* Status */}
-                      <td className="p-3.5">
-                        <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
-                          st.status === 'active'
-                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                            : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
-                        }`}>
-                          {st.status === 'active' ? t.active : t.expired}
-                        </span>
-                      </td>
-
-                      {/* Actions */}
-                      <td className="p-3.5 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          
-                          {/* Settle Debt Button */}
-                          {hasDebt && (
-                            <button
-                              onClick={() => {
-                                setPayDebtStudent(st);
-                                setDebtPayAmount(st.remainingDebt);
-                              }}
-                              className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 dark:hover:bg-amber-900 text-amber-700 dark:text-amber-300 font-bold"
-                              title={t.payDebt}
-                            >
-                              <DollarSign className="h-4 w-4" />
-                            </button>
-                          )}
-
-                          {/* Renew Button */}
-                          <button
-                            onClick={() => {
-                              setRenewStudent(st);
-                              const pr = getPackagePrice(st.packageType);
-                              setRenewFee(pr);
-                              setRenewPaid(pr);
-                            }}
-                            className="p-1.5 rounded-lg text-stone-400 hover:text-emerald-600 hover:bg-stone-100 dark:hover:bg-stone-800"
-                            title={t.renewMembership}
-                          >
-                            <RefreshCw className="h-4 w-4" />
-                          </button>
-
-                          {/* View Detail Button */}
-                          <button
-                            onClick={() => setSelectedStudentForDetail(st.id)}
-                            className="p-1.5 rounded-lg text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800"
-                            title="پرونده شاگرد"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </button>
-
-                          {/* Edit Button */}
-                          <button
-                            onClick={() => openEditModal(st)}
-                            className="p-1.5 rounded-lg text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800"
-                            title={t.edit}
-                          >
-                            <Edit3 className="h-4 w-4" />
-                          </button>
-
-                          {/* Delete Button */}
-                          <button
-                            onClick={() => {
-                              if (confirm(`آیا از حذف شاگرد ${st.fullName} اطمینان دارید؟`)) {
-                                deleteStudent(st.id);
-                              }
-                            }}
-                            className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-stone-100 dark:hover:bg-stone-800"
-                            title={t.delete}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-
-                        </div>
-                      </td>
-
-                    </tr>
-                  );
-                })}
+              <tbody className="divide-y divide-[var(--gym-border)]">
+                {paginatedResult.items.map((st) => (
+                  <MemberRow
+                    key={st.id}
+                    student={st}
+                    coachName={coachMap.get(st.coachId || '')}
+                    packageName={packageMap.get(st.packageType) || st.packageType}
+                    onSelectDetail={setSelectedStudentForDetail}
+                    onOpenPayDebt={setPayDebtStudent}
+                    onOpenRenew={setRenewStudent}
+                    onOpenEdit={openEditModal}
+                    onDelete={handleDeleteStudent}
+                    formatMoney={formatMoney}
+                    t={t as Record<string, string>}
+                  />
+                ))}
               </tbody>
             </table>
           </div>
-        </div>
+
+          {/* Pagination Bar */}
+          <div className="p-4 border-t border-[var(--gym-border)] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[var(--gym-text-muted)] glass-subtle">
+            <div>
+              نمایش <span className="font-mono font-bold text-[var(--gym-text,#fff)]">{(paginatedResult.currentPage - 1) * pageSize + 1}</span> تا{' '}
+              <span className="font-mono font-bold text-[var(--gym-text,#fff)]">
+                {Math.min(paginatedResult.currentPage * pageSize, paginatedResult.total)}
+              </span>{' '}
+              از مجموع <span className="font-mono font-bold text-[var(--gym-text,#fff)]">{formatNum(paginatedResult.total)}</span> عضو
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setPage(1)}
+                disabled={paginatedResult.currentPage === 1}
+                className="p-1.5 rounded-xl border border-[var(--gym-border)] glass-subtle disabled:opacity-30 hover:bg-[var(--gym-surface-glass-strong)] cursor-pointer"
+                title="صفحه اول"
+              >
+                <ChevronsRight className="w-4 h-4 rtl:rotate-180" />
+              </button>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={paginatedResult.currentPage === 1}
+                className="p-1.5 rounded-xl border border-[var(--gym-border)] glass-subtle disabled:opacity-30 hover:bg-[var(--gym-surface-glass-strong)] cursor-pointer"
+                title="صفحه قبل"
+              >
+                <ChevronRight className="w-4 h-4 rtl:rotate-180" />
+              </button>
+
+              <span className="px-3 py-1 font-mono font-semibold text-[var(--gym-text,#fff)]">
+                صفحه {formatNum(paginatedResult.currentPage)} از {formatNum(paginatedResult.totalPages)}
+              </span>
+
+              <button
+                onClick={() => setPage(p => Math.min(paginatedResult.totalPages, p + 1))}
+                disabled={paginatedResult.currentPage >= paginatedResult.totalPages}
+                className="p-1.5 rounded-xl border border-[var(--gym-border)] glass-subtle disabled:opacity-30 hover:bg-[var(--gym-surface-glass-strong)] cursor-pointer"
+                title="صفحه بعد"
+              >
+                <ChevronLeft className="w-4 h-4 rtl:rotate-180" />
+              </button>
+              <button
+                onClick={() => setPage(paginatedResult.totalPages)}
+                disabled={paginatedResult.currentPage >= paginatedResult.totalPages}
+                className="p-1.5 rounded-xl border border-[var(--gym-border)] glass-subtle disabled:opacity-30 hover:bg-[var(--gym-surface-glass-strong)] cursor-pointer"
+                title="صفحه آخر"
+              >
+                <ChevronsLeft className="w-4 h-4 rtl:rotate-180" />
+              </button>
+            </div>
+          </div>
+        </GlassCard>
       )}
 
       {/* Fast Member Registration Drawer for New Members */}
@@ -610,458 +626,400 @@ export const StudentList: React.FC<StudentListProps> = ({
 
       {/* Edit Student Modal */}
       {isAddModalOpen && editingStudent && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="relative w-full max-w-xl bg-white dark:bg-stone-900 rounded-2xl shadow-xl border border-stone-200 dark:border-stone-800 overflow-hidden my-8">
-            <div className="p-5 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">
-              <h3 className="text-base font-bold text-stone-900 dark:text-white">
-                {editingStudent ? 'ویرایش اطلاعات شاگرد' : t.newStudent}
-              </h3>
-              <button
-                onClick={() => {
-                  setIsAddModalOpen(false);
-                  if (onModalClosed) onModalClosed();
-                }}
-                className="text-stone-400 hover:text-stone-600"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveStudent} className="p-6 space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                    {t.studentName} *
-                  </label>
-                  <input
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="نام و نام‌خانوادگی"
-                    className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                    {t.phoneNumber} *
-                  </label>
-                  <input
-                    type="text"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="0935..."
-                    className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-sm"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Package & Optional Services */}
-              <div className="space-y-3 p-4 rounded-xl bg-stone-50 dark:bg-stone-800/40 border border-stone-200 dark:border-stone-700">
-                <div>
-                  <label className="block font-bold text-stone-900 dark:text-white mb-1.5 flex items-center justify-between">
-                    <span>{t.packageType}</span>
-                    <span className="text-xs font-normal text-stone-500">بر اساس تعرفه‌های مصوب باشگاه</span>
-                  </label>
-                  <select
-                    value={packageType}
-                    onChange={(e) => handlePackageChange(e.target.value as PackageType)}
-                    className="w-full px-3 py-2.5 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-sm font-semibold text-stone-900 dark:text-white"
-                  >
-                    {packages.map(p => (
-                      <option key={p.id} value={p.type}>
-                        {p.name} ({p.durationDays} روزه / {p.sessionsCount} جلسه) - {formatMoney(p.price)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="pt-2 border-t border-stone-200 dark:border-stone-700 space-y-2.5">
-                  <div className="text-xs font-bold text-stone-800 dark:text-stone-200">
-                    خدمات انتخابی و اختیاری (Optional Add-ons):
-                  </div>
-
-                  {/* Coach Optional */}
-                  <div className="p-2.5 rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 space-y-2">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={wantsCoach}
-                        onChange={(e) => handleToggleCoach(e.target.checked)}
-                        className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500"
-                      />
-                      <span className="text-xs font-semibold text-stone-900 dark:text-white">
-                        درخواست مربی اختصاصی / خصوصی
-                      </span>
-                      <span className="text-[11px] text-stone-500 mr-auto font-mono">
-                        {wantsCoach ? `+${formatMoney(coachFee)}` : '(بدون مربی / تمرین آزاد)'}
-                      </span>
-                    </label>
-
-                    {wantsCoach && (
-                      <div className="pt-1.5 pr-6">
-                        <select
-                          value={coachId}
-                          onChange={(e) => handleCoachChange(e.target.value)}
-                          className="w-full px-3 py-1.5 rounded-lg border border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-xs"
-                        >
-                          <option value="">انتخاب مربی اختصاصی...</option>
-                          {coaches.map(c => (
-                            <option key={c.id} value={c.id}>
-                              {c.fullName} ({c.specialty})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Workout Plan Optional */}
-                  <div className="p-2.5 rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={wantsWorkoutPlan}
-                        onChange={(e) => handleToggleWorkoutPlan(e.target.checked)}
-                        className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500"
-                      />
-                      <span className="text-xs font-semibold text-stone-900 dark:text-white">
-                        صدور و تنظیم برنامه تمرینی اختصاصی
-                      </span>
-                      <span className="text-[11px] text-stone-500 mr-auto font-mono">
-                        {wantsWorkoutPlan ? `+${formatMoney(workoutPlanFee)}` : 'اختیاری'}
-                      </span>
-                    </label>
-                  </div>
-
-                  {/* Diet Plan Optional */}
-                  <div className="p-2.5 rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={wantsDietPlan}
-                        onChange={(e) => handleToggleDietPlan(e.target.checked)}
-                        className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500"
-                      />
-                      <span className="text-xs font-semibold text-stone-900 dark:text-white">
-                        تنظیم رژیم تغذیه و مکمل ورزشی
-                      </span>
-                      <span className="text-[11px] text-stone-500 mr-auto font-mono">
-                        {wantsDietPlan ? `+${formatMoney(dietPlanFee)}` : 'اختیاری'}
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              {/* Financial Section */}
-              <div className="p-3.5 rounded-xl bg-amber-500/10 dark:bg-amber-500/5 border border-amber-500/30 space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-bold text-stone-900 dark:text-white mb-1">
-                      {t.totalFee} ({t.currency})
-                    </label>
-                    <input
-                      type="number"
-                      value={totalFee || ''}
-                      onChange={(e) => setTotalFee(Number(e.target.value))}
-                      className="w-full px-3 py-2 rounded-lg border border-amber-500/40 bg-white dark:bg-stone-900 font-mono text-sm font-bold text-stone-900 dark:text-white"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-bold text-emerald-600 dark:text-emerald-400 mb-1">
-                      {t.paidAmount} (دریافتی اولیه)
-                    </label>
-                    <input
-                      type="number"
-                      value={initialPayment || ''}
-                      onChange={(e) => setInitialPayment(Number(e.target.value))}
-                      className="w-full px-3 py-2 rounded-lg border border-emerald-500/40 bg-white dark:bg-stone-900 font-mono text-sm font-bold text-emerald-600 dark:text-emerald-400"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between text-xs pt-2 border-t border-amber-500/20">
-                  <div className="flex items-center gap-2">
-                    <span>روش پرداخت:</span>
-                    <select
-                      value={paymentMethod}
-                      onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-                      className="px-2 py-1 rounded border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs"
-                    >
-                      <option value="pos">کارتخوان (POS)</option>
-                      <option value="card_transfer">کارت به کارت</option>
-                      <option value="cash">نقدی</option>
-                    </select>
-                  </div>
-                  <div className="font-mono text-rose-600 dark:text-rose-400 font-bold">
-                    مانده بدهی: {formatMoney(Math.max(0, totalFee - initialPayment))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Dates & Biometrics */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                    {t.expireDate}
-                  </label>
-                  <input
-                    type="text"
-                    value={expireDate}
-                    onChange={(e) => setExpireDate(e.target.value)}
-                    placeholder="1403/06/25"
-                    className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                    هدف تمرینی
-                  </label>
-                  <input
-                    type="text"
-                    value={goal}
-                    onChange={(e) => setGoal(e.target.value)}
-                    placeholder="کاهش وزن، عضله‌سازی..."
-                    className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
-                  />
-                </div>
-              </div>
-
+        <GlassModal
+          isOpen={isAddModalOpen && !!editingStudent}
+          onClose={() => {
+            setIsAddModalOpen(false);
+            if (onModalClosed) onModalClosed();
+          }}
+          title="ویرایش اطلاعات شاگرد"
+          icon={<Edit3 className="w-5 h-5 text-[var(--gym-brand,#10b981)]" />}
+          maxWidth="max-w-xl"
+        >
+          <form onSubmit={handleEditStudentSubmit} className="space-y-4 text-xs">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                  ملاحظات پزشکی یا آسیب‌دیدگی
-                </label>
-                <textarea
-                  rows={2}
-                  value={medicalNotes}
-                  onChange={(e) => setMedicalNotes(e.target.value)}
-                  placeholder="دیسک کمر، جراحی قبلی، محدودیت حرکتی..."
-                  className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-sm"
-                />
-              </div>
-
-              <div className="pt-4 flex justify-end gap-2 border-t border-stone-200 dark:border-stone-800">
-                <button
-                  type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 text-stone-600 dark:text-stone-400 hover:bg-stone-100 rounded-lg"
-                >
-                  {t.cancel}
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold rounded-lg transition-colors"
-                >
-                  {t.save}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Pay Debt Modal */}
-      {payDebtStudent && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="relative w-full max-w-md bg-white dark:bg-stone-900 rounded-2xl shadow-xl border border-stone-200 dark:border-stone-800 overflow-hidden my-8 p-6 text-xs">
-            <h3 className="text-base font-bold text-stone-900 dark:text-white mb-2 flex items-center gap-2">
-              <DollarSign className="w-5 h-5 text-emerald-500" />
-              <span>ثبت دریافت و تسویه بدهی</span>
-            </h3>
-            
-            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 mb-4 space-y-1">
-              <div className="flex justify-between">
-                <span className="text-stone-500">شاگرد:</span>
-                <span className="font-bold text-stone-900 dark:text-white">{payDebtStudent.fullName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-stone-500">بدهی فعلی:</span>
-                <span className="font-mono font-bold text-rose-600 dark:text-rose-400">{formatMoney(payDebtStudent.remainingDebt)}</span>
-              </div>
-            </div>
-
-            <form onSubmit={handleSettleDebtSubmit} className="space-y-4">
-              <div>
-                <label className="block font-bold text-stone-900 dark:text-white mb-1.5">
-                  مبلغ دریافتی امروز
-                </label>
-                <MoneyInput
-                  value={debtPayAmount}
-                  onChange={(val) => setDebtPayAmount(val)}
-                  onFullAmount={() => setDebtPayAmount(payDebtStudent.remainingDebt)}
-                  fullAmountLabel="دریافت کل بدهی"
-                  placeholder="مبلغ پرداختی"
-                />
-              </div>
-
-              {/* Live Remaining Balance */}
-              <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 flex justify-between items-center">
-                <span className="text-stone-500">مانده پس از دریافت:</span>
-                <span className={`font-mono font-bold ${
-                  Math.max(0, payDebtStudent.remainingDebt - debtPayAmount) > 0 
-                    ? 'text-amber-600 dark:text-amber-400' 
-                    : 'text-emerald-600 dark:text-emerald-400'
-                }`}>
-                  {Math.max(0, payDebtStudent.remainingDebt - debtPayAmount) > 0
-                    ? formatMoney(Math.max(0, payDebtStudent.remainingDebt - debtPayAmount))
-                    : 'تسویه کامل ✓'}
-                </span>
-              </div>
-
-              <div>
-                <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                  روش پرداخت
-                </label>
-                <select
-                  value={debtPayMethod}
-                  onChange={(e) => setDebtPayMethod(e.target.value as PaymentMethod)}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs"
-                >
-                  <option value="pos">کارتخوان (POS)</option>
-                  <option value="card_transfer">کارت به کارت</option>
-                  <option value="cash">نقدی (صندوق)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                  توضیحات و بابت فیش
+                <label className="block font-medium text-[var(--gym-text-secondary)] mb-1">
+                  {t.studentName} *
                 </label>
                 <input
                   type="text"
-                  value={debtPayNote}
-                  onChange={(e) => setDebtPayNote(e.target.value)}
-                  placeholder="تسویه مانده شهریه دوره"
-                  className="w-full px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="نام و نام‌خانوادگی"
+                  className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-sm text-[var(--gym-text)]"
+                  required
                 />
               </div>
-
-              <div className="pt-3 flex justify-end gap-2 border-t border-stone-200 dark:border-stone-800">
-                <button
-                  type="button"
-                  onClick={() => setPayDebtStudent(null)}
-                  className="px-3 py-1.5 text-stone-600 dark:text-stone-400 hover:bg-stone-100 rounded-lg"
-                >
-                  انصراف
-                </button>
-                <button
-                  type="submit"
-                  disabled={debtPayAmount <= 0}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-xs"
-                >
-                  ثبت دریافت و کسر بدهی
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Renew Membership Modal */}
-      {renewStudent && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="relative w-full max-w-md bg-white dark:bg-stone-900 rounded-2xl shadow-xl border border-stone-200 dark:border-stone-800 overflow-hidden my-8 p-6 text-xs">
-            <h3 className="text-base font-bold text-stone-900 dark:text-white mb-2 flex items-center gap-2">
-              <RefreshCw className="w-5 h-5 text-amber-500" />
-              <span>تمدید دوره عضویت شاگرد</span>
-            </h3>
-            <p className="text-xs text-stone-500 mb-4">
-              شاگرد: <strong className="text-stone-900 dark:text-white">{renewStudent.fullName}</strong> (پایان دوره فعلی: <span className="font-mono">{renewStudent.expireDate}</span>)
-            </p>
-
-            <form onSubmit={handleRenewSubmit} className="space-y-4">
               <div>
-                <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                  پکیج تمدید
+                <label className="block font-medium text-[var(--gym-text-secondary)] mb-1">
+                  {t.phoneNumber} *
+                </label>
+                <input
+                  type="text"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="0935..."
+                  className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] font-mono text-sm text-[var(--gym-text)]"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Package */}
+            <div className="space-y-3 p-4 rounded-2xl glass-subtle border-[var(--gym-border)]">
+              <div>
+                <label className="block font-bold text-[var(--gym-text,#fff)] mb-1.5 flex items-center justify-between">
+                  <span>{t.packageType}</span>
+                  <span className="text-xs font-normal text-[var(--gym-text-muted)]">بر اساس تعرفه‌های مصوب باشگاه</span>
                 </label>
                 <select
-                  value={renewPackage}
+                  value={packageType}
                   onChange={(e) => {
-                    const p = e.target.value as PackageType;
-                    setRenewPackage(p);
-                    const pr = getPackagePrice(p);
-                    setRenewFee(pr);
-                    setRenewPaid(pr);
+                    const val = e.target.value as PackageType;
+                    setPackageType(val);
+                    const pr = getPackagePrice(val);
+                    setTotalFee(pr);
                   }}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs font-semibold"
+                  className="w-full px-3 py-2.5 rounded-xl glass-subtle border-[var(--gym-border)] text-sm font-semibold text-[var(--gym-text,#fff)] bg-[var(--gym-surface)]"
                 >
                   {packages.map(p => (
-                    <option key={p.id} value={p.type}>
+                    <option key={p.id} value={p.type} className="bg-stone-900 text-white">
                       {p.name} ({p.durationDays} روزه / {p.sessionsCount} جلسه) - {formatMoney(p.price)}
                     </option>
                   ))}
                 </select>
               </div>
 
+              <div className="pt-2 border-t border-[var(--gym-border)] space-y-2.5">
+                <div className="text-xs font-bold text-[var(--gym-text-secondary)]">
+                  خدمات انتخابی و اختیاری:
+                </div>
+
+                {/* Coach Optional */}
+                <div className="p-2.5 rounded-xl glass-subtle border-[var(--gym-border)] space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={wantsCoach}
+                      onChange={(e) => setWantsCoach(e.target.checked)}
+                      className="w-4 h-4 rounded text-[var(--gym-brand,#10b981)]"
+                    />
+                    <span className="text-xs font-semibold text-[var(--gym-text,#fff)]">
+                      درخواست مربی اختصاصی / خصوصی
+                    </span>
+                  </label>
+
+                  {wantsCoach && (
+                    <div className="pt-1.5 pr-6">
+                      <select
+                        value={coachId}
+                        onChange={(e) => setCoachId(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded-xl glass-subtle border-[var(--gym-border)] text-xs text-[var(--gym-text)] bg-[var(--gym-surface)]"
+                      >
+                        <option value="" className="bg-stone-900 text-white">انتخاب مربی اختصاصی...</option>
+                        {coaches.map(c => (
+                          <option key={c.id} value={c.id} className="bg-stone-900 text-white">
+                            {c.fullName} ({c.specialty})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Financial Section */}
+            <div className="p-3.5 rounded-2xl bg-[var(--gym-brand,#10b981)]/10 border border-[var(--gym-brand,#10b981)]/30 space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                    شهریه دوره
+                  <label className="block font-bold text-[var(--gym-text,#fff)] mb-1">
+                    {t.totalFee} ({t.currency})
                   </label>
-                  <MoneyInput
-                    value={renewFee}
-                    onChange={(val) => {
-                      setRenewFee(val);
-                      setRenewPaid(val);
-                    }}
-                    placeholder="شهریه دوره"
+                  <input
+                    type="number"
+                    value={totalFee || ''}
+                    onChange={(e) => setTotalFee(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] font-mono text-sm font-bold text-[var(--gym-text,#fff)]"
+                    required
                   />
                 </div>
                 <div>
-                  <label className="block font-medium text-emerald-600 dark:text-emerald-400 mb-1">
-                    مبلغ پرداختی
+                  <label className="block font-bold text-emerald-400 mb-1">
+                    {t.paidAmount} (دریافتی ثبت‌شده)
                   </label>
-                  <MoneyInput
-                    value={renewPaid}
-                    onChange={(val) => setRenewPaid(val)}
-                    onFullAmount={() => setRenewPaid(renewFee)}
-                    fullAmountLabel="دریافت کامل"
-                    placeholder="مبلغ پرداختی"
+                  <input
+                    type="number"
+                    value={initialPayment || ''}
+                    onChange={(e) => setInitialPayment(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] font-mono text-sm font-bold text-emerald-400"
+                    required
                   />
                 </div>
               </div>
 
-              <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 flex justify-between items-center">
-                <span className="text-stone-500">مانده بدهی این دوره:</span>
-                <span className="font-mono font-bold text-amber-600 dark:text-amber-400">
-                  {Math.max(0, renewFee - renewPaid) > 0 ? formatMoney(Math.max(0, renewFee - renewPaid)) : 'تسویه کامل ✓'}
-                </span>
+              <div className="flex items-center justify-between text-xs pt-2 border-t border-[var(--gym-border)]">
+                <div className="font-mono text-rose-400 font-bold">
+                  مانده بدهی: {formatMoney(Math.max(0, totalFee - initialPayment))}
+                </div>
               </div>
+            </div>
 
+            {/* Dates & Biometrics */}
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block font-medium text-stone-700 dark:text-stone-300 mb-1">
-                  تاریخ انقضای دوره جدید
+                <label className="block font-medium text-[var(--gym-text-secondary)] mb-1">
+                  {t.expireDate}
                 </label>
                 <input
                   type="text"
-                  value={renewExpireDate}
-                  onChange={(e) => setRenewExpireDate(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-xs"
+                  value={expireDate}
+                  onChange={(e) => setExpireDate(e.target.value)}
+                  placeholder="1403/06/25"
+                  className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] font-mono text-sm text-[var(--gym-text)]"
                 />
               </div>
-
-              <div className="pt-3 flex justify-end gap-2 border-t border-stone-200 dark:border-stone-800">
-                <button
-                  type="button"
-                  onClick={() => setRenewStudent(null)}
-                  className="px-3 py-1.5 text-stone-600 dark:text-stone-400 hover:bg-stone-100 rounded-lg"
-                >
-                  انصراف
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold rounded-xl shadow-xs"
-                >
-                  تایید تمدید دوره
-                </button>
+              <div>
+                <label className="block font-medium text-[var(--gym-text-secondary)] mb-1">
+                  هدف تمرینی
+                </label>
+                <input
+                  type="text"
+                  value={goal}
+                  onChange={(e) => setGoal(e.target.value)}
+                  placeholder="کاهش وزن، عضله‌سازی..."
+                  className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-sm text-[var(--gym-text)]"
+                />
               </div>
-            </form>
+            </div>
+
+            <div>
+              <label className="block font-medium text-[var(--gym-text-secondary)] mb-1">
+                ملاحظات پزشکی یا آسیب‌دیدگی
+              </label>
+              <textarea
+                rows={2}
+                value={medicalNotes}
+                onChange={(e) => setMedicalNotes(e.target.value)}
+                placeholder="دیسک کمر، جراحی قبلی، محدودیت حرکتی..."
+                className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-sm text-[var(--gym-text)]"
+              />
+            </div>
+
+            <div className="pt-4 flex justify-end gap-2.5 border-t border-[var(--gym-border)]">
+              <GlassButton
+                type="button"
+                variant="ghost"
+                onClick={() => setIsAddModalOpen(false)}
+              >
+                {t.cancel}
+              </GlassButton>
+              <GlassButton
+                type="submit"
+                variant="neon"
+              >
+                {t.save}
+              </GlassButton>
+            </div>
+          </form>
+        </GlassModal>
+      )}
+
+      {/* Pay Debt Modal */}
+      {payDebtStudent && (
+        <GlassModal
+          isOpen={!!payDebtStudent}
+          onClose={() => setPayDebtStudent(null)}
+          title="ثبت دریافت و تسویه بدهی"
+          icon={<DollarSign className="w-5 h-5 text-emerald-400" />}
+          maxWidth="max-w-md"
+        >
+          <div className="p-3 rounded-2xl bg-[var(--gym-brand,#10b981)]/10 border border-[var(--gym-brand,#10b981)]/30 mb-4 space-y-1 text-xs">
+            <div className="flex justify-between">
+              <span className="text-[var(--gym-text-muted)]">شاگرد:</span>
+              <span className="font-bold text-[var(--gym-text,#fff)]">{payDebtStudent.fullName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[var(--gym-text-muted)]">بدهی فعلی:</span>
+              <span className="font-mono font-bold text-rose-400">{formatMoney(payDebtStudent.remainingDebt)}</span>
+            </div>
           </div>
-        </div>
+
+          <form onSubmit={handleSettleDebtSubmit} className="space-y-4 text-xs">
+            <div>
+              <label className="block font-bold text-[var(--gym-text,#fff)] mb-1.5">
+                مبلغ دریافتی امروز
+              </label>
+              <MoneyInput
+                value={debtPayAmount}
+                onChange={(val) => setDebtPayAmount(val)}
+                onFullAmount={() => setDebtPayAmount(payDebtStudent.remainingDebt)}
+                fullAmountLabel="دریافت کل بدهی"
+                placeholder="مبلغ پرداختی"
+              />
+            </div>
+
+            {/* Live Remaining Balance */}
+            <div className="p-3 rounded-2xl glass-subtle border-[var(--gym-border)] flex justify-between items-center">
+              <span className="text-[var(--gym-text-muted)]">مانده پس از دریافت:</span>
+              <span className={`font-mono font-bold ${
+                Math.max(0, payDebtStudent.remainingDebt - debtPayAmount) > 0 
+                  ? 'text-amber-400' 
+                  : 'text-emerald-400'
+              }`}>
+                {Math.max(0, payDebtStudent.remainingDebt - debtPayAmount) > 0
+                  ? formatMoney(Math.max(0, payDebtStudent.remainingDebt - debtPayAmount))
+                  : 'تسویه کامل ✓'}
+              </span>
+            </div>
+
+            <div>
+              <label className="block font-medium text-[var(--gym-text-secondary)] mb-1">
+                روش پرداخت
+              </label>
+              <select
+                value={debtPayMethod}
+                onChange={(e) => setDebtPayMethod(e.target.value as PaymentMethod)}
+                className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-xs text-[var(--gym-text)] bg-[var(--gym-surface)]"
+              >
+                <option value="pos" className="bg-stone-900 text-white">کارتخوان (POS)</option>
+                <option value="card_transfer" className="bg-stone-900 text-white">کارت به کارت</option>
+                <option value="cash" className="bg-stone-900 text-white">نقدی (صندوق)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block font-medium text-[var(--gym-text-secondary)] mb-1">
+                توضیحات و بابت فیش
+              </label>
+              <input
+                type="text"
+                value={debtPayNote}
+                onChange={(e) => setDebtPayNote(e.target.value)}
+                placeholder="تسویه مانده شهریه دوره"
+                className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-xs text-[var(--gym-text)]"
+              />
+            </div>
+
+            <div className="pt-3 flex justify-end gap-2.5 border-t border-[var(--gym-border)]">
+              <GlassButton
+                type="button"
+                variant="ghost"
+                onClick={() => setPayDebtStudent(null)}
+              >
+                انصراف
+              </GlassButton>
+              <GlassButton
+                type="submit"
+                variant="primary"
+                disabled={debtPayAmount <= 0}
+              >
+                ثبت دریافت و کسر بدهی
+              </GlassButton>
+            </div>
+          </form>
+        </GlassModal>
+      )}
+
+      {/* Renew Membership Modal */}
+      {renewStudent && (
+        <GlassModal
+          isOpen={!!renewStudent}
+          onClose={() => setRenewStudent(null)}
+          title="تمدید دوره عضویت شاگرد"
+          subtitle={`شاگرد: ${renewStudent.fullName} (پایان دوره فعلی: ${renewStudent.expireDate})`}
+          icon={<RefreshCw className="w-5 h-5 text-[var(--gym-brand,#10b981)]" />}
+          maxWidth="max-w-md"
+        >
+          <form onSubmit={handleRenewSubmit} className="space-y-4 text-xs">
+            <div>
+              <label className="block font-medium text-[var(--gym-text-secondary)] mb-1">
+                پکیج تمدید
+              </label>
+              <select
+                value={renewPackage}
+                onChange={(e) => {
+                  const p = e.target.value as PackageType;
+                  setRenewPackage(p);
+                  const pr = getPackagePrice(p);
+                  setRenewFee(pr);
+                  setRenewPaid(pr);
+                }}
+                className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-xs font-semibold text-[var(--gym-text)] bg-[var(--gym-surface)]"
+              >
+                {packages.map(p => (
+                  <option key={p.id} value={p.type} className="bg-stone-900 text-white">
+                    {p.name} ({p.durationDays} روزه / {p.sessionsCount} جلسه) - {formatMoney(p.price)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-medium text-[var(--gym-text-secondary)] mb-1">
+                  شهریه دوره
+                </label>
+                <MoneyInput
+                  value={renewFee}
+                  onChange={(val) => {
+                    setRenewFee(val);
+                    setRenewPaid(val);
+                  }}
+                  placeholder="شهریه دوره"
+                />
+              </div>
+              <div>
+                <label className="block font-medium text-emerald-400 mb-1">
+                  مبلغ پرداختی
+                </label>
+                <MoneyInput
+                  value={renewPaid}
+                  onChange={(val) => setRenewPaid(val)}
+                  onFullAmount={() => setRenewPaid(renewFee)}
+                  fullAmountLabel="دریافت کامل"
+                  placeholder="مبلغ پرداختی"
+                />
+              </div>
+            </div>
+
+            <div className="p-3 rounded-2xl glass-subtle border-[var(--gym-border)] flex justify-between items-center">
+              <span className="text-[var(--gym-text-muted)]">مانده بدهی این دوره:</span>
+              <span className="font-mono font-bold text-amber-400">
+                {Math.max(0, renewFee - renewPaid) > 0 ? formatMoney(Math.max(0, renewFee - renewPaid)) : 'تسویه کامل ✓'}
+              </span>
+            </div>
+
+            <div>
+              <label className="block font-medium text-[var(--gym-text-secondary)] mb-1">
+                تاریخ انقضای دوره جدید
+              </label>
+              <input
+                type="text"
+                value={renewExpireDate}
+                onChange={(e) => setRenewExpireDate(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] font-mono text-xs text-[var(--gym-text)]"
+              />
+            </div>
+
+            <div className="pt-3 flex justify-end gap-2.5 border-t border-[var(--gym-border)]">
+              <GlassButton
+                type="button"
+                variant="ghost"
+                onClick={() => setRenewStudent(null)}
+              >
+                انصراف
+              </GlassButton>
+              <GlassButton
+                type="submit"
+                variant="neon"
+              >
+                تایید تمدید دوره
+              </GlassButton>
+            </div>
+          </form>
+        </GlassModal>
       )}
 
       {/* Student Dossier Detail Modal */}

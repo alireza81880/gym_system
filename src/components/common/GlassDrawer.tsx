@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
 
-interface GlassDrawerProps {
+export interface GlassDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
@@ -35,35 +35,34 @@ export const GlassDrawer: React.FC<GlassDrawerProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden">
-      {/* Semi-transparent backdrop that keeps the underlying screen visible */}
+    <div className="fixed inset-0 z-50 overflow-hidden" dir="rtl">
+      {/* Semi-transparent backdrop */}
       <div
         onClick={onClose}
-        className="absolute inset-0 bg-stone-950/60 backdrop-blur-xs transition-opacity duration-300 animate-fade-in"
+        className="fixed inset-0 bg-stone-950/70 backdrop-blur-xs transition-opacity duration-200 animate-in fade-in"
       />
 
-      <div className="fixed inset-y-0 right-0 max-w-full flex">
+      <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
         <div
-          className={`w-screen ${widthClass} max-w-[min(100vw,560px)] bg-white dark:bg-stone-900 border-l border-stone-200 dark:border-stone-800 shadow-2xl flex flex-col transform transition-transform duration-300 ease-out`}
-          dir="rtl"
+          className={`w-screen ${widthClass} max-w-[min(100vw,580px)] glass-regular border-l border-[var(--gym-border-strong)] shadow-2xl flex flex-col transform transition-transform duration-200 ease-out animate-in slide-in-from-right`}
         >
           {/* Header */}
-          <div className="px-5 sm:px-6 py-4 sm:py-5 border-b border-stone-200 dark:border-stone-800 bg-white/95 dark:bg-stone-900/95 backdrop-blur-md flex items-center justify-between sticky top-0 z-10 shrink-0">
-            <div className="flex items-center gap-3">
+          <div className="px-5 sm:px-6 py-4 sm:py-5 border-b border-[var(--gym-border)] bg-[var(--gym-surface-glass-strong)] flex items-center justify-between sticky top-0 z-10 shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
               {icon && (
-                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0">
+                <div className="w-10 h-10 rounded-2xl bg-[var(--gym-brand-soft)] border border-[var(--gym-border-strong)] flex items-center justify-center text-[var(--gym-brand,#10b981)] shrink-0 shadow-xs">
                   {icon}
                 </div>
               )}
-              <div>
-                <h3 className="text-base sm:text-lg font-bold text-stone-900 dark:text-white leading-tight">{title}</h3>
-                {subtitle && <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">{subtitle}</p>}
+              <div className="min-w-0">
+                <h3 className="text-base sm:text-lg font-bold text-[var(--gym-text,#fff)] leading-tight truncate">{title}</h3>
+                {subtitle && <p className="text-xs text-[var(--gym-text-muted,#9ca3af)] mt-0.5 truncate">{subtitle}</p>}
               </div>
             </div>
 
             <button
               onClick={onClose}
-              className="w-9 h-9 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-white flex items-center justify-center transition-colors border border-stone-200 dark:border-stone-700"
+              className="w-9 h-9 rounded-xl bg-[var(--gym-surface-glass)] hover:bg-[var(--gym-surface-strong)] text-[var(--gym-text-muted)] hover:text-[var(--gym-text,#fff)] flex items-center justify-center transition-colors border border-[var(--gym-border)]"
               aria-label="بستن"
             >
               <X className="w-5 h-5" />
@@ -71,13 +70,13 @@ export const GlassDrawer: React.FC<GlassDrawerProps> = ({
           </div>
 
           {/* Body Content */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 scrollbar-thin">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 scrollbar-thin text-[var(--gym-text,#f3f4f6)]">
             {children}
           </div>
 
           {/* Footer */}
           {footer && (
-            <div className="px-5 sm:px-6 py-4 border-t border-stone-200 dark:border-stone-800 bg-stone-50/95 dark:bg-stone-900/95 backdrop-blur-md shrink-0">
+            <div className="px-5 sm:px-6 py-3.5 border-t border-[var(--gym-border)] bg-[var(--gym-surface-glass-strong)] shrink-0">
               {footer}
             </div>
           )}
@@ -86,3 +85,4 @@ export const GlassDrawer: React.FC<GlassDrawerProps> = ({
     </div>
   );
 };
+

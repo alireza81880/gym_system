@@ -5,19 +5,47 @@
 @layer base {
   :root {
     --font-primary: 'Vazirmatn', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-    --theme-bg: #0c0e12;
-    --theme-surface: #151921;
-    --theme-surface-glass: rgba(21, 25, 33, 0.75);
-    --theme-surface-glass-strong: rgba(27, 33, 44, 0.90);
-    --theme-border: rgba(255, 255, 255, 0.08);
-    --theme-border-strong: rgba(16, 185, 129, 0.35);
-    --theme-text: #f3f4f6;
-    --theme-text-muted: #9ca3af;
-    --theme-brand: #10b981;
-    --theme-brand-soft: rgba(16, 185, 129, 0.15);
-    --theme-neon: #10b981;
-    --theme-accent: #34d399;
-    --theme-glow: 0 0 20px rgba(16, 185, 129, 0.25);
+    
+    /* Semantic Design Tokens */
+    --gym-bg: #0c0e12;
+    --gym-bg-secondary: #11141b;
+    --gym-surface: #151921;
+    --gym-surface-soft: #191f2a;
+    --gym-surface-strong: #1e2533;
+    --gym-surface-glass: rgba(21, 25, 33, 0.75);
+    --gym-surface-glass-strong: rgba(27, 33, 44, 0.90);
+    --gym-border: rgba(255, 255, 255, 0.08);
+    --gym-border-strong: rgba(16, 185, 129, 0.40);
+    --gym-text: #f3f4f6;
+    --gym-text-secondary: #d1d5db;
+    --gym-text-muted: #9ca3af;
+    --gym-brand: #10b981;
+    --gym-brand-soft: rgba(16, 185, 129, 0.15);
+    --gym-accent: #34d399;
+    --gym-neon: #10b981;
+    --gym-neon-soft: rgba(16, 185, 129, 0.25);
+    --gym-success: #10b981;
+    --gym-warning: #f59e0b;
+    --gym-danger: #f43f5e;
+    --gym-info: #06b6d4;
+    --gym-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35);
+    --gym-glow: 0 0 24px rgba(16, 185, 129, 0.30);
+
+    /* Compatibility aliases */
+    --theme-bg: var(--gym-bg);
+    --theme-surface: var(--gym-surface);
+    --theme-surface-glass: var(--gym-surface-glass);
+    --theme-surface-glass-strong: var(--gym-surface-glass-strong);
+    --theme-border: var(--gym-border);
+    --theme-border-strong: var(--gym-border-strong);
+    --theme-text: var(--gym-text);
+    --theme-text-muted: var(--gym-text-muted);
+    --theme-brand: var(--gym-brand);
+    --theme-brand-soft: var(--gym-brand-soft);
+    --theme-neon: var(--gym-neon);
+    --theme-accent: var(--gym-accent);
+    --theme-glow: var(--gym-glow);
+
     color-scheme: light;
   }
 
@@ -29,39 +57,61 @@
     font-family: var(--font-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background-color: var(--theme-bg, #0c0e12);
-    color: var(--theme-text, #f3f4f6);
+    background-color: var(--gym-bg, #0c0e12);
+    color: var(--gym-text, #f3f4f6);
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 }
 
-/* Three Level Glass OS Utility Classes */
+/* ====================================================
+   THE THREE-LEVEL GLASS SYSTEM
+   ==================================================== */
+
+/* Level 1: Subtle Glass (inputs, filters, secondary controls, table rows) */
 .glass-subtle {
-  background-color: var(--theme-surface-glass, rgba(21, 25, 33, 0.65));
+  background-color: var(--gym-surface-glass, rgba(21, 25, 33, 0.65));
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--theme-border, rgba(255, 255, 255, 0.08));
+  border: 1px solid var(--gym-border, rgba(255, 255, 255, 0.08));
 }
 
+/* Level 2: Regular Glass (cards, panels, sidebar, header, modal containers, drawers) */
 .glass-regular {
-  background-color: var(--theme-surface-glass-strong, rgba(27, 33, 44, 0.85));
+  background-color: var(--gym-surface-glass-strong, rgba(27, 33, 44, 0.85));
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--theme-border, rgba(255, 255, 255, 0.12));
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--gym-border, rgba(255, 255, 255, 0.12));
+  box-shadow: var(--gym-shadow, 0 8px 32px 0 rgba(0, 0, 0, 0.25));
 }
 
+/* Level 3: Neon Glass (primary actions, active navigation, key live status, critical highlights) */
 .glass-neon {
-  background: linear-gradient(135deg, var(--theme-brand-soft, rgba(16, 185, 129, 0.20)), var(--theme-surface-glass-strong, rgba(27, 33, 44, 0.90)));
+  background: linear-gradient(135deg, var(--gym-brand-soft, rgba(16, 185, 129, 0.20)), var(--gym-surface-glass-strong, rgba(27, 33, 44, 0.90)));
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--theme-border-strong, rgba(16, 185, 129, 0.45));
-  box-shadow: var(--theme-glow, 0 0 24px rgba(16, 185, 129, 0.30));
+  border: 1px solid var(--gym-border-strong, rgba(16, 185, 129, 0.45));
+  box-shadow: var(--gym-glow, 0 0 24px rgba(16, 185, 129, 0.30));
+}
+
+/* Neon Focus State */
+.focus-neon:focus-within,
+.focus-neon:focus {
+  border-color: var(--gym-brand, #10b981) !important;
+  box-shadow: 0 0 0 2px var(--gym-brand-soft, rgba(16, 185, 129, 0.25)) !important;
+  outline: none !important;
+}
+
+/* Active Nav Glow */
+.nav-item-active {
+  background: linear-gradient(90deg, var(--gym-brand-soft, rgba(16, 185, 129, 0.20)), transparent);
+  border-right: 3px solid var(--gym-brand, #10b981);
+  color: var(--gym-brand, #10b981);
 }
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -69,29 +119,29 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(156, 163, 175, 0.4);
+  background: rgba(156, 163, 175, 0.3);
   border-radius: 9999px;
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: rgba(113, 113, 122, 0.5);
+  background: rgba(113, 113, 122, 0.4);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(156, 163, 175, 0.7);
+  background: rgba(156, 163, 175, 0.6);
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  background: rgba(161, 161, 170, 0.8);
+  background: rgba(161, 161, 170, 0.7);
 }
 
 /* Hardware & Locker Visual Effects */
 @keyframes locker-pulse {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+    box-shadow: 0 0 0 0 var(--gym-brand-soft, rgba(16, 185, 129, 0.4));
   }
   50% {
-    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
   }
 }
 
@@ -127,3 +177,4 @@
     display: none !important;
   }
 }
+

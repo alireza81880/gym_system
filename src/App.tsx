@@ -134,7 +134,7 @@ const MainLayout: React.FC = () => {
   }
 
   return (
-    <div className="h-screen w-screen min-h-0 overflow-hidden flex flex-row bg-stone-100 dark:bg-stone-950 text-stone-900 dark:text-stone-100 font-sans transition-colors duration-200" dir="rtl">
+    <div className="h-screen w-screen min-h-0 overflow-hidden flex flex-row bg-[var(--gym-bg,#0c0f17)] text-[var(--gym-text,#fff)] font-sans transition-colors duration-200" dir="rtl">
       
       {/* 1. AppShell -> Sidebar */}
       <Sidebar
@@ -151,14 +151,14 @@ const MainLayout: React.FC = () => {
         
         {/* Demo Sandbox Alert Banner */}
         {isDemoMode && (
-          <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 px-4 py-2 text-xs font-bold flex items-center justify-between shadow-md z-30 shrink-0">
+          <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-stone-950 px-4 py-2 text-xs font-bold flex items-center justify-between shadow-md z-30 shrink-0">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-slate-950 animate-ping"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-stone-950 animate-ping"></span>
               <span>حالت دمو و آموزشی فعال است — تغییرات روی داده‌های شبیه‌سازی شده اعمال می‌شوند.</span>
             </div>
             <button
               onClick={exitDemoMode}
-              className="px-3 py-1 rounded-lg bg-slate-950 text-amber-300 hover:text-white transition-all text-[11px] cursor-pointer"
+              className="px-3 py-1 rounded-xl bg-stone-950 text-amber-300 hover:text-white transition-all text-[11px] cursor-pointer font-bold"
             >
               خروج از دمو
             </button>
@@ -220,15 +220,15 @@ const MainLayout: React.FC = () => {
           </main>
 
           {/* Compact In-Content Footer */}
-          <footer className="w-full max-w-7xl mx-auto border-t border-stone-200 dark:border-stone-800/80 pt-4 pb-6 mt-8 text-xs text-stone-500 dark:text-stone-400 no-print flex flex-col sm:flex-row items-center justify-between gap-2">
+          <footer className="w-full max-w-7xl mx-auto border-t border-[var(--gym-border)] pt-4 pb-6 mt-8 text-xs text-[var(--gym-text-muted,#9ca3af)] no-print flex flex-col sm:flex-row items-center justify-between gap-2">
             <div className="flex items-center space-x-2 rtl:space-x-reverse">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span className="font-semibold text-stone-800 dark:text-stone-200">سامانه جامع مدیریت هوشمند باشگاه و مربیان (Gym OS)</span>
+              <span className="h-2 w-2 rounded-full bg-[var(--gym-brand,#10b981)] animate-pulse"></span>
+              <span className="font-semibold text-[var(--gym-text-secondary,#d1d5db)]">سامانه جامع مدیریت هوشمند باشگاه و مربیان (Gym OS)</span>
             </div>
             <div className="font-mono text-[11px] flex items-center gap-3">
               <button
                 onClick={() => setIsOnboardingOpen(true)}
-                className="text-amber-600 dark:text-amber-400 hover:underline font-bold"
+                className="text-[var(--gym-brand,#10b981)] hover:underline font-bold cursor-pointer"
               >
                 راهنمای راه‌اندازی سریع (Wizard)
               </button>

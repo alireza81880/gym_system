@@ -37,6 +37,7 @@ export interface MembershipPackage {
   price: number;
   durationMonths?: number;
   durationDays?: number;
+  validityDays?: number;
   sessionsCount: number;
   description?: string;
   isActive?: boolean;
@@ -128,6 +129,9 @@ export interface Student {
   credentials?: MemberCredential[];
   customFields?: Record<string, any>;
   zone?: LockerZone | string;
+  gender?: 'male' | 'female';
+  coachFee?: number;
+  planFee?: number;
 }
 
 export type Member = Student; // Clean domain alias
@@ -733,12 +737,17 @@ export interface OrganizationInfo {
 }
 
 export interface AccessPolicyConfig {
-  expiredMembership: 'deny' | 'warn' | 'allow';
-  debtPolicy: 'deny' | 'warn' | 'allow';
-  sessionLimit: 'enforce' | 'ignore';
-  duplicateEntrySameDay: 'allow' | 'warn' | 'block';
-  lockerRequired: boolean;
-  maxDebtAllowed: number;
+  expiredMembership?: 'deny' | 'warn' | 'allow';
+  debtPolicy?: 'deny' | 'warn' | 'allow';
+  sessionLimit?: 'enforce' | 'ignore';
+  duplicateEntrySameDay?: 'allow' | 'warn' | 'block';
+  lockerRequired?: boolean;
+  maxDebtAllowed?: number;
+  allowEntryWithDebt?: boolean;
+  maxAllowedDebtTolerated?: number;
+  enforceHoursWindow?: boolean;
+  allowSameDayMultipleEntries?: boolean;
+  enforceSessionLimit?: boolean;
 }
 
 // ----------------------------------------------------

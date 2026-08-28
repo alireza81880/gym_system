@@ -445,27 +445,27 @@ export const MemberRegistrationDrawer: React.FC<MemberRegistrationDrawerProps> =
               SECTION 1: مشخصات عضو (Member Info)
           ======================================================== */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-stone-200 dark:border-stone-800">
-              <h4 className="text-sm font-bold text-stone-900 dark:text-white flex items-center gap-2">
-                <span className="w-6 h-6 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center font-mono text-xs">۱</span>
+            <div className="flex items-center justify-between pb-2 border-b border-[var(--gym-border)]">
+              <h4 className="text-sm font-bold text-[var(--gym-text,#fff)] flex items-center gap-2">
+                <span className="w-6 h-6 rounded-xl bg-[var(--gym-brand,#10b981)]/15 text-[var(--gym-brand,#10b981)] flex items-center justify-center font-mono text-xs">۱</span>
                 <span>مشخصات فردی عضو</span>
               </h4>
 
               {/* Sequential Number Preview Badge */}
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-[11px]">
-                <span className="text-stone-500">شماره عضویت:</span>
-                <span className="font-mono font-bold text-amber-600 dark:text-amber-400">در حال تخصیص (پیش‌نمایش: #{nextMemberNumber})</span>
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl glass-subtle border border-[var(--gym-border)] text-[11px]">
+                <span className="text-[var(--gym-text-muted)]">شماره عضویت:</span>
+                <span className="font-mono font-bold text-[var(--gym-brand,#10b981)]">پیش‌نمایش: #{nextMemberNumber}</span>
               </div>
             </div>
 
             {/* Duplicate Warning Dialog */}
             {duplicateWarning && duplicateWarning.isDuplicate && (
-              <div className="p-3.5 rounded-xl bg-amber-500/15 border border-amber-500/40 space-y-2 text-xs">
-                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-bold">
+              <div className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/40 space-y-2 text-xs">
+                <div className="flex items-center gap-2 text-amber-400 font-bold">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
                   <span>عضو مشابه در سیستم پیدا شد!</span>
                 </div>
-                <p className="text-stone-700 dark:text-stone-300 text-[11px] leading-relaxed">
+                <p className="text-[var(--gym-text-secondary)] text-[11px] leading-relaxed">
                   {duplicateWarning.reason}
                   {duplicateWarning.matchedMember && (
                     <span className="block mt-1 font-semibold">
@@ -481,7 +481,7 @@ export const MemberRegistrationDrawer: React.FC<MemberRegistrationDrawerProps> =
                         onClose();
                         onOpenMemberDetail(duplicateWarning.matchedMember!.id);
                       }}
-                      className="px-2.5 py-1 rounded-lg bg-amber-500 text-stone-950 font-bold text-[11px] hover:bg-amber-600 transition-colors"
+                      className="px-2.5 py-1 rounded-xl bg-amber-500 text-stone-950 font-bold text-[11px] hover:bg-amber-600 transition-colors"
                     >
                       مشاهده پرونده عضو موجود
                     </button>
@@ -489,7 +489,7 @@ export const MemberRegistrationDrawer: React.FC<MemberRegistrationDrawerProps> =
                   <button
                     type="button"
                     onClick={() => setAcknowledgedDuplicate(true)}
-                    className="px-2.5 py-1 rounded-lg bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 font-medium text-[11px] hover:bg-stone-300"
+                    className="px-2.5 py-1 rounded-xl glass-subtle text-[var(--gym-text-secondary)] font-medium text-[11px] hover:text-[var(--gym-text)]"
                   >
                     ادامه و ثبت عضو جدید
                   </button>
@@ -499,8 +499,8 @@ export const MemberRegistrationDrawer: React.FC<MemberRegistrationDrawerProps> =
 
             {/* Full Name */}
             <div>
-              <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                نام و نام خانوادگی <span className="text-rose-500">*</span>
+              <label className="block text-xs font-semibold text-[var(--gym-text-secondary)] mb-1">
+                نام و نام خانوادگی <span className="text-rose-400">*</span>
               </label>
               <input
                 type="text"
@@ -513,15 +513,15 @@ export const MemberRegistrationDrawer: React.FC<MemberRegistrationDrawerProps> =
                 }}
                 onBlur={() => checkDuplicate({ fullName, phone, nationalId })}
                 placeholder="مثال: علی رضایی"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-white text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none"
+                className="w-full px-3.5 py-2.5 rounded-2xl glass-subtle border-[var(--gym-border)] text-[var(--gym-text,#fff)] text-sm focus:border-[var(--gym-brand,#10b981)] focus:ring-2 focus:ring-[var(--gym-brand,#10b981)]/20 outline-none"
               />
             </div>
 
             {/* Phone & National ID */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                  شماره موبایل <span className="text-rose-500">*</span>
+                <label className="block text-xs font-semibold text-[var(--gym-text-secondary)] mb-1">
+                  شماره موبایل <span className="text-rose-400">*</span>
                 </label>
                 <input
                   type="tel"
@@ -530,20 +530,20 @@ export const MemberRegistrationDrawer: React.FC<MemberRegistrationDrawerProps> =
                   onChange={(e) => handlePhoneChange(e.target.value)}
                   placeholder="09123456789"
                   dir="ltr"
-                  className={`w-full px-3.5 py-2.5 rounded-xl border font-mono text-sm outline-none transition-all ${
+                  className={`w-full px-3.5 py-2.5 rounded-2xl glass-subtle border font-mono text-sm outline-none transition-all ${
                     phoneError
-                      ? 'border-rose-500 bg-rose-50/20 text-rose-600 focus:ring-rose-500/20'
-                      : 'border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20'
+                      ? 'border-rose-500 bg-rose-500/10 text-rose-400 focus:ring-rose-500/20'
+                      : 'border-[var(--gym-border)] text-[var(--gym-text,#fff)] focus:border-[var(--gym-brand,#10b981)] focus:ring-2 focus:ring-[var(--gym-brand,#10b981)]/20'
                   }`}
                 />
                 {phoneError && (
-                  <span className="text-[11px] text-rose-500 mt-1 block">{phoneError}</span>
+                  <span className="text-[11px] text-rose-400 mt-1 block">{phoneError}</span>
                 )}
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1">
-                  کد ملی <span className="text-stone-400 font-normal">(اختیاری)</span>
+                <label className="block text-xs font-semibold text-[var(--gym-text-secondary)] mb-1">
+                  کد ملی <span className="text-[var(--gym-text-muted)] font-normal">(اختیاری)</span>
                 </label>
                 <input
                   type="text"
@@ -552,57 +552,57 @@ export const MemberRegistrationDrawer: React.FC<MemberRegistrationDrawerProps> =
                   onChange={(e) => handleNationalIdChange(e.target.value)}
                   placeholder="۱۰ رقمی"
                   dir="ltr"
-                  className={`w-full px-3.5 py-2.5 rounded-xl border font-mono text-sm outline-none transition-all ${
+                  className={`w-full px-3.5 py-2.5 rounded-2xl glass-subtle border font-mono text-sm outline-none transition-all ${
                     nationalIdError
-                      ? 'border-rose-500 bg-rose-50/20 text-rose-600 focus:ring-rose-500/20'
-                      : 'border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20'
+                      ? 'border-rose-500 bg-rose-500/10 text-rose-400 focus:ring-rose-500/20'
+                      : 'border-[var(--gym-border)] text-[var(--gym-text,#fff)] focus:border-[var(--gym-brand,#10b981)] focus:ring-2 focus:ring-[var(--gym-brand,#10b981)]/20'
                   }`}
                 />
                 {nationalIdError && (
-                  <span className="text-[11px] text-rose-500 mt-1 block">{nationalIdError}</span>
+                  <span className="text-[11px] text-rose-400 mt-1 block">{nationalIdError}</span>
                 )}
               </div>
             </div>
 
             {/* Expandable Accordion for Extended Dossier */}
-            <div className="rounded-xl border border-stone-200 dark:border-stone-800 overflow-hidden">
+            <div className="rounded-2xl border border-[var(--gym-border)] overflow-hidden">
               <button
                 type="button"
                 onClick={() => setIsExtendedOpen(!isExtendedOpen)}
-                className="w-full px-4 py-2.5 bg-stone-50 dark:bg-stone-850 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer"
+                className="w-full px-4 py-2.5 glass-subtle text-[var(--gym-text-secondary)] text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer"
               >
                 <span className="flex items-center gap-2">
-                  <Dumbbell className="w-3.5 h-3.5 text-amber-500" />
+                  <Dumbbell className="w-3.5 h-3.5 text-[var(--gym-brand,#10b981)]" />
                   <span>اطلاعات تکمیلی و پرونده ورزشی (مربی، هدف، کارت، فیلد سفارشی)</span>
                 </span>
                 {isExtendedOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
 
               {isExtendedOpen && (
-                <div className="p-4 bg-white dark:bg-stone-900 space-y-3.5 border-t border-stone-200 dark:border-stone-800 text-xs">
+                <div className="p-4 glass-regular space-y-3.5 border-t border-[var(--gym-border)] text-xs">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-stone-600 dark:text-stone-400 mb-1">جنسیت</label>
+                      <label className="block text-[var(--gym-text-muted)] mb-1">جنسیت</label>
                       <select
                         value={gender}
                         onChange={(e) => setGender(e.target.value as 'male' | 'female')}
-                        className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800"
+                        className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-[var(--gym-text)] bg-[var(--gym-surface)]"
                       >
-                        <option value="male">آقا</option>
-                        <option value="female">خانم</option>
+                        <option value="male" className="bg-stone-900 text-white">آقا</option>
+                        <option value="female" className="bg-stone-900 text-white">خانم</option>
                       </select>
                     </div>
 
                     <div>
-                      <label className="block text-stone-600 dark:text-stone-400 mb-1">مربی اختصاصی</label>
+                      <label className="block text-[var(--gym-text-muted)] mb-1">مربی اختصاصی</label>
                       <select
                         value={coachId}
                         onChange={(e) => setCoachId(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800"
+                        className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-[var(--gym-text)] bg-[var(--gym-surface)]"
                       >
-                        <option value="">بدون مربی / تمرین آزاد</option>
+                        <option value="" className="bg-stone-900 text-white">بدون مربی / تمرین آزاد</option>
                         {coaches.map(c => (
-                          <option key={c.id} value={c.id}>
+                          <option key={c.id} value={c.id} className="bg-stone-900 text-white">
                             {c.fullName} ({c.specialty})
                           </option>
                         ))}
@@ -612,85 +612,85 @@ export const MemberRegistrationDrawer: React.FC<MemberRegistrationDrawerProps> =
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-stone-600 dark:text-stone-400 mb-1">قد (سانتی‌متر)</label>
+                      <label className="block text-[var(--gym-text-muted)] mb-1">قد (سانتی‌متر)</label>
                       <input
                         type="number"
                         value={height}
                         onChange={(e) => setHeight(e.target.value ? Number(e.target.value) : '')}
                         placeholder="180"
-                        className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-left"
+                        className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-[var(--gym-text)] font-mono text-left"
                       />
                     </div>
                     <div>
-                      <label className="block text-stone-600 dark:text-stone-400 mb-1">وزن (کیلوگرم)</label>
+                      <label className="block text-[var(--gym-text-muted)] mb-1">وزن (کیلوگرم)</label>
                       <input
                         type="number"
                         value={weight}
                         onChange={(e) => setWeight(e.target.value ? Number(e.target.value) : '')}
                         placeholder="78"
-                        className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-left"
+                        className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-[var(--gym-text)] font-mono text-left"
                       />
                     </div>
                     <div>
-                      <label className="block text-stone-600 dark:text-stone-400 mb-1">تلفن اضطراری</label>
+                      <label className="block text-[var(--gym-text-muted)] mb-1">تلفن اضطراری</label>
                       <input
                         type="tel"
                         value={emergencyPhone}
                         onChange={(e) => setEmergencyPhone(e.target.value)}
                         placeholder="021..."
-                        className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-left"
+                        className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-[var(--gym-text)] font-mono text-left"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-stone-600 dark:text-stone-400 mb-1">هدف ورزشی</label>
+                      <label className="block text-[var(--gym-text-muted)] mb-1">هدف ورزشی</label>
                       <input
                         type="text"
                         value={goal}
                         onChange={(e) => setGoal(e.target.value)}
                         placeholder="کاهش وزن، بدنسازی، فیتنس..."
-                        className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800"
+                        className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-[var(--gym-text)]"
                       />
                     </div>
                     <div>
-                      <label className="block text-stone-600 dark:text-stone-400 mb-1">کارت تردد / RFID UID</label>
+                      <label className="block text-[var(--gym-text-muted)] mb-1">کارت تردد / RFID UID</label>
                       <input
                         type="text"
                         value={rfidCardNumber}
                         onChange={(e) => setRfidCardNumber(e.target.value)}
                         placeholder="شناسه کارت یا مچ‌بند..."
-                        className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 font-mono text-left"
+                        className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-[var(--gym-text)] font-mono text-left"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-stone-600 dark:text-stone-400 mb-1">سوابق پزشکی / آسیب‌دیدگی</label>
+                    <label className="block text-[var(--gym-text-muted)] mb-1">سوابق پزشکی / آسیب‌دیدگی</label>
                     <input
                       type="text"
                       value={medicalNotes}
                       onChange={(e) => setMedicalNotes(e.target.value)}
                       placeholder="دیسک، جراحی قبلی یا توضیحات پزشکی..."
-                      className="w-full px-3 py-2 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800"
+                      className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-[var(--gym-text)]"
                     />
                   </div>
 
                   {/* Custom Organization Fields */}
                   {customFields.length > 0 && (
-                    <div className="pt-2 border-t border-stone-200 dark:border-stone-800 space-y-2">
-                      <span className="font-semibold text-stone-700 dark:text-stone-300 block">فیلدهای سفارشی باشگاه:</span>
+                    <div className="pt-2 border-t border-[var(--gym-border)] space-y-2">
+                      <span className="font-semibold text-[var(--gym-text-secondary)] block">فیلدهای سفارشی باشگاه:</span>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {customFields.map((cf) => (
                           <div key={cf.id}>
-                            <label className="block text-[11px] text-stone-500 mb-1">{cf.label}</label>
+                            <label className="block text-[11px] text-[var(--gym-text-muted)] mb-1">{cf.label}</label>
                             <input
                               type="text"
                               value={customData[cf.key] || ''}
                               onChange={(e) => setCustomData({ ...customData, [cf.key]: e.target.value })}
                               placeholder={cf.placeholder || cf.label}
-                              className="w-full px-2.5 py-1.5 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs"
+                              className="w-full px-2.5 py-1.5 rounded-xl glass-subtle border-[var(--gym-border)] text-xs text-[var(--gym-text)]"
                             />
                           </div>
                         ))}

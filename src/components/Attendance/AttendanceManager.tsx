@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   UserCheck, 
   Search, 
@@ -6,48 +6,61 @@ import {
   KeyRound, 
   CheckCircle2, 
   AlertTriangle, 
-  Calendar, 
   Users, 
-  ShieldAlert,
-  Dumbbell
+  ChevronLeft, 
+  ChevronRight, 
+  Sparkles 
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { MemberRepository } from '../../services/repositories/memberRepository';
+import { LockerRepository } from '../../services/repositories/lockerRepository';
+import { GlassPageHeader } from '../common/GlassPageHeader';
+import { GlassCard } from '../common/GlassCard';
+import { GlassButton } from '../common/GlassButton';
+import { GlassBadge } from '../common/GlassBadge';
+
+const PAGE_SIZE = 15;
 
 export const AttendanceManager: React.FC = () => {
   const { 
-    students, 
     coaches, 
     attendance, 
     checkInStudent, 
     formatNum, 
     t, 
-    lang 
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [customLocker, setCustomLocker] = useState<number>(0);
+  const [customLocker, setCustomLocker] = useState<number | ''>('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [dateFilter, setDateFilter] = useState('all');
+
   const [lastCheckInResult, setLastCheckInResult] = useState<{
     studentName: string;
     message: string;
     alertType: 'info' | 'warning' | 'error';
     time: string;
-    locker: number;
+    locker?: number;
   } | null>(null);
 
-  const [dateFilter, setDateFilter] = useState('all');
-
-  // Search matching students
-  const matchingStudents = searchQuery.trim() === '' ? [] : students.filter(s => 
-    s.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    s.nationalId.includes(searchQuery) ||
-    s.phone.includes(searchQuery)
-  );
+  // Fast indexed search using MemberRepository
+  const matchingStudents = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    return MemberRepository.searchFast(searchQuery, 8);
+  }, [searchQuery]);
 
   const handlePerformCheckIn = (studentId: string) => {
-    const student = students.find(s => s.id === studentId);
+    const student = MemberRepository.getById(studentId);
     if (!student) return;
 
-    const assignedLocker = customLocker || Math.floor(1 + Math.random() * 60);
+    let assignedLocker = typeof customLocker === 'number' && customLocker > 0 ? customLocker : undefined;
+    if (!assignedLocker) {
+      const avail = LockerRepository.getAvailable();
+      if (avail.length > 0) {
+        assignedLocker = avail[0].number;
+      }
+    }
+
     const result = checkInStudent(studentId, assignedLocker);
 
     const now = new Date();
@@ -62,52 +75,56 @@ export const AttendanceManager: React.FC = () => {
     });
 
     setSearchQuery('');
-    setCustomLocker(0);
+    setCustomLocker('');
   };
 
-  const datesList = Array.from(new Set(attendance.map(a => a.date)));
+  const datesList = useMemo(() => {
+    return Array.from(new Set(attendance.map(a => a.date)));
+  }, [attendance]);
 
-  const filteredAttendance = attendance.filter(a => {
-    return dateFilter === 'all' || a.date === dateFilter;
-  });
+  const filteredAttendance = useMemo(() => {
+    if (dateFilter === 'all') return attendance;
+    return attendance.filter(a => a.date === dateFilter);
+  }, [attendance, dateFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredAttendance.length / PAGE_SIZE));
+  const paginatedAttendance = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredAttendance.slice(start, start + PAGE_SIZE);
+  }, [filteredAttendance, currentPage]);
 
   return (
     <div className="space-y-6">
       
       {/* Header */}
-      <div className="bg-white dark:bg-stone-900 p-6 rounded-2xl border border-stone-200 dark:border-stone-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-stone-900 dark:text-white flex items-center gap-2">
-            <UserCheck className="h-6 w-6 text-amber-500" />
-            <span>{t.attendanceTitle}</span>
-          </h2>
-          <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-            {t.attendanceDesc}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 px-4 py-2 rounded-xl text-xs font-bold text-emerald-800 dark:text-emerald-300">
-          <Users className="h-4 w-4" />
-          <span>ورودهای ثبت شده: {formatNum(attendance.length)} تردد</span>
-        </div>
-      </div>
+      <GlassPageHeader
+        title={t.attendanceTitle}
+        subtitle={t.attendanceDesc}
+        icon={<UserCheck className="w-6 h-6 text-[var(--gym-brand,#10b981)]" />}
+        actions={
+          <div className="flex items-center gap-2 px-4 py-2 rounded-2xl glass-subtle border border-[var(--gym-border)] text-xs font-bold text-[var(--gym-text-secondary)]">
+            <Users className="h-4 w-4 text-[var(--gym-brand,#10b981)]" />
+            <span>ورودهای ثبت شده: {formatNum(attendance.length)} تردد</span>
+          </div>
+        }
+      />
 
       {/* Live Check-in Desk Form */}
-      <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 p-6 shadow-xs space-y-4">
-        <h3 className="text-base font-bold text-stone-900 dark:text-white flex items-center gap-2">
-          <KeyRound className="h-5 w-5 text-amber-500" />
+      <GlassCard variant="regular" className="p-6 space-y-4">
+        <h3 className="text-base font-bold text-[var(--gym-text,#fff)] flex items-center gap-2">
+          <KeyRound className="h-5 w-5 text-[var(--gym-brand,#10b981)]" />
           <span>میز پذیرش و ثبت فوری ورود ورزشکار</span>
         </h3>
 
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <div className="relative sm:col-span-3">
-            <Search className="absolute right-3.5 rtl:right-3.5 rtl:left-auto left-auto top-3.5 h-4 w-4 text-stone-400" />
+            <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--gym-text-muted)]" />
             <input
               type="text"
               placeholder={t.scanOrSearchStudent}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-4 pr-11 rtl:pr-11 rtl:pl-4 py-3 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-sm font-medium focus:bg-white dark:focus:bg-stone-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full pl-4 pr-11 py-3 rounded-2xl glass-subtle border border-[var(--gym-border)] text-sm font-medium text-[var(--gym-text)] focus:border-[var(--gym-brand,#10b981)] focus:ring-1 focus:ring-[var(--gym-brand,#10b981)] outline-none"
               autoFocus
             />
           </div>
@@ -116,52 +133,55 @@ export const AttendanceManager: React.FC = () => {
             <input
               type="number"
               placeholder="شماره کمد (اختیاری)"
-              value={customLocker || ''}
-              onChange={(e) => setCustomLocker(Number(e.target.value))}
-              className="w-full px-4 py-3 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
+              value={customLocker}
+              onChange={(e) => setCustomLocker(e.target.value ? Number(e.target.value) : '')}
+              className="w-full px-4 py-3 rounded-2xl glass-subtle border border-[var(--gym-border)] text-sm font-mono text-[var(--gym-text)] focus:border-[var(--gym-brand,#10b981)] outline-none"
             />
           </div>
         </div>
 
         {/* Autocomplete Dropdown */}
         {matchingStudents.length > 0 && (
-          <div className="border border-stone-200 dark:border-stone-700 rounded-xl overflow-hidden divide-y divide-stone-100 dark:divide-stone-800 bg-white dark:bg-stone-900 shadow-md">
+          <div className="border border-[var(--gym-border)] rounded-2xl overflow-hidden divide-y divide-[var(--gym-border)] glass-regular shadow-xl">
             {matchingStudents.map((st) => {
               const coach = coaches.find(c => c.id === st.coachId);
               return (
                 <div
                   key={st.id}
                   onClick={() => handlePerformCheckIn(st.id)}
-                  className="p-3.5 flex items-center justify-between hover:bg-amber-50/60 dark:hover:bg-amber-950/30 cursor-pointer transition-colors"
+                  className="p-3.5 flex items-center justify-between hover:bg-[var(--gym-surface-glass)] cursor-pointer transition-colors"
                 >
                   <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                    <div className="h-9 w-9 rounded-lg bg-stone-100 dark:bg-stone-800 flex items-center justify-center font-bold text-sm">
+                    <div className="h-10 w-10 rounded-xl bg-[var(--gym-brand,#10b981)]/15 text-[var(--gym-brand,#10b981)] border border-[var(--gym-brand,#10b981)]/30 flex items-center justify-center font-bold text-sm">
                       {st.fullName.charAt(0)}
                     </div>
                     <div>
-                      <div className="font-bold text-sm text-stone-900 dark:text-white flex items-center gap-2">
+                      <div className="font-bold text-sm text-[var(--gym-text,#fff)] flex items-center gap-2">
                         <span>{st.fullName}</span>
                         {st.remainingDebt > 0 && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-rose-100 text-rose-800 font-bold">بدهکار</span>
+                          <GlassBadge variant="danger" size="sm">بدهکار</GlassBadge>
                         )}
                         {st.status !== 'active' && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-100 text-amber-800 font-bold">منقضی</span>
+                          <GlassBadge variant="warning" size="sm">منقضی</GlassBadge>
                         )}
                       </div>
-                      <div className="text-xs text-stone-500 flex items-center gap-2 mt-0.5">
-                        <span>کدملی: {st.nationalId}</span>
+                      <div className="text-xs text-[var(--gym-text-muted)] flex items-center gap-2 mt-0.5">
+                        <span>پرونده #{st.memberNumber || st.id.slice(0, 6)}</span>
+                        <span>•</span>
+                        <span>موبایل: {st.phone}</span>
                         <span>•</span>
                         <span>مربی: {coach ? coach.fullName : 'عمومی'}</span>
                       </div>
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold rounded-lg text-xs"
+                  <GlassButton
+                    variant="neon"
+                    size="sm"
+                    icon={<Sparkles className="h-3.5 w-3.5" />}
                   >
                     ثبت ورود + کمد
-                  </button>
+                  </GlassButton>
                 </div>
               );
             })}
@@ -170,60 +190,60 @@ export const AttendanceManager: React.FC = () => {
 
         {/* Real-time Confirmation Card */}
         {lastCheckInResult && (
-          <div className={`p-4 rounded-xl border text-xs flex items-center justify-between ${
+          <div className={`p-4 rounded-2xl border text-xs flex items-center justify-between transition-all ${
             lastCheckInResult.alertType === 'warning'
-              ? 'bg-amber-50 border-amber-300 text-amber-900 dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-200'
-              : 'bg-emerald-50 border-emerald-300 text-emerald-900 dark:bg-emerald-950/50 dark:border-emerald-800 dark:text-emerald-200'
+              ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+              : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
           }`}>
             <div className="flex items-center space-x-3 rtl:space-x-reverse">
               {lastCheckInResult.alertType === 'warning' ? (
-                <AlertTriangle className="h-6 w-6 text-amber-600 flex-shrink-0" />
+                <AlertTriangle className="h-6 w-6 text-amber-400 shrink-0" />
               ) : (
-                <CheckCircle2 className="h-6 w-6 text-emerald-600 flex-shrink-0" />
+                <CheckCircle2 className="h-6 w-6 text-emerald-400 shrink-0" />
               )}
               <div>
                 <div className="font-bold text-sm">
                   ورود {lastCheckInResult.studentName} ثبت گردید
                 </div>
-                <div className="mt-0.5">{lastCheckInResult.message}</div>
+                <div className="mt-0.5 opacity-90">{lastCheckInResult.message}</div>
               </div>
             </div>
 
             <div className="text-left rtl:text-right font-mono">
-              <div className="px-2.5 py-1 rounded bg-white dark:bg-stone-900 font-bold border border-stone-200 dark:border-stone-700">
-                کمد #{lastCheckInResult.locker}
+              <div className="px-3 py-1 rounded-xl glass-subtle font-bold border border-[var(--gym-border)] text-center">
+                کمد #{lastCheckInResult.locker || '---'}
               </div>
-              <div className="text-[10px] text-stone-400 mt-1 text-center">
+              <div className="text-[10px] text-[var(--gym-text-muted)] mt-1 text-center">
                 ساعت {lastCheckInResult.time}
               </div>
             </div>
           </div>
         )}
-      </div>
+      </GlassCard>
 
       {/* Attendance History */}
-      <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 overflow-hidden shadow-xs space-y-4 p-5">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-bold text-stone-900 dark:text-white flex items-center gap-2">
-            <Clock className="h-5 w-5 text-stone-500" />
+      <GlassCard variant="regular" className="overflow-hidden p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h3 className="text-base font-bold text-[var(--gym-text,#fff)] flex items-center gap-2">
+            <Clock className="h-5 w-5 text-[var(--gym-brand,#10b981)]" />
             <span>{t.checkInHistory}</span>
           </h3>
 
           <select
             value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
-            className="px-3 py-1.5 rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs"
+            onChange={(e) => { setDateFilter(e.target.value); setCurrentPage(1); }}
+            className="px-3 py-1.5 rounded-xl glass-subtle border border-[var(--gym-border)] text-xs text-[var(--gym-text)] bg-[var(--gym-surface)] outline-none"
           >
-            <option value="all">تمامی روزها ({attendance.length} رکورد)</option>
+            <option value="all" className="bg-stone-900 text-white">تمامی روزها ({attendance.length} رکورد)</option>
             {datesList.map(d => (
-              <option key={d} value={d}>تاریخ: {d}</option>
+              <option key={d} value={d} className="bg-stone-900 text-white">تاریخ: {d}</option>
             ))}
           </select>
         </div>
 
-        <div className="border border-stone-200 dark:border-stone-800 rounded-xl overflow-hidden">
+        <div className="border border-[var(--gym-border)] rounded-2xl overflow-hidden">
           <table className="w-full text-xs text-right">
-            <thead className="bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 font-semibold">
+            <thead className="glass-subtle text-[var(--gym-text-secondary)] font-semibold border-b border-[var(--gym-border)]">
               <tr>
                 <th className="p-3">نام ورزشکار</th>
                 <th className="p-3">مربی</th>
@@ -232,24 +252,55 @@ export const AttendanceManager: React.FC = () => {
                 <th className="p-3">کمد تحویلی</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-stone-200 dark:divide-stone-800">
-              {filteredAttendance.map(att => (
-                <tr key={att.id} className="hover:bg-stone-50/80 dark:hover:bg-stone-800/40">
-                  <td className="p-3 font-bold text-stone-900 dark:text-white">{att.studentName}</td>
-                  <td className="p-3 text-stone-600 dark:text-stone-400">{att.coachName}</td>
-                  <td className="p-3 text-stone-600 dark:text-stone-400 font-mono">{att.date}</td>
-                  <td className="p-3 font-mono font-bold text-stone-800 dark:text-stone-200">{att.checkInTime}</td>
-                  <td className="p-3">
-                    <span className="px-2 py-0.5 rounded bg-stone-100 dark:bg-stone-800 font-mono font-bold text-amber-700 dark:text-amber-300 border border-stone-200 dark:border-stone-700">
-                      #{att.lockerNumber}
-                    </span>
+            <tbody className="divide-y divide-[var(--gym-border)]">
+              {paginatedAttendance.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="p-6 text-center text-[var(--gym-text-muted)]">
+                    هیچ رکوردی یافت نشد.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                paginatedAttendance.map(att => (
+                  <tr key={att.id} className="hover:bg-[var(--gym-surface-glass)]">
+                    <td className="p-3 font-bold text-[var(--gym-text,#fff)]">{att.studentName}</td>
+                    <td className="p-3 text-[var(--gym-text-secondary)]">{att.coachName}</td>
+                    <td className="p-3 text-[var(--gym-text-secondary)] font-mono">{att.date}</td>
+                    <td className="p-3 font-mono font-bold text-[var(--gym-text,#fff)]">{att.checkInTime}</td>
+                    <td className="p-3">
+                      <span className="px-2 py-0.5 rounded-lg glass-subtle font-mono font-bold text-[var(--gym-brand,#10b981)] border border-[var(--gym-border)]">
+                        #{att.lockerNumber || '---'}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
-      </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between pt-2 border-t border-[var(--gym-border)] text-xs text-[var(--gym-text-muted)]">
+            <span>صفحه {formatNum(currentPage)} از {formatNum(totalPages)} ({formatNum(filteredAttendance.length)} تردد)</span>
+            <div className="flex items-center gap-1.5">
+              <button
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                className="p-1.5 rounded-xl border border-[var(--gym-border)] glass-subtle disabled:opacity-40 cursor-pointer text-[var(--gym-text)]"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+              <button
+                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                className="p-1.5 rounded-xl border border-[var(--gym-border)] glass-subtle disabled:opacity-40 cursor-pointer text-[var(--gym-text)]"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
+      </GlassCard>
 
     </div>
   );

@@ -430,6 +430,31 @@ export class ThemeEngineService {
     }
 
     // Set CSS Custom Properties on :root
+    root.style.setProperty('--gym-bg', config.colors.bg);
+    root.style.setProperty('--gym-bg-secondary', config.colors.sidebarBg || config.colors.surface);
+    root.style.setProperty('--gym-surface', config.colors.surface);
+    root.style.setProperty('--gym-surface-soft', config.colors.surfaceGlass);
+    root.style.setProperty('--gym-surface-strong', config.colors.surfaceGlassStrong);
+    root.style.setProperty('--gym-surface-glass', config.colors.surfaceGlass);
+    root.style.setProperty('--gym-surface-glass-strong', config.colors.surfaceGlassStrong);
+    root.style.setProperty('--gym-border', config.colors.border);
+    root.style.setProperty('--gym-border-strong', config.colors.borderStrong);
+    root.style.setProperty('--gym-text', config.colors.text);
+    root.style.setProperty('--gym-text-secondary', isDark ? '#d1d5db' : '#334155');
+    root.style.setProperty('--gym-text-muted', config.colors.textMuted);
+    root.style.setProperty('--gym-brand', config.colors.brand);
+    root.style.setProperty('--gym-brand-soft', config.colors.brandSoft);
+    root.style.setProperty('--gym-accent', config.colors.accent);
+    root.style.setProperty('--gym-neon', config.colors.neon);
+    root.style.setProperty('--gym-neon-soft', config.colors.brandSoft);
+    root.style.setProperty('--gym-success', isDark ? '#10b981' : '#059669');
+    root.style.setProperty('--gym-warning', isDark ? '#f59e0b' : '#d97706');
+    root.style.setProperty('--gym-danger', isDark ? '#f43f5e' : '#e11d48');
+    root.style.setProperty('--gym-info', isDark ? '#06b6d4' : '#0284c7');
+    root.style.setProperty('--gym-shadow', isDark ? '0 8px 32px 0 rgba(0, 0, 0, 0.35)' : '0 8px 30px 0 rgba(0, 0, 0, 0.08)');
+    root.style.setProperty('--gym-glow', config.colors.glow);
+
+    // Compatibility aliases
     root.style.setProperty('--theme-bg', config.colors.bg);
     root.style.setProperty('--theme-surface', config.colors.surface);
     root.style.setProperty('--theme-surface-glass', config.colors.surfaceGlass);
