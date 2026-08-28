@@ -109,8 +109,8 @@ const MainLayout: React.FC = () => {
   const handleStartMigration = () => {
     completeInstallation({
       orgData: { name: 'باشگاه ورزشی' },
-      lockerCount: 60,
-      ownerData: { fullName: 'مدیر باشگاه', phone: '09120000000' }
+      lockerCount: 0,
+      ownerData: { fullName: 'مدیریت باشگاه', phone: '' }
     });
     setActiveTab('migration');
   };

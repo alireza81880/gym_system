@@ -9,7 +9,7 @@ export interface GlassModalProps {
   icon?: React.ReactNode;
   children: React.ReactNode;
   footer?: React.ReactNode;
-  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | string;
 }
 
 export const GlassModal: React.FC<GlassModalProps> = ({
@@ -34,7 +34,7 @@ export const GlassModal: React.FC<GlassModalProps> = ({
 
   if (!isOpen) return null;
 
-  const maxWidthClass = {
+  const maxWidthMap: Record<string, string> = {
     sm: 'max-w-sm',
     md: 'max-w-md',
     lg: 'max-w-lg',
@@ -42,7 +42,11 @@ export const GlassModal: React.FC<GlassModalProps> = ({
     '2xl': 'max-w-2xl',
     '3xl': 'max-w-3xl',
     '4xl': 'max-w-4xl',
-  }[maxWidth];
+  };
+
+  const maxWidthClass = maxWidth.startsWith('max-w-')
+    ? maxWidth
+    : maxWidthMap[maxWidth] || 'max-w-lg';
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 sm:p-6" dir="rtl">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   KeyRound, 
   Lock, 
@@ -26,16 +26,23 @@ import {
   Edit3,
   Layers,
   PlusCircle,
-  X
+  X,
+  History,
+  Grid,
+  Clock,
+  Check,
+  Search,
+  Settings
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { SmartLocker, LockerZone, ScanResult } from '../../types';
+import { SmartLocker, LockerZone, ScanResult, LockerAssignment } from '../../types';
 import { GlassPageHeader } from '../common/GlassPageHeader';
 import { GlassCard } from '../common/GlassCard';
 import { GlassStatCard } from '../common/GlassStatCard';
 import { GlassButton } from '../common/GlassButton';
 import { GlassBadge } from '../common/GlassBadge';
 import { GlassModal } from '../common/GlassModal';
+import { LockerRepository } from '../../services/repositories/lockerRepository';
 
 export const SmartLockerHub: React.FC = () => {
   const { 
@@ -56,8 +63,12 @@ export const SmartLockerHub: React.FC = () => {
     simulateIdentityScan,
     toggleDeviceOnline,
     testRelayPulse,
+    setLockerCount,
     formatNum 
   } = useApp();
+
+  // Tab View Selection
+  const [activeTab, setActiveTab] = useState<'matrix' | 'history'>('matrix');
 
   // Filters & State
   const [selectedZone, setSelectedZone] = useState<LockerZone | 'all'>('all');
@@ -81,6 +92,22 @@ export const SmartLockerHub: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingLocker, setEditingLocker] = useState<SmartLocker | null>(null);
   const [deleteConfirmLocker, setDeleteConfirmLocker] = useState<SmartLocker | null>(null);
+
+  // Emergency Master Unlock Modal State
+  const [isMasterUnlockModalOpen, setIsMasterUnlockModalOpen] = useState(false);
+  const [masterUnlockReason, setMasterUnlockReason] = useState('تخلیه سراسری شیفت کاری');
+  const [isConfirmingMaster, setIsConfirmingMaster] = useState(false);
+
+  // Capacity Resize Modal State
+  const [isResizeModalOpen, setIsResizeModalOpen] = useState(false);
+  const [newCapacityCount, setNewCapacityCount] = useState(smartLockers.length || 32);
+
+  // History State
+  const [assignmentHistory, setAssignmentHistory] = useState<LockerAssignment[]>([]);
+
+  useEffect(() => {
+    setAssignmentHistory(LockerRepository.getAssignmentHistory(50));
+  }, [smartLockers]);
 
   const maxLockerNum = smartLockers.length > 0 ? Math.max(...smartLockers.map(l => l.number)) : 0;
   const [newLockerNumber, setNewLockerNumber] = useState<number>(maxLockerNum + 1);
@@ -123,7 +150,8 @@ export const SmartLockerHub: React.FC = () => {
       const res = simulateIdentityScan(activeScanMethod, query);
       setLastScanResult(res);
       setIsScanning(false);
-    }, 1200);
+      setAssignmentHistory(LockerRepository.getAssignmentHistory(50));
+    }, 900);
   };
 
   // Test individual device relay pulse
@@ -131,9 +159,10 @@ export const SmartLockerHub: React.FC = () => {
     setTestingDevice(deviceId);
     setTestResult(null);
     setTimeout(() => {
-      const latency = testRelayPulse(deviceId);
-      setTestResult({ id: deviceId, latency });
-      setTestingDevice(null);
+      testRelayPulse(deviceId).then(res => {
+        setTestResult({ id: deviceId, latency: res.latency });
+        setTestingDevice(null);
+      });
     }, 450);
   };
 
@@ -143,6 +172,7 @@ export const SmartLockerHub: React.FC = () => {
       assignLocker(assignModalLocker.number, selectedStudentToAssign);
       setAssignModalLocker(null);
       setSelectedStudentToAssign('');
+      setAssignmentHistory(LockerRepository.getAssignmentHistory(50));
     }
   };
 
@@ -155,6 +185,7 @@ export const SmartLockerHub: React.FC = () => {
       relayPort: Number(newLockerRelay),
       lockType: newLockerLockType,
       status: newLockerStatus,
+      isLocked: true,
     });
     setIsAddModalOpen(false);
     setNewLockerNumber(maxLockerNum + 2);
@@ -203,8 +234,22 @@ export const SmartLockerHub: React.FC = () => {
         relayPort: ((num - 1) % 32) + 1,
         lockType: 'solenoid_12v',
         status: 'available',
+        isLocked: true,
       });
     }
+  };
+
+  // Master Unlock Execute
+  const handleExecuteMasterUnlock = () => {
+    triggerMasterUnlock(masterUnlockReason);
+    setIsConfirmingMaster(false);
+    setIsMasterUnlockModalOpen(false);
+  };
+
+  // Capacity Resize Execute
+  const handleExecuteResize = () => {
+    setLockerCount(newCapacityCount);
+    setIsResizeModalOpen(false);
   };
 
   return (
@@ -212,10 +257,10 @@ export const SmartLockerHub: React.FC = () => {
       
       {/* Top Page Header */}
       <GlassPageHeader
-        title={t.smartLockersTitle}
-        subtitle={t.smartLockersDesc}
-        icon={<KeyRound className="w-6 h-6 text-[var(--gym-brand,#10b981)]" />}
-        badge={{ text: 'IoT Hardware Active', variant: 'success' }}
+        title="سیستم مدیریت کمدهای هوشمند (Smart Locker OS)"
+        subtitle="تخصیص هوشمند کمد، یکپارچه‌سازی تردد با رله‌های سخت‌افزاری و مانیتورینگ آنلاین"
+        icon={<KeyRound className="w-6 h-6 text-[var(--gym-brand)]" />}
+        badge={{ text: 'IoT Active Relay Gateway', variant: 'success' }}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <GlassButton
@@ -230,7 +275,7 @@ export const SmartLockerHub: React.FC = () => {
             <GlassButton
               variant="secondary"
               size="md"
-              icon={<Layers className="w-3.5 h-3.5 text-[var(--gym-brand,#10b981)]" />}
+              icon={<Layers className="w-3.5 h-3.5 text-[var(--gym-brand)]" />}
               onClick={handleBatchAdd5}
               title="افزودن سریع ۵ کمد جدید متوالی"
             >
@@ -240,15 +285,28 @@ export const SmartLockerHub: React.FC = () => {
             <GlassButton
               variant="secondary"
               size="md"
+              icon={<Settings className="w-3.5 h-3.5" />}
+              onClick={() => {
+                setNewCapacityCount(smartLockers.length);
+                setIsResizeModalOpen(true);
+              }}
+              title="تغییر ظرفیت کلی کمدهای باشگاه"
+            >
+              تنظیم ظرفیت ({formatNum(smartLockers.length)})
+            </GlassButton>
+
+            <GlassButton
+              variant="secondary"
+              size="md"
               className="!bg-rose-500/15 !border-rose-500/40 !text-rose-400 hover:!bg-rose-500/25"
               icon={<AlertTriangle className="w-4 h-4 text-rose-400" />}
-              onClick={triggerMasterUnlock}
+              onClick={() => setIsMasterUnlockModalOpen(true)}
             >
               {t.masterUnlockAll}
             </GlassButton>
 
             <div className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-2xl glass-subtle border border-[var(--gym-border)] text-[var(--gym-text-secondary)]">
-              <Cpu className="w-4 h-4 text-[var(--gym-brand,#10b981)]" />
+              <Cpu className="w-4 h-4 text-[var(--gym-brand)]" />
               <span>{formatNum(onlineDevicesCount)} / {formatNum(hardwareDevices.length)} {t.hardwareConnected}</span>
             </div>
           </div>
@@ -260,7 +318,7 @@ export const SmartLockerHub: React.FC = () => {
         <GlassStatCard
           title={t.totalLockers}
           value={`${formatNum(totalCount)} کمد`}
-          icon={<KeyRound className="w-6 h-6 text-[var(--gym-brand,#10b981)]" />}
+          icon={<KeyRound className="w-6 h-6 text-[var(--gym-brand)]" />}
         />
 
         <GlassStatCard
@@ -295,7 +353,7 @@ export const SmartLockerHub: React.FC = () => {
               <ScanFace className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-[var(--gym-text,#fff)]">
+              <h2 className="text-base font-bold text-[var(--gym-text)]">
                 {t.liveScanIdentity}
               </h2>
               <p className="text-xs text-[var(--gym-text-muted)]">
@@ -310,7 +368,7 @@ export const SmartLockerHub: React.FC = () => {
               onClick={() => setActiveScanMethod('face_recognition')}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                 activeScanMethod === 'face_recognition'
-                  ? 'bg-[var(--gym-brand,#10b981)] text-stone-950 shadow-xs'
+                  ? 'bg-[var(--gym-brand)] text-stone-950 shadow-xs'
                   : 'text-[var(--gym-text-secondary)] hover:text-[var(--gym-text)]'
               }`}
             >
@@ -321,7 +379,7 @@ export const SmartLockerHub: React.FC = () => {
               onClick={() => setActiveScanMethod('rfid_card')}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                 activeScanMethod === 'rfid_card'
-                  ? 'bg-[var(--gym-brand,#10b981)] text-stone-950 shadow-xs'
+                  ? 'bg-[var(--gym-brand)] text-stone-950 shadow-xs'
                   : 'text-[var(--gym-text-secondary)] hover:text-[var(--gym-text)]'
               }`}
             >
@@ -332,7 +390,7 @@ export const SmartLockerHub: React.FC = () => {
               onClick={() => setActiveScanMethod('fingerprint')}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                 activeScanMethod === 'fingerprint'
-                  ? 'bg-[var(--gym-brand,#10b981)] text-stone-950 shadow-xs'
+                  ? 'bg-[var(--gym-brand)] text-stone-950 shadow-xs'
                   : 'text-[var(--gym-text-secondary)] hover:text-[var(--gym-text)]'
               }`}
             >
@@ -343,7 +401,7 @@ export const SmartLockerHub: React.FC = () => {
               onClick={() => setActiveScanMethod('qr_code')}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
                 activeScanMethod === 'qr_code'
-                  ? 'bg-[var(--gym-brand,#10b981)] text-stone-950 shadow-xs'
+                  ? 'bg-[var(--gym-brand)] text-stone-950 shadow-xs'
                   : 'text-[var(--gym-text-secondary)] hover:text-[var(--gym-text)]'
               }`}
             >
@@ -361,9 +419,9 @@ export const SmartLockerHub: React.FC = () => {
             <div className="absolute inset-0 bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:16px_16px] opacity-15"></div>
 
             {/* Target Reticle */}
-            <div className="relative z-10 w-32 h-32 md:w-36 md:h-36 rounded-2xl border-2 border-dashed border-[var(--gym-brand,#10b981)]/50 flex flex-col items-center justify-center p-3 text-center">
+            <div className="relative z-10 w-32 h-32 md:w-36 md:h-36 rounded-2xl border-2 border-dashed border-[var(--gym-brand)]/50 flex flex-col items-center justify-center p-3 text-center">
               {isScanning && (
-                <div className="absolute inset-x-0 h-0.5 bg-[var(--gym-brand,#10b981)] shadow-[0_0_12px_#10b981] animate-pulse"></div>
+                <div className="absolute inset-x-0 h-0.5 bg-[var(--gym-brand)] shadow-[0_0_12px_#10b981] animate-pulse"></div>
               )}
 
               {activeScanMethod === 'face_recognition' && (
@@ -380,7 +438,7 @@ export const SmartLockerHub: React.FC = () => {
               )}
 
               <span className="text-[11px] font-mono text-[var(--gym-text-muted)] mt-2">
-                {isScanning ? 'در حال تحلیل بیومتریک...' : 'آماده دریافت سیگنال سخت‌افزار'}
+                {isScanning ? 'در حال پردازش بیومتریک...' : 'آماده دریافت سیگنال سخت‌افزار'}
               </span>
             </div>
 
@@ -390,7 +448,7 @@ export const SmartLockerHub: React.FC = () => {
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 ONLINE 60FPS
               </span>
-              <span>ESP32-RELAY-MODBUS: READY</span>
+              <span>LOCKER-GATE-PIPELINE: ACTIVE</span>
             </div>
           </div>
 
@@ -404,7 +462,7 @@ export const SmartLockerHub: React.FC = () => {
                 <select
                   value={selectedStudentForScan}
                   onChange={(e) => setSelectedStudentForScan(e.target.value)}
-                  className="w-full text-xs rounded-xl glass-subtle border border-[var(--gym-border)] px-3 py-2.5 text-[var(--gym-text)] bg-[var(--gym-surface)] focus:outline-none focus:border-[var(--gym-brand,#10b981)]"
+                  className="w-full text-xs rounded-xl glass-subtle border border-[var(--gym-border)] px-3 py-2.5 text-[var(--gym-text)] bg-[var(--gym-surface)] focus:outline-none focus:border-[var(--gym-brand)]"
                 >
                   {students.map(s => (
                     <option key={s.id} value={s.id} className="bg-stone-900 text-white">
@@ -424,7 +482,7 @@ export const SmartLockerHub: React.FC = () => {
                     placeholder="e.g. E2-80-68-9A"
                     value={customRfidInput}
                     onChange={(e) => setCustomRfidInput(e.target.value)}
-                    className="w-full text-xs font-mono rounded-xl glass-subtle border border-[var(--gym-border)] px-3 py-2 text-[var(--gym-text)] focus:border-[var(--gym-brand,#10b981)] outline-none"
+                    className="w-full text-xs font-mono rounded-xl glass-subtle border border-[var(--gym-border)] px-3 py-2 text-[var(--gym-text)] focus:border-[var(--gym-brand)] outline-none"
                   />
                 </div>
               ) : (
@@ -448,7 +506,7 @@ export const SmartLockerHub: React.FC = () => {
                 disabled={isScanning}
                 icon={isScanning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
               >
-                {isScanning ? 'در حال اسکن و ارسال پالس...' : 'تست اسکن و فرمان بازگشایی'}
+                {isScanning ? 'در حال اسکن و ارسال پالس...' : 'تست اسکن و اجرای پایپ‌لاین ورود'}
               </GlassButton>
 
               <span className="text-xs text-[var(--gym-text-muted)] font-mono">
@@ -459,11 +517,11 @@ export const SmartLockerHub: React.FC = () => {
             {/* Scan Feedback Message */}
             {lastScanResult && (
               <div className={`p-3 rounded-2xl border text-xs flex items-start gap-2.5 transition-all ${
-                lastScanResult.granted 
+                lastScanResult.granted !== false && lastScanResult.alertType !== 'error'
                   ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300' 
                   : 'bg-rose-500/15 border-rose-500/40 text-rose-300'
               }`}>
-                {lastScanResult.granted ? (
+                {lastScanResult.granted !== false && lastScanResult.alertType !== 'error' ? (
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
                 ) : (
                   <XCircle className="w-4 h-4 text-rose-400 mt-0.5 shrink-0" />
@@ -483,197 +541,305 @@ export const SmartLockerHub: React.FC = () => {
         </div>
       </GlassCard>
 
+      {/* Main View Tabs Switcher */}
+      <div className="flex items-center gap-2 border-b border-[var(--gym-border)] pb-2">
+        <button
+          onClick={() => setActiveTab('matrix')}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+            activeTab === 'matrix'
+              ? 'bg-[var(--gym-brand)] text-stone-950 shadow-xs'
+              : 'glass-subtle text-[var(--gym-text-secondary)] hover:text-[var(--gym-text)]'
+          }`}
+        >
+          <Grid className="w-4 h-4" />
+          <span>ماتریس و مانیتورینگ زنده کمدها ({formatNum(smartLockers.length)})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('history')}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+            activeTab === 'history'
+              ? 'bg-[var(--gym-brand)] text-stone-950 shadow-xs'
+              : 'glass-subtle text-[var(--gym-text-secondary)] hover:text-[var(--gym-text)]'
+          }`}
+        >
+          <History className="w-4 h-4" />
+          <span>لاگ و تاریخچه تخصیص کمدها ({formatNum(assignmentHistory.length)})</span>
+        </button>
+      </div>
+
       {/* ---------------------------------------------------- */}
-      {/* SMART LOCKERS INTERACTIVE GRID */}
+      {/* TAB 1: SMART LOCKERS INTERACTIVE GRID */}
       {/* ---------------------------------------------------- */}
-      <GlassCard variant="regular" className="p-5 md:p-6 space-y-6">
-        
-        {/* Controls and Filters */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-base font-bold text-[var(--gym-text,#fff)] flex items-center gap-2">
-              <KeyRound className="w-4 h-4 text-[var(--gym-brand,#10b981)]" />
-              ماتریس کمدهای هوشمند باشگاه ({formatNum(filteredLockers.length)} کمد)
-            </h2>
-            <p className="text-xs text-[var(--gym-text-muted)]">
-              مشاهده وضعیت فیزیکی و باز کردن درب کمدها از راه دور از طریق پالس رله
-            </p>
-          </div>
+      {activeTab === 'matrix' ? (
+        <GlassCard variant="regular" className="p-5 md:p-6 space-y-6">
+          
+          {/* Controls and Filters */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-base font-bold text-[var(--gym-text)] flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-[var(--gym-brand)]" />
+                ماتریس کمدهای هوشمند باشگاه ({formatNum(filteredLockers.length)} کمد)
+              </h2>
+              <p className="text-xs text-[var(--gym-text-muted)]">
+                مشاهده وضعیت فیزیکی و باز کردن درب کمدها از راه دور از طریق پالس رله
+              </p>
+            </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Search */}
-            <input
-              type="text"
-              placeholder="جستجوی شماره کمد یا نام شاگرد..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="text-xs px-3 py-1.5 rounded-xl glass-subtle border border-[var(--gym-border)] text-[var(--gym-text)] focus:border-[var(--gym-brand,#10b981)] outline-none"
-            />
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Search */}
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute right-3 top-2.5 text-[var(--gym-text-muted)]" />
+                <input
+                  type="text"
+                  placeholder="جستجوی شماره یا نام..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="text-xs pr-8 pl-3 py-1.5 rounded-xl glass-subtle border border-[var(--gym-border)] text-[var(--gym-text)] focus:border-[var(--gym-brand)] outline-none"
+                />
+              </div>
 
-            {/* Zone Filter */}
-            <select
-              value={selectedZone}
-              onChange={(e) => setSelectedZone(e.target.value as any)}
-              className="text-xs px-3 py-1.5 rounded-xl glass-subtle border border-[var(--gym-border)] text-[var(--gym-text)] bg-[var(--gym-surface)] outline-none"
-            >
-              <option value="all" className="bg-stone-900 text-white">همه بخش‌ها</option>
-              <option value="vip" className="bg-stone-900 text-white">{t.zoneVip}</option>
-              <option value="men" className="bg-stone-900 text-white">{t.zoneMen}</option>
-              <option value="women" className="bg-stone-900 text-white">{t.zoneWomen}</option>
-              <option value="general" className="bg-stone-900 text-white">{t.zoneGeneral}</option>
-            </select>
-
-            {/* Status Filter */}
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="text-xs px-3 py-1.5 rounded-xl glass-subtle border border-[var(--gym-border)] text-[var(--gym-text)] bg-[var(--gym-surface)] outline-none"
-            >
-              <option value="all" className="bg-stone-900 text-white">تمام وضعیت‌ها</option>
-              <option value="available" className="bg-stone-900 text-white">فقط خالی / آماده</option>
-              <option value="occupied" className="bg-stone-900 text-white">در حال استفاده</option>
-              <option value="maintenance" className="bg-stone-900 text-white">در دست تعمیر</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Lockers Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">
-          {filteredLockers.map((locker) => {
-            const isAvailable = locker.status === 'available';
-            const isOccupied = locker.status === 'occupied';
-            const isMaintenance = locker.status === 'maintenance';
-            const isDoorOpen = !locker.isLocked;
-
-            return (
-              <div
-                key={locker.id}
-                className={`relative rounded-2xl p-3.5 border transition-all duration-200 flex flex-col justify-between ${
-                  isOccupied
-                    ? 'glass-regular bg-amber-500/10 border-amber-500/30 hover:border-amber-400'
-                    : isAvailable
-                    ? 'glass-subtle border-[var(--gym-border)] hover:border-emerald-400'
-                    : 'glass-subtle opacity-60'
-                } ${isDoorOpen ? 'ring-2 ring-[var(--gym-brand,#10b981)] shadow-[0_0_15px_var(--gym-brand-glow)]' : ''}`}
+              {/* Zone Filter */}
+              <select
+                value={selectedZone}
+                onChange={(e) => setSelectedZone(e.target.value as any)}
+                className="text-xs px-3 py-1.5 rounded-xl glass-subtle border border-[var(--gym-border)] text-[var(--gym-text)] bg-[var(--gym-surface)] outline-none"
               >
-                {/* Locker Card Header */}
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-lg font-black text-[var(--gym-text,#fff)] font-mono">
-                      #{formatNum(locker.number)}
-                    </span>
-                    {locker.zone === 'vip' && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                        VIP
+                <option value="all" className="bg-stone-900 text-white">همه بخش‌ها</option>
+                <option value="vip" className="bg-stone-900 text-white">{t.zoneVip}</option>
+                <option value="men" className="bg-stone-900 text-white">{t.zoneMen}</option>
+                <option value="women" className="bg-stone-900 text-white">{t.zoneWomen}</option>
+                <option value="general" className="bg-stone-900 text-white">{t.zoneGeneral}</option>
+              </select>
+
+              {/* Status Filter */}
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className="text-xs px-3 py-1.5 rounded-xl glass-subtle border border-[var(--gym-border)] text-[var(--gym-text)] bg-[var(--gym-surface)] outline-none"
+              >
+                <option value="all" className="bg-stone-900 text-white">تمام وضعیت‌ها</option>
+                <option value="available" className="bg-stone-900 text-white">فقط خالی / آماده</option>
+                <option value="occupied" className="bg-stone-900 text-white">در حال استفاده</option>
+                <option value="maintenance" className="bg-stone-900 text-white">در دست تعمیر</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Lockers Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4">
+            {filteredLockers.map((locker) => {
+              const isAvailable = locker.status === 'available';
+              const isOccupied = locker.status === 'occupied';
+              const isMaintenance = locker.status === 'maintenance';
+              const isDoorOpen = !locker.isLocked;
+
+              return (
+                <div
+                  key={locker.id}
+                  className={`relative rounded-2xl p-3.5 border transition-all duration-200 flex flex-col justify-between ${
+                    isOccupied
+                      ? 'glass-regular bg-amber-500/10 border-amber-500/30 hover:border-amber-400'
+                      : isAvailable
+                      ? 'glass-subtle border-[var(--gym-border)] hover:border-emerald-400'
+                      : 'glass-subtle opacity-60'
+                  } ${isDoorOpen ? 'ring-2 ring-[var(--gym-brand)] shadow-[0_0_15px_var(--gym-brand-glow)]' : ''}`}
+                >
+                  {/* Locker Card Header */}
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-lg font-black text-[var(--gym-text)] font-mono">
+                        #{formatNum(locker.number)}
                       </span>
+                      {locker.zone === 'vip' && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                          VIP
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Status Indicator LED */}
+                    <div className="flex items-center gap-1">
+                      <span className={`w-2 h-2 rounded-full ${
+                        isAvailable ? 'bg-emerald-400 animate-pulse' : isOccupied ? 'bg-amber-400' : 'bg-stone-500'
+                      }`}></span>
+                      <span className="text-[10px] font-mono text-[var(--gym-text-muted)]">
+                        R{locker.relayPort}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Locker Body Information */}
+                  <div className="my-2.5">
+                    {isOccupied ? (
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-[var(--gym-text)] truncate" title={locker.currentStudentName}>
+                          {locker.currentStudentName}
+                        </p>
+                        <p className="text-[10px] text-[var(--gym-text-muted)]">
+                          ورود: {locker.assignedAt || 'امروز'}
+                        </p>
+                      </div>
+                    ) : isAvailable ? (
+                      <p className="text-[11px] font-semibold text-emerald-400">
+                        خالی و آماده تحویل
+                      </p>
+                    ) : (
+                      <p className="text-[11px] font-medium text-[var(--gym-text-muted)]">
+                        غیرفعال / قفل فنی
+                      </p>
                     )}
                   </div>
 
-                  {/* Status Indicator LED */}
-                  <div className="flex items-center gap-1">
-                    <span className={`w-2 h-2 rounded-full ${
-                      isAvailable ? 'bg-emerald-400 animate-pulse' : isOccupied ? 'bg-amber-400' : 'bg-stone-500'
-                    }`}></span>
-                    <span className="text-[10px] font-mono text-[var(--gym-text-muted)]">
-                      R{locker.relayPort}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Locker Body Information */}
-                <div className="my-2.5">
-                  {isOccupied ? (
-                    <div className="space-y-1">
-                      <p className="text-xs font-bold text-[var(--gym-text,#fff)] truncate" title={locker.currentStudentName}>
-                        {locker.currentStudentName}
-                      </p>
-                      <p className="text-[10px] text-[var(--gym-text-muted)]">
-                        ورود: {locker.assignedAt || 'امروز'}
-                      </p>
-                    </div>
-                  ) : isAvailable ? (
-                    <p className="text-[11px] font-semibold text-emerald-400">
-                      خالی و آماده تحویل
-                    </p>
-                  ) : (
-                    <p className="text-[11px] font-medium text-[var(--gym-text-muted)]">
-                      غیرفعال / قفل فنی
-                    </p>
-                  )}
-                </div>
-
-                {/* Locker Actions Toolbar */}
-                <div className="pt-2 border-t border-[var(--gym-border)] flex items-center justify-between gap-1">
-                  
-                  {/* Remote Unlock Trigger */}
-                  <button
-                    onClick={() => openLocker(locker.number, 'دستور دستی از داشبورد')}
-                    title="ارسال فرمان رله و باز کردن درب کمد"
-                    className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                      isDoorOpen
-                        ? 'bg-[var(--gym-brand,#10b981)] text-stone-950 font-bold shadow-xs'
-                        : 'glass-subtle hover:bg-[var(--gym-brand,#10b981)] hover:text-stone-950 text-[var(--gym-text-secondary)]'
-                    }`}
-                  >
-                    {isDoorOpen ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
-                    <span className="text-[10px]">{isDoorOpen ? 'باز شد' : 'باز کردن'}</span>
-                  </button>
-
-                  {/* Context Menu / Actions */}
-                  {isOccupied ? (
+                  {/* Locker Actions Toolbar */}
+                  <div className="pt-2 border-t border-[var(--gym-border)] flex items-center justify-between gap-1">
+                    
+                    {/* Remote Unlock Trigger */}
                     <button
-                      onClick={() => releaseLocker(locker.number)}
-                      title="تخلیه و آزادسازی کمد"
+                      onClick={() => openLocker(locker.number, 'دستور دستی از داشبورد')}
+                      title="ارسال فرمان رله و باز کردن درب کمد"
+                      className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                        isDoorOpen
+                          ? 'bg-[var(--gym-brand)] text-stone-950 font-bold shadow-xs'
+                          : 'glass-subtle hover:bg-[var(--gym-brand)] hover:text-stone-950 text-[var(--gym-text-secondary)]'
+                      }`}
+                    >
+                      {isDoorOpen ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                      <span className="text-[10px]">{isDoorOpen ? 'باز شد' : 'باز کردن'}</span>
+                    </button>
+
+                    {/* Context Menu / Actions */}
+                    {isOccupied ? (
+                      <button
+                        onClick={() => releaseLocker(locker.number)}
+                        title="تخلیه و آزادسازی کمد"
+                        className="p-1.5 rounded-lg text-[var(--gym-text-muted)] hover:text-rose-400 hover:bg-rose-500/15 transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    ) : isAvailable ? (
+                      <button
+                        onClick={() => setAssignModalLocker(locker)}
+                        title="تخصیص به شاگرد"
+                        className="p-1.5 rounded-lg text-[var(--gym-text-muted)] hover:text-amber-400 hover:bg-amber-500/15 transition-colors cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    ) : null}
+
+                    <button
+                      onClick={() => handleOpenEditModal(locker)}
+                      title="ویرایش مشخصات کمد و پورت رله"
+                      className="p-1.5 rounded-lg text-[var(--gym-text-muted)] hover:text-blue-400 hover:bg-blue-500/15 transition-colors cursor-pointer"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                    </button>
+
+                    <button
+                      onClick={() => toggleLockerMaintenance(locker.number)}
+                      title="تغییر وضعیت تعمیرات"
+                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                        isMaintenance 
+                          ? 'text-amber-400 bg-amber-500/15' 
+                          : 'text-[var(--gym-text-muted)] hover:text-[var(--gym-text)]'
+                      }`}
+                    >
+                      <SlidersHorizontal className="w-3 h-3" />
+                    </button>
+
+                    <button
+                      onClick={() => setDeleteConfirmLocker(locker)}
+                      title="حذف کمد از سیستم"
                       className="p-1.5 rounded-lg text-[var(--gym-text-muted)] hover:text-rose-400 hover:bg-rose-500/15 transition-colors cursor-pointer"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-3 h-3" />
                     </button>
-                  ) : isAvailable ? (
-                    <button
-                      onClick={() => setAssignModalLocker(locker)}
-                      title="تخصیص به شاگرد"
-                      className="p-1.5 rounded-lg text-[var(--gym-text-muted)] hover:text-amber-400 hover:bg-amber-500/15 transition-colors cursor-pointer"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                    </button>
-                  ) : null}
 
-                  <button
-                    onClick={() => handleOpenEditModal(locker)}
-                    title="ویرایش مشخصات کمد و پورت رله"
-                    className="p-1.5 rounded-lg text-[var(--gym-text-muted)] hover:text-blue-400 hover:bg-blue-500/15 transition-colors cursor-pointer"
-                  >
-                    <Edit3 className="w-3 h-3" />
-                  </button>
-
-                  <button
-                    onClick={() => toggleLockerMaintenance(locker.number)}
-                    title="تغییر وضعیت تعمیرات"
-                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                      isMaintenance 
-                        ? 'text-amber-400 bg-amber-500/15' 
-                        : 'text-[var(--gym-text-muted)] hover:text-[var(--gym-text)]'
-                    }`}
-                  >
-                    <SlidersHorizontal className="w-3 h-3" />
-                  </button>
-
-                  <button
-                    onClick={() => setDeleteConfirmLocker(locker)}
-                    title="حذف کمد از سیستم"
-                    className="p-1.5 rounded-lg text-[var(--gym-text-muted)] hover:text-rose-400 hover:bg-rose-500/15 transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
+                  </div>
 
                 </div>
+              );
+            })}
+          </div>
 
-              </div>
-            );
-          })}
-        </div>
+        </GlassCard>
+      ) : (
+        /* ---------------------------------------------------- */
+        /* TAB 2: LOCKER ASSIGNMENT & USAGE HISTORY */
+        /* ---------------------------------------------------- */
+        <GlassCard variant="regular" className="p-5 md:p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-[var(--gym-text)] flex items-center gap-2">
+                <History className="w-4 h-4 text-[var(--gym-brand)]" />
+                <span>سوابق و لاگ تخصیص کمدهای هوشمند</span>
+              </h3>
+              <p className="text-xs text-[var(--gym-text-muted)]">
+                رهگیری کامل لاگ بازگشایی، تحویل خودکار و تخلیه کمدها بر اساس شناسه و شماره کمد
+              </p>
+            </div>
+            <GlassButton
+              variant="secondary"
+              size="sm"
+              icon={<RefreshCw className="w-3.5 h-3.5" />}
+              onClick={() => setAssignmentHistory(LockerRepository.getAssignmentHistory(50))}
+            >
+              به‌روزرسانی لاگ
+            </GlassButton>
+          </div>
 
-      </GlassCard>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-right" dir="rtl">
+              <thead>
+                <tr className="border-b border-[var(--gym-border)] text-[var(--gym-text-muted)]">
+                  <th className="py-2.5 px-3">شماره کمد</th>
+                  <th className="py-2.5 px-3">نام عضو</th>
+                  <th className="py-2.5 px-3">بخش / زون</th>
+                  <th className="py-2.5 px-3">زمان تحویل</th>
+                  <th className="py-2.5 px-3">زمان تخلیه</th>
+                  <th className="py-2.5 px-3">روش تخصیص</th>
+                  <th className="py-2.5 px-3 text-center">وضعیت</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--gym-border)] text-[var(--gym-text)]">
+                {assignmentHistory.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-8 text-[var(--gym-text-muted)]">
+                      هنوز رکوردی در تاریخچه تخصیص کمدها ثبت نشده است.
+                    </td>
+                  </tr>
+                ) : (
+                  assignmentHistory.map((item) => (
+                    <tr key={item.id} className="hover:bg-[var(--gym-surface-glass)] transition-colors">
+                      <td className="py-3 px-3 font-mono font-bold text-[var(--gym-brand)]">
+                        #{formatNum(item.lockerNumber)}
+                      </td>
+                      <td className="py-3 px-3 font-semibold">{item.memberName || 'ورزشکار باشگاه'}</td>
+                      <td className="py-3 px-3">
+                        <span className="px-2 py-0.5 rounded text-[10px] glass-subtle border border-[var(--gym-border)]">
+                          {item.zone === 'vip' ? 'VIP' : item.zone === 'men' ? 'آقایان' : item.zone === 'women' ? 'بانوان' : 'عمومی'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 font-mono text-[var(--gym-text-secondary)]">{item.assignedAt}</td>
+                      <td className="py-3 px-3 font-mono text-[var(--gym-text-muted)]">
+                        {item.releasedAt || 'در حال استفاده'}
+                      </td>
+                      <td className="py-3 px-3 text-[var(--gym-text-muted)]">
+                        {item.assignedBy === 'auto_gate' ? 'گیت هوشمند' : 'دستی از پذیرش'}
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        <GlassBadge variant={item.releasedAt ? 'neutral' : 'success'}>
+                          {item.releasedAt ? 'تخلیه شده' : 'فعال'}
+                        </GlassBadge>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </GlassCard>
+      )}
 
       {/* ---------------------------------------------------- */}
       {/* HARDWARE DEVICES & LIVE ACCESS TELEMETRY */}
@@ -684,8 +850,8 @@ export const SmartLockerHub: React.FC = () => {
         <GlassCard variant="regular" className="lg:col-span-6 p-5 md:p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Cpu className="w-5 h-5 text-[var(--gym-brand,#10b981)]" />
-              <h3 className="text-sm font-bold text-[var(--gym-text,#fff)]">
+              <Cpu className="w-5 h-5 text-[var(--gym-brand)]" />
+              <h3 className="text-sm font-bold text-[var(--gym-text)]">
                 وضعیت تجهیزات سخت‌افزاری و کنترلرها
               </h3>
             </div>
@@ -701,7 +867,7 @@ export const SmartLockerHub: React.FC = () => {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${dev.status === 'online' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`}></span>
-                    <h4 className="text-xs font-bold text-[var(--gym-text,#fff)]">{dev.name}</h4>
+                    <h4 className="text-xs font-bold text-[var(--gym-text)]">{dev.name}</h4>
                   </div>
                   <div className="flex flex-wrap items-center gap-3 text-[11px] font-mono text-[var(--gym-text-muted)] mt-1">
                     <span>IP: {dev.ipAddress}</span>
@@ -736,7 +902,7 @@ export const SmartLockerHub: React.FC = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Activity className="w-5 h-5 text-indigo-400" />
-              <h3 className="text-sm font-bold text-[var(--gym-text,#fff)]">
+              <h3 className="text-sm font-bold text-[var(--gym-text)]">
                 لاگ زنده تردد و رله‌های الکترونیکی
               </h3>
             </div>
@@ -754,7 +920,7 @@ export const SmartLockerHub: React.FC = () => {
                   <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${isGranted ? 'bg-emerald-400' : 'bg-rose-400'}`} />
                   <div className="flex-1 space-y-0.5">
                     <div className="flex items-center justify-between text-[11px]">
-                      <span className="font-bold text-[var(--gym-text,#fff)]">{log.studentName}</span>
+                      <span className="font-bold text-[var(--gym-text)]">{log.studentName}</span>
                       <span className="text-[10px] font-mono text-[var(--gym-text-muted)]">{log.timestamp}</span>
                     </div>
                     <p className="text-[11px] text-[var(--gym-text-secondary)]">{log.message}</p>
@@ -777,7 +943,7 @@ export const SmartLockerHub: React.FC = () => {
           onClose={() => setAssignModalLocker(null)}
           title={`تخصیص کمد هوشمند #${formatNum(assignModalLocker.number)}`}
           subtitle="یک ورزشکار حاضر در سالن را جهت تحویل کمد انتخاب نمایید:"
-          icon={<KeyRound className="w-5 h-5 text-[var(--gym-brand,#10b981)]" />}
+          icon={<KeyRound className="w-5 h-5 text-[var(--gym-brand)]" />}
         >
           <div className="space-y-4 text-xs">
             <div>
@@ -826,7 +992,7 @@ export const SmartLockerHub: React.FC = () => {
           onClose={() => setIsAddModalOpen(false)}
           title="افزودن کمد هوشمند جدید به باشگاه"
           subtitle="پیکربندی شماره کمد، بخش استقرار و پورت اتصال رله سخت‌افزاری"
-          icon={<PlusCircle className="w-5 h-5 text-[var(--gym-brand,#10b981)]" />}
+          icon={<PlusCircle className="w-5 h-5 text-[var(--gym-brand)]" />}
         >
           <form onSubmit={handleSaveNewLocker} className="space-y-4 text-xs">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -840,7 +1006,7 @@ export const SmartLockerHub: React.FC = () => {
                   required
                   value={newLockerNumber}
                   onChange={(e) => setNewLockerNumber(parseInt(e.target.value) || 1)}
-                  className="w-full font-mono font-bold rounded-xl glass-subtle border border-[var(--gym-border)] px-3 py-2 text-[var(--gym-text)] focus:border-[var(--gym-brand,#10b981)] outline-none"
+                  className="w-full font-mono font-bold rounded-xl glass-subtle border border-[var(--gym-border)] px-3 py-2 text-[var(--gym-text)] focus:border-[var(--gym-brand)] outline-none"
                 />
               </div>
 
@@ -855,7 +1021,7 @@ export const SmartLockerHub: React.FC = () => {
                   required
                   value={newLockerRelay}
                   onChange={(e) => setNewLockerRelay(parseInt(e.target.value) || 1)}
-                  className="w-full font-mono rounded-xl glass-subtle border border-[var(--gym-border)] px-3 py-2 text-[var(--gym-text)] focus:border-[var(--gym-brand,#10b981)] outline-none"
+                  className="w-full font-mono rounded-xl glass-subtle border border-[var(--gym-border)] px-3 py-2 text-[var(--gym-text)] focus:border-[var(--gym-brand)] outline-none"
                 />
               </div>
 
@@ -903,7 +1069,7 @@ export const SmartLockerHub: React.FC = () => {
                     name="initialStatus"
                     checked={newLockerStatus === 'available'}
                     onChange={() => setNewLockerStatus('available')}
-                    className="accent-[var(--gym-brand,#10b981)]"
+                    className="accent-[var(--gym-brand)]"
                   />
                   <span>آماده و قابل تحویل به شاگرد</span>
                 </label>
@@ -913,7 +1079,7 @@ export const SmartLockerHub: React.FC = () => {
                     name="initialStatus"
                     checked={newLockerStatus === 'maintenance'}
                     onChange={() => setNewLockerStatus('maintenance')}
-                    className="accent-[var(--gym-brand,#10b981)]"
+                    className="accent-[var(--gym-brand)]"
                   />
                   <span>در دست تعمیر / قفل فنی</span>
                 </label>
@@ -1053,6 +1219,110 @@ export const SmartLockerHub: React.FC = () => {
                 }}
               >
                 تایید و حذف
+              </GlassButton>
+            </div>
+          </div>
+        </GlassModal>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* MASTER EMERGENCY UNLOCK MODAL */}
+      {/* ---------------------------------------------------- */}
+      {isMasterUnlockModalOpen && (
+        <GlassModal
+          isOpen={true}
+          onClose={() => setIsMasterUnlockModalOpen(false)}
+          title="هشدار امنیتی: بازگشایی سراسری تمام کمدها"
+          subtitle="این عملیات کلیه کمدهای هوشمند فعال را به طور همزمان بازگشایی و لاگ نظارتی ایجاد می‌نماید."
+          icon={<AlertTriangle className="w-5 h-5 text-rose-500" />}
+          maxWidth="max-w-md"
+        >
+          <div className="space-y-4 text-xs">
+            <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 leading-relaxed">
+              <p className="font-bold mb-1">دقت فرمایید:</p>
+              <p>پالس بازگشایی به رله تمام {formatNum(smartLockers.length)} کمد سالن ارسال خواهد شد. این رخداد همراه با نام کاربر فعال در لاگ‌های امنیتی ثبت می‌شود.</p>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-[var(--gym-text-secondary)] mb-1">
+                علت بازگشایی سراسری:
+              </label>
+              <input
+                type="text"
+                value={masterUnlockReason}
+                onChange={(e) => setMasterUnlockReason(e.target.value)}
+                placeholder="مثال: پایان شیفت کاری، مانور ایمنی یا بازرسی"
+                className="w-full px-3 py-2 rounded-xl glass-subtle border border-[var(--gym-border)] text-[var(--gym-text)]"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--gym-border)]">
+              <GlassButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsMasterUnlockModalOpen(false)}
+              >
+                انصراف
+              </GlassButton>
+              <GlassButton
+                variant="secondary"
+                size="sm"
+                className="!bg-rose-600 hover:!bg-rose-500 !text-white font-bold"
+                onClick={handleExecuteMasterUnlock}
+              >
+                اجرای بازگشایی سراسری
+              </GlassButton>
+            </div>
+          </div>
+        </GlassModal>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* RESIZE FACILITY LOCKERS MODAL */}
+      {/* ---------------------------------------------------- */}
+      {isResizeModalOpen && (
+        <GlassModal
+          isOpen={true}
+          onClose={() => setIsResizeModalOpen(false)}
+          title="تنظیم و تغییر ظرفیت کمدهای باشگاه"
+          subtitle="افزایش یا کاهش خودکار ماتریس کمدها با حفظ کمدهای اشغال شده فعلی"
+          icon={<Settings className="w-5 h-5 text-[var(--gym-brand)]" />}
+          maxWidth="max-w-md"
+        >
+          <div className="space-y-4 text-xs">
+            <div className="flex items-center justify-between p-3 rounded-xl glass-subtle border border-[var(--gym-border)]">
+              <span className="text-[var(--gym-text-muted)]">تعداد کمدهای فعلی:</span>
+              <span className="font-bold font-mono text-[var(--gym-text)]">{formatNum(smartLockers.length)} کمد</span>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-[var(--gym-text-secondary)] mb-1">
+                ظرفیت جدید مورد نظر (عدد):
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="256"
+                value={newCapacityCount}
+                onChange={(e) => setNewCapacityCount(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-full px-3 py-2 rounded-xl font-mono text-center font-bold text-sm glass-subtle border border-[var(--gym-border)] text-[var(--gym-text)]"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--gym-border)]">
+              <GlassButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsResizeModalOpen(false)}
+              >
+                انصراف
+              </GlassButton>
+              <GlassButton
+                variant="neon"
+                size="sm"
+                onClick={handleExecuteResize}
+              >
+                اعمال ظرفیت جدید
               </GlassButton>
             </div>
           </div>

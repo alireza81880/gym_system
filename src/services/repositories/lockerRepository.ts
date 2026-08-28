@@ -1,4 +1,4 @@
-import { SmartLocker, LockerZone } from '../../types';
+import { SmartLocker, LockerZone, LockerAssignment } from '../../types';
 import { initialSmartLockers } from '../../data/initialData';
 import { PersistenceManager } from './persistenceManager';
 import { LockerEngine } from '../lockerService';
@@ -6,6 +6,7 @@ import { LockerEngine } from '../lockerService';
 export class LockerRepository {
   private static lockersList: SmartLocker[] = [];
   private static byNumberMap = new Map<number, SmartLocker>();
+  private static assignmentHistory: LockerAssignment[] = [];
   private static isInitialized = false;
 
   private static cachedAvailableCount = 0;
@@ -14,6 +15,26 @@ export class LockerRepository {
   static initialize(): void {
     if (this.isInitialized) return;
     const stored = PersistenceManager.get<SmartLocker[]>('smart_lockers', initialSmartLockers);
+    this.assignmentHistory = PersistenceManager.get<LockerAssignment[]>('locker_assignments_history', [
+      {
+        id: 'lck-hist-init-1',
+        lockerNumber: 12,
+        memberId: 'std-2',
+        memberName: 'نیما کمالی',
+        assignedAt: '18:30',
+        assignedBy: 'auto_gate',
+        zone: 'men',
+      },
+      {
+        id: 'lck-hist-init-2',
+        lockerNumber: 4,
+        memberId: 'std-1',
+        memberName: 'سهراب مرادی',
+        assignedAt: '17:15',
+        assignedBy: 'auto_gate',
+        zone: 'vip',
+      }
+    ]);
     this.rebuildIndex(stored);
     this.isInitialized = true;
   }
@@ -70,7 +91,18 @@ export class LockerRepository {
     return this.byNumberMap.get(num);
   }
 
-  static assignLocker(num: number, studentId: string): boolean {
+  static getAssignmentHistory(limit = 50): LockerAssignment[] {
+    this.initialize();
+    return this.assignmentHistory.slice(0, limit);
+  }
+
+  static recordAssignment(assignment: LockerAssignment): void {
+    this.initialize();
+    this.assignmentHistory = [assignment, ...this.assignmentHistory].slice(0, 100);
+    PersistenceManager.setBatched('locker_assignments_history', this.assignmentHistory);
+  }
+
+  static assignLocker(num: number, studentId: string, studentName?: string, zone?: LockerZone): boolean {
     this.initialize();
     const locker = this.byNumberMap.get(num);
     if (!locker || locker.status !== 'available') return false;
@@ -82,10 +114,26 @@ export class LockerRepository {
       ...locker,
       status: 'occupied',
       currentStudentId: studentId,
+      currentStudentName: studentName,
       assignedAt: timeStr,
+      isLocked: false,
+      lastUnlockedAt: new Date().toISOString(),
     };
 
     this.updateLockerInList(updated);
+
+    if (studentName) {
+      this.recordAssignment({
+        id: `lck-asn-${Date.now()}-${num}`,
+        lockerNumber: num,
+        memberId: studentId,
+        memberName: studentName,
+        assignedAt: timeStr,
+        assignedBy: 'auto_gate',
+        zone: locker.zone,
+      });
+    }
+
     return true;
   }
 
@@ -94,11 +142,26 @@ export class LockerRepository {
     const locker = this.byNumberMap.get(num);
     if (!locker) return false;
 
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+    // Mark released in history
+    this.assignmentHistory = this.assignmentHistory.map(item => {
+      if (item.lockerNumber === num && !item.releasedAt) {
+        return { ...item, releasedAt: timeStr };
+      }
+      return item;
+    });
+    PersistenceManager.setBatched('locker_assignments_history', this.assignmentHistory);
+
     const updated: SmartLocker = {
       ...locker,
       status: 'available',
       currentStudentId: undefined,
+      currentStudentName: undefined,
       assignedAt: undefined,
+      isLocked: true,
+      lastUnlockedAt: new Date().toISOString(),
     };
 
     this.updateLockerInList(updated);
@@ -115,6 +178,7 @@ export class LockerRepository {
       ...locker,
       status: nextStatus,
       currentStudentId: undefined,
+      currentStudentName: undefined,
       assignedAt: undefined,
     };
 

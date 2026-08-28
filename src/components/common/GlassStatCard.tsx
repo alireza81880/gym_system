@@ -1,9 +1,17 @@
 import React from 'react';
+import { GlassBadge, GlassBadgeProps } from './GlassBadge';
 
 export interface GlassStatCardProps {
-  label: string;
+  label?: string;
+  title?: string;
   value: string | number;
   subValue?: string;
+  subtitle?: string;
+  badge?: {
+    text: string;
+    variant?: GlassBadgeProps['variant'];
+  };
+  neonAccent?: boolean;
   trend?: {
     value: string;
     isPositive?: boolean;
@@ -18,8 +26,12 @@ export interface GlassStatCardProps {
 
 export const GlassStatCard: React.FC<GlassStatCardProps> = ({
   label,
+  title,
   value,
   subValue,
+  subtitle,
+  badge,
+  neonAccent = false,
   trend,
   icon,
   level = 'regular',
@@ -27,10 +39,14 @@ export const GlassStatCard: React.FC<GlassStatCardProps> = ({
   className = '',
   onClick,
 }) => {
+  const displayLabel = title || label || '';
+  const displaySubValue = subtitle || subValue;
+
+  const actualLevel = neonAccent ? 'neon' : level;
   const levelClass =
-    level === 'subtle'
+    actualLevel === 'subtle'
       ? 'glass-subtle'
-      : level === 'neon'
+      : actualLevel === 'neon'
       ? 'glass-neon'
       : 'glass-regular';
 
@@ -53,9 +69,14 @@ export const GlassStatCard: React.FC<GlassStatCardProps> = ({
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold text-[var(--gym-text-muted,#9ca3af)] truncate">
-          {label}
+          {displayLabel}
         </span>
-        {icon && (
+        {badge && (
+          <GlassBadge variant={badge.variant || 'neutral'} size="sm">
+            {badge.text}
+          </GlassBadge>
+        )}
+        {icon && !badge && (
           <div className="w-8 h-8 rounded-xl bg-[var(--gym-surface-glass)] border border-[var(--gym-border)] flex items-center justify-center text-[var(--gym-brand,#10b981)] shrink-0">
             {icon}
           </div>
@@ -82,11 +103,12 @@ export const GlassStatCard: React.FC<GlassStatCardProps> = ({
         )}
       </div>
 
-      {subValue && (
+      {displaySubValue && (
         <div className="text-[11px] text-[var(--gym-text-muted,#9ca3af)] mt-1.5 truncate">
-          {subValue}
+          {displaySubValue}
         </div>
       )}
     </div>
   );
 };
+

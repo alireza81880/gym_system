@@ -1,7 +1,7 @@
 import React from 'react';
 
 export interface GlassButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost' | 'success';
+  variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost' | 'success' | 'neon';
   size?: 'sm' | 'md' | 'lg';
   icon?: React.ReactNode;
   iconPosition?: 'start' | 'end';
@@ -29,6 +29,8 @@ export const GlassButton: React.FC<GlassButtonProps> = ({
   const variantClasses = {
     primary:
       'bg-[var(--gym-brand,#10b981)] hover:opacity-95 text-stone-950 font-bold border border-[var(--gym-border-strong)] shadow-[var(--gym-glow)] active:scale-[0.98]',
+    neon:
+      'bg-[var(--gym-brand,#10b981)] hover:opacity-95 text-stone-950 font-bold border border-[var(--gym-border-strong)] shadow-[var(--gym-glow)] active:scale-[0.98]',
     secondary:
       'glass-regular text-[var(--gym-text,#f3f4f6)] hover:border-[var(--gym-border-strong)] active:scale-[0.98]',
     outline:
@@ -39,7 +41,7 @@ export const GlassButton: React.FC<GlassButtonProps> = ({
       'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 shadow-xs active:scale-[0.98]',
     ghost:
       'bg-transparent hover:bg-[var(--gym-surface-glass)] text-[var(--gym-text-muted,#9ca3af)] hover:text-[var(--gym-text,#fff)] border-transparent active:scale-[0.98]',
-  }[variant];
+  }[variant] || 'bg-[var(--gym-brand,#10b981)] text-stone-950';
 
   return (
     <button

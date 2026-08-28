@@ -28,12 +28,14 @@ import {
   PlayCircle,
   Clock,
   HelpCircle,
-  Tag
+  Tag,
+  ArrowRightLeft
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { MembershipPackage, PackageType, CustomField, CustomFieldType, ThemeKey } from '../../types';
 import { ThemeEngineService } from '../../services/themeEngine';
 import { InstallationWizard } from '../Setup/InstallationWizard';
+import { MigrationCenter } from '../Migration/MigrationCenter';
 
 export const SettingsView: React.FC = () => {
   const { 
@@ -67,7 +69,7 @@ export const SettingsView: React.FC = () => {
   } = useApp();
 
   // Active Sub-Tab
-  const [activeTab, setActiveTab] = useState<'theme' | 'org' | 'packages' | 'lockers' | 'custom_fields' | 'backup'>('theme');
+  const [activeTab, setActiveTab] = useState<'theme' | 'org' | 'packages' | 'lockers' | 'custom_fields' | 'migration' | 'backup'>('theme');
 
   // Org State
   const [gymName, setGymName] = useState(organizationInfo.name);
@@ -302,6 +304,7 @@ export const SettingsView: React.FC = () => {
           { id: 'packages', label: 'پکیج‌ها و تعرفه‌ها', icon: Package },
           { id: 'lockers', label: 'ظرفیت کمدهای هوشمند', icon: KeyRound },
           { id: 'custom_fields', label: 'فیلدهای اختصاصی پرونده', icon: Tag },
+          { id: 'migration', label: 'انتقال اطلاعات (Migration)', icon: ArrowRightLeft },
           { id: 'backup', label: 'پشتیبان و ریست سیستم', icon: Shield },
         ].map((tab) => {
           const Icon = tab.icon;
@@ -812,7 +815,16 @@ export const SettingsView: React.FC = () => {
       )}
 
       {/* ---------------------------------------------------- */}
-      {/* TAB 6: BACKUP & SYSTEM RESET                         */}
+      {/* TAB 6: MIGRATION CENTER                              */}
+      {/* ---------------------------------------------------- */}
+      {activeTab === 'migration' && (
+        <div className="space-y-6">
+          <MigrationCenter />
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* TAB 7: BACKUP & SYSTEM RESET                         */}
       {/* ---------------------------------------------------- */}
       {activeTab === 'backup' && (
         <div className="p-8 rounded-3xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-6">
