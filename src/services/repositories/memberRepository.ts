@@ -479,8 +479,39 @@ export class MemberRepository {
     return { durationMs, count };
   }
 
+  static async getNextSequentialMemberNumber(): Promise<string> {
+    this.initialize();
+    let maxNum = 1000;
+    for (const student of this.studentsList) {
+      if (student.memberNumber) {
+        const cleanDigits = student.memberNumber.replace(/\D/g, '');
+        const n = parseInt(cleanDigits, 10);
+        if (!isNaN(n) && n > maxNum) {
+          maxNum = n;
+        }
+      }
+    }
+    return String(maxNum + 1);
+  }
+
+  static archive(id: string, archivedBy = 'مدیر سیستم'): boolean {
+    this.initialize();
+    const existing = this.byIdMap.get(id);
+    if (!existing) return false;
+
+    this.updateMember(id, {
+      status: 'inactive',
+    });
+    return true;
+  }
+
+  static searchMembers(params: MemberQueryParams = {}): PaginatedResult<Student> {
+    return this.queryPaginated(params);
+  }
+
   static restoreSampleData(): void {
     this.rebuildIndex(initialStudents);
     PersistenceManager.setBatched('students', initialStudents);
   }
 }
+

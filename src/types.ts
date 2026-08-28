@@ -57,7 +57,7 @@ export type StudentStatus = MemberStatus; // Compatibility alias
 
 export type PaymentMethod = 'pos' | 'cash' | 'card_transfer' | 'online' | 'installment';
 
-export type TransactionType = 'tuition' | 'coach_settlement' | 'supplement_sale' | 'buffet' | 'expense' | 'other_income';
+export type TransactionType = 'tuition' | 'coach_settlement' | 'supplement_sale' | 'buffet' | 'expense' | 'other_income' | 'personal_training' | 'locker_rent' | 'guest_entry' | 'penalty';
 
 export type ExpenseCategory = 'rent' | 'salary' | 'utility' | 'equipment' | 'maintenance' | 'marketing' | 'buffet_stock' | 'other';
 

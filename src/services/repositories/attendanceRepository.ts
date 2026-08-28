@@ -48,6 +48,31 @@ export class AttendanceRepository {
     return this.attendanceList;
   }
 
+  static recordEntry(record: AttendanceRecord): void {
+    this.recordCheckIn(record);
+  }
+
+  static recordExit(studentId: string): void {
+    this.recordCheckOut(studentId);
+  }
+
+  static getToday(): AttendanceRecord[] {
+    return this.getTodayAttendance();
+  }
+
+  static getByMember(studentId: string): AttendanceRecord[] {
+    return this.getMemberAttendance(studentId);
+  }
+
+  static getByDateRange(startDate: string, endDate: string): AttendanceRecord[] {
+    this.initialize();
+    return this.attendanceList.filter(a => a.date >= startDate && a.date <= endDate);
+  }
+
+  static getCurrentlyInside(): LiveVisitor[] {
+    return this.getLiveVisitors();
+  }
+
   static getTodayAttendance(): AttendanceRecord[] {
     this.initialize();
     const todayStr = new Date().toISOString().slice(0, 10);

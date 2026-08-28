@@ -47,6 +47,34 @@ export class HardwareRepository {
     return this.eventsRingBuffer.slice(0, limit);
   }
 
+  static append(event: HardwareEvent): void {
+    this.addEvent(event);
+  }
+
+  static getRecent(limit = 50): HardwareEvent[] {
+    return this.getRecentEvents(limit);
+  }
+
+  static getByDevice(deviceId: string): HardwareEvent[] {
+    this.initialize();
+    return this.eventsRingBuffer.filter(e => e.deviceId === deviceId);
+  }
+
+  static getByMember(memberId: string): HardwareEvent[] {
+    this.initialize();
+    return this.eventsRingBuffer.filter(e => e.memberId === memberId);
+  }
+
+  static getByDateRange(startDate: string, endDate: string): HardwareEvent[] {
+    this.initialize();
+    return this.eventsRingBuffer.filter(e => e.timestamp >= startDate && e.timestamp <= endDate);
+  }
+
+  static getErrors(): HardwareEvent[] {
+    this.initialize();
+    return this.eventsRingBuffer.filter(e => e.eventType === 'DEVICE_ERROR' || e.eventType === 'DEVICE_OFFLINE' || e.eventType === 'SYNC_FAILED' || e.accessResult === 'denied');
+  }
+
   static getOnlineCount(): number {
     this.initialize();
     return this.devicesList.filter(d => d.status === 'online').length;

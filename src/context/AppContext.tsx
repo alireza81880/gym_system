@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
 import { 
   Language, 
   Theme, 
@@ -62,6 +62,8 @@ import { AttendanceRepository } from '../services/repositories/attendanceReposit
 import { HardwareRepository } from '../services/repositories/hardwareRepository';
 import { LockerRepository } from '../services/repositories/lockerRepository';
 import { PersistenceManager } from '../services/repositories/persistenceManager';
+import { LocalDatabase } from '../services/database/localDatabase';
+import { PerformanceDiagnostics } from '../services/diagnostics/performanceMetrics';
 import { useMemberStore, memberActions } from '../stores/memberStore';
 import { useFinanceStore, financeActions } from '../stores/financeStore';
 import { useAttendanceStore, attendanceActions } from '../stores/attendanceStore';
@@ -321,6 +323,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const migrationSnapshots = useMigrationStore(s => s.migrationSnapshots);
 
   const t = translations[lang];
+
+  // Initialize Local Production Data Core & Apply Migrations
+  useEffect(() => {
+    PerformanceDiagnostics.measure('DatabaseInitialization', async () => {
+      try {
+        const report = await LocalDatabase.initialize();
+        if (report.detectedLegacy && report.status === 'SUCCESS') {
+          console.log(`[GymOS] ${report.message}`);
+        }
+      } catch (err) {
+        console.error('[GymOS] Failed to initialize local database core:', err);
+      }
+    });
+  }, []);
 
   // Language & Theme
   const toggleLanguage = useCallback(() => {

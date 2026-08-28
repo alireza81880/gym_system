@@ -93,6 +93,72 @@ export class PaymentRepository {
     };
   }
 
+  static listByMember(studentId: string): PaymentRecord[] {
+    return this.getMemberPayments(studentId);
+  }
+
+  static listByDateRange(startDate: string, endDate: string): PaymentRecord[] {
+    this.initialize();
+    return this.paymentsList.filter(p => {
+      if (!p.date) return false;
+      return p.date >= startDate && p.date <= endDate;
+    });
+  }
+
+  static getOutstanding(): number {
+    this.initialize();
+    return this.cachedSummary.netProfit;
+  }
+
+  static reverse(paymentId: string, reason = 'ابطال فاکتور'): PaymentRecord | null {
+    this.initialize();
+    const existing = this.paymentsList.find(p => p.id === paymentId);
+    if (!existing) return null;
+
+    // Create a reversal entry rather than hard-deleting
+    const reversal: PaymentRecord = {
+      id: `rev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      tenantId: existing.tenantId,
+      branchId: existing.branchId,
+      studentId: existing.studentId,
+      studentName: existing.studentName,
+      amount: -Math.abs(existing.amount),
+      date: new Date().toLocaleDateString('fa-IR'),
+      paymentMethod: existing.paymentMethod,
+      type: existing.type,
+      description: `برگشت/ابطال تراکنش #${existing.receiptNumber || existing.id}: ${reason}`,
+      receiptNumber: `REV-${Date.now().toString().slice(-6)}`,
+      recordedBy: 'مدیر مالی',
+    };
+
+    this.addPayment(reversal);
+    return reversal;
+  }
+
+  static refund(paymentId: string, refundAmount: number, reason = 'استرداد وجه'): PaymentRecord | null {
+    this.initialize();
+    const existing = this.paymentsList.find(p => p.id === paymentId);
+    if (!existing || refundAmount <= 0) return null;
+
+    const refundEntry: PaymentRecord = {
+      id: `ref-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      tenantId: existing.tenantId,
+      branchId: existing.branchId,
+      studentId: existing.studentId,
+      studentName: existing.studentName,
+      amount: -Math.abs(refundAmount),
+      date: new Date().toLocaleDateString('fa-IR'),
+      paymentMethod: existing.paymentMethod,
+      type: existing.type,
+      description: `استرداد وجه برای #${existing.receiptNumber || existing.id}: ${reason}`,
+      receiptNumber: `REF-${Date.now().toString().slice(-6)}`,
+      recordedBy: 'مدیر مالی',
+    };
+
+    this.addPayment(refundEntry);
+    return refundEntry;
+  }
+
   static getMemberPayments(studentId: string): PaymentRecord[] {
     this.initialize();
     return this.paymentsList.filter(p => p.studentId === studentId);
