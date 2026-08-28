@@ -163,46 +163,31 @@ export const MigrationCenter: React.FC = () => {
   // Execution Handler with Real Chunking
   // ----------------------------------------------------
   const handleStartImportExecution = async () => {
+    if (isImporting) return;
     setIsImporting(true);
 
     try {
-      const result = await MigrationEngine.executeImport(
+      const report = await executeMigration(
         validatedItems,
-        students,
         conflictResolutions,
         {
-          tenantId: organizationInfo.tenantId,
-          branchId: activeBranchId,
-          defaultCoachId: coaches[0]?.id || '',
           sourceType,
           fileName: selectedFile?.name || parseResult?.fileName,
           importMode,
           scope,
           currencyUnit,
           preserveMemberNumbers,
-          createMissingPackages: true,
-          createMissingCoaches: true,
-          globalConflictResolution: 'merge',
         },
         (progress) => {
           setProgressState(progress);
         }
       );
 
-      // Execute via AppContext for state synchronization and audit logging
-      executeMigration(
-        validatedItems,
-        conflictResolutions,
-        {
-          sourceType,
-          fileName: selectedFile?.name || parseResult?.fileName,
-        }
-      );
-
-      setLatestReport(result.report);
+      setLatestReport(report);
       setCurrentStep('report');
     } catch (err) {
-      alert(`خطا در اجرای فرآیند انتقال: ${(err as Error).message}`);
+      console.error('Migration execution error:', err);
+      alert(`انتقال اطلاعات ناموفق بود: ${(err as Error).message}`);
     } finally {
       setIsImporting(false);
     }
@@ -398,6 +383,7 @@ export const MigrationCenter: React.FC = () => {
               validatedItems={validatedItems}
               importMode={importMode}
               scope={scope}
+              isImporting={isImporting}
               onUpdateImportMode={setImportMode}
               onUpdateScope={setScope}
               onExecute={handleStartImportExecution}

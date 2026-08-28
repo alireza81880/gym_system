@@ -18,7 +18,8 @@ import { MigrationNormalizers } from './migration/normalizers';
 import { 
   ParseResult, 
   ImportValidationItem, 
-  MigrationOptions 
+  MigrationOptions,
+  MigrationProgressState
 } from './migration/migrationTypes';
 
 export * from './migration/migrationTypes';
@@ -75,80 +76,54 @@ export class MigrationService {
     });
   }
 
-  static executeImport(
+  static async executeImport(
     validatedItems: ImportValidationItem[],
     existingStudents: Student[],
     conflictResolutions: Record<string, DuplicateResolution>,
     options: {
       tenantId: string;
       branchId: string;
-      defaultCoachId: string;
+      defaultCoachId?: string;
       sourceType: string;
       fileName?: string;
       importMode?: 'create_and_update' | 'create_only' | 'update_only';
       scope?: 'members_only' | 'current_membership' | 'full_migration';
       currencyUnit?: 'toman' | 'rial';
       preserveMemberNumbers?: boolean;
-    }
-  ): {
+      createMissingPackages?: boolean;
+      createMissingCoaches?: boolean;
+      globalConflictResolution?: DuplicateResolution;
+    },
+    onProgress?: (progress: MigrationProgressState) => void
+  ): Promise<{
     updatedStudents: Student[];
     report: MigrationReport;
     snapshot: MigrationSnapshot;
-  } {
+  }> {
     const defaultOptions: MigrationOptions = {
       tenantId: options.tenantId,
       branchId: options.branchId,
-      defaultCoachId: options.defaultCoachId,
+      defaultCoachId: options.defaultCoachId || '',
       sourceType: options.sourceType as any,
       fileName: options.fileName,
       importMode: options.importMode || 'create_and_update',
       scope: options.scope || 'members_only',
       currencyUnit: options.currencyUnit || 'toman',
       preserveMemberNumbers: options.preserveMemberNumbers !== undefined ? options.preserveMemberNumbers : true,
-      createMissingPackages: true,
-      createMissingCoaches: true,
-      globalConflictResolution: 'merge',
+      createMissingPackages: options.createMissingPackages !== undefined ? options.createMissingPackages : false,
+      createMissingCoaches: options.createMissingCoaches !== undefined ? options.createMissingCoaches : false,
+      globalConflictResolution: options.globalConflictResolution || 'merge',
     };
 
-    // Synchronous execution wrapper for AppContext
-    let result: any;
-    MigrationEngine.executeImport(
+    const result = await MigrationEngine.executeImport(
       validatedItems,
       existingStudents,
       conflictResolutions,
-      defaultOptions
-    ).then(res => {
-      result = res;
-    });
+      defaultOptions,
+      onProgress
+    );
 
-    // Fallback sync compute if executed synchronously in test
-    return result || {
-      updatedStudents: existingStudents,
-      report: {
-        id: `rep-${Date.now()}`,
-        migrationId: `MIG-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        sourceType: options.sourceType,
-        fileName: options.fileName,
-        totalRows: validatedItems.length,
-        importedCount: validatedItems.length,
-        updatedCount: 0,
-        skippedCount: 0,
-        duplicatesCount: 0,
-        conflictCount: 0,
-        errorCount: 0,
-        warningCount: 0,
-        status: 'SUCCESS',
-        errors: [],
-        rollbackAvailable: true,
-      },
-      snapshot: {
-        id: `MIG-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        description: 'پشتیبان خودکار',
-        dataBackup: JSON.stringify(existingStudents),
-      },
-    };
+    return result;
   }
 
   static rollback(snapshot: MigrationSnapshot): Student[] {

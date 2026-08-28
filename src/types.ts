@@ -52,7 +52,7 @@ export interface MembershipPackage {
   debtToleranceAmount?: number; // allow entry if debt < tolerance
 }
 
-export type MemberStatus = 'active' | 'expired' | 'pending_renewal' | 'suspended';
+export type MemberStatus = 'active' | 'expired' | 'pending_renewal' | 'suspended' | 'inactive';
 export type StudentStatus = MemberStatus; // Compatibility alias
 
 export type PaymentMethod = 'pos' | 'cash' | 'card_transfer' | 'online' | 'installment';
@@ -807,8 +807,13 @@ export interface MigrationReport {
   duplicatesCount: number;
   conflictCount: number;
   errorCount: number;
+  warningCount?: number;
+  status: 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'CANCELLED' | 'ROLLED_BACK';
   errors: MigrationErrorRecord[];
   rollbackAvailable: boolean;
+  durationMs?: number;
+  scope?: string;
+  importMode?: string;
 }
 
 export interface MigrationSnapshot {

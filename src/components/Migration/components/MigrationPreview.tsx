@@ -27,6 +27,7 @@ interface MigrationPreviewProps {
   validatedItems: ImportValidationItem[];
   importMode: ImportMode;
   scope: HistoricalMigrationScope;
+  isImporting?: boolean;
   onUpdateImportMode: (mode: ImportMode) => void;
   onUpdateScope: (scope: HistoricalMigrationScope) => void;
   onExecute: () => void;
@@ -37,6 +38,7 @@ export const MigrationPreview: React.FC<MigrationPreviewProps> = ({
   validatedItems,
   importMode,
   scope,
+  isImporting = false,
   onUpdateImportMode,
   onUpdateScope,
   onExecute,
@@ -368,14 +370,14 @@ export const MigrationPreview: React.FC<MigrationPreviewProps> = ({
               <button
                 type="button"
                 id="btn-confirm-migration-final"
-                disabled={!confirmChecked}
+                disabled={!confirmChecked || isImporting}
                 onClick={() => {
                   setShowConfirmModal(false);
                   onExecute();
                 }}
                 className="px-7 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-xs shadow-lg transition-all disabled:opacity-50 cursor-pointer"
               >
-                شروع عملیات انتقال داده‌ها
+                {isImporting ? 'در حال انتقال...' : 'شروع عملیات انتقال داده‌ها'}
               </button>
             </div>
           </div>

@@ -22,6 +22,7 @@ import { ManagerReports } from './components/Reports/ManagerReports';
 import { SettingsView } from './components/Settings/SettingsView';
 import { MigrationCenter } from './components/Migration/MigrationCenter';
 import { InstallationWizard } from './components/Setup/InstallationWizard';
+import { MigrationSetup } from './components/Setup/MigrationSetup';
 import { InitialAccessScreen } from './components/Setup/InitialAccessScreen';
 import { QuickCheckInModal } from './components/Modals/QuickCheckInModal';
 import { NewPaymentModal } from './components/Modals/NewPaymentModal';
@@ -47,6 +48,7 @@ const MainLayout: React.FC = () => {
 
   // Modals
   const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [isMigrationSetupOpen, setIsMigrationSetupOpen] = useState(false);
   const [isQuickCheckInOpen, setIsQuickCheckInOpen] = useState(false);
   const [isNewPaymentOpen, setIsNewPaymentOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
@@ -107,11 +109,29 @@ const MainLayout: React.FC = () => {
   };
 
   const handleStartMigration = () => {
+    setIsMigrationSetupOpen(true);
+  };
+
+  const handleCompleteMigrationSetup = (setupData: {
+    gymName: string;
+    managerName: string;
+    phone: string;
+    city: string;
+  }) => {
     completeInstallation({
-      orgData: { name: 'باشگاه ورزشی' },
+      orgData: {
+        name: setupData.gymName,
+        managerName: setupData.managerName,
+        phone: setupData.phone,
+        city: setupData.city,
+      },
       lockerCount: 0,
-      ownerData: { fullName: 'مدیریت باشگاه', phone: '' }
+      ownerData: {
+        fullName: setupData.managerName,
+        phone: setupData.phone,
+      },
     });
+    setIsMigrationSetupOpen(false);
     setActiveTab('migration');
   };
 
@@ -121,6 +141,14 @@ const MainLayout: React.FC = () => {
         <InstallationWizard
           isInitialSetup={true}
           onClose={() => setIsWizardOpen(false)}
+        />
+      );
+    }
+    if (isMigrationSetupOpen) {
+      return (
+        <MigrationSetup
+          onBack={() => setIsMigrationSetupOpen(false)}
+          onComplete={handleCompleteMigrationSetup}
         />
       );
     }

@@ -276,8 +276,16 @@ export class MigrationEngine {
           assignedMemberNum = MemberService.calculateNextMemberNumber(studentList);
         }
 
-        const todayJalali = DateService.getTodayJalali();
-        const defaultExpireJalali = DateService.addDaysToJalali(todayJalali, 30);
+        const rawFullName = item.mappedMember.fullName || `${item.mappedMember.firstName || ''} ${item.mappedMember.lastName || ''}`.trim();
+
+        // Safe data provenance metadata
+        const mergedCustomFields = {
+          ...(item.mappedMember.customFields || {}),
+          sourceSystem: options.sourceType,
+          migrationId,
+          ...(options.fileName ? { sourceFileName: options.fileName } : {}),
+          ...(item.data?.id !== undefined ? { sourceRecordId: String(item.data.id) } : {}),
+        };
 
         const newStudent: Student = {
           id: `std-imp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -286,24 +294,24 @@ export class MigrationEngine {
           memberNumber: assignedMemberNum,
           firstName: item.mappedMember.firstName || '',
           lastName: item.mappedMember.lastName || '',
-          fullName: item.mappedMember.fullName || 'عضو وارد شده',
+          fullName: rawFullName || '',
           nationalId: item.mappedMember.nationalId || '',
           phone: item.mappedMember.phone || '',
           emergencyPhone: item.mappedMember.emergencyPhone,
           coachId: item.mappedMember.coachId || options.defaultCoachId || '',
-          packageType: item.mappedMember.packageType || '1_month',
-          registrationDate: item.mappedMember.registrationDate || todayJalali,
-          expireDate: item.mappedMember.expireDate || defaultExpireJalali,
-          totalFee: item.mappedMember.totalFee || 0,
-          paidAmount: item.mappedMember.paidAmount || 0,
-          remainingDebt: item.mappedMember.remainingDebt || 0,
-          status: item.mappedMember.status || 'active',
-          sessionsTotal: item.mappedMember.sessionsTotal || 24,
-          sessionsAttended: item.mappedMember.sessionsAttended || 0,
+          packageType: item.mappedMember.packageType || '',
+          registrationDate: item.mappedMember.registrationDate || '',
+          expireDate: item.mappedMember.expireDate || '',
+          totalFee: item.mappedMember.totalFee !== undefined ? Number(item.mappedMember.totalFee) : 0,
+          paidAmount: item.mappedMember.paidAmount !== undefined ? Number(item.mappedMember.paidAmount) : 0,
+          remainingDebt: item.mappedMember.remainingDebt !== undefined ? Number(item.mappedMember.remainingDebt) : 0,
+          status: item.mappedMember.status || (item.mappedMember.expireDate ? 'active' : 'inactive'),
+          sessionsTotal: typeof item.mappedMember.sessionsTotal === 'number' ? item.mappedMember.sessionsTotal : (item.mappedMember.sessionsTotal ? Number(item.mappedMember.sessionsTotal) : 0),
+          sessionsAttended: typeof item.mappedMember.sessionsAttended === 'number' ? item.mappedMember.sessionsAttended : (item.mappedMember.sessionsAttended ? Number(item.mappedMember.sessionsAttended) : 0),
           medicalNotes: item.mappedMember.medicalNotes,
           rfidCardUid: item.mappedMember.rfidCardUid,
           notes: item.mappedMember.notes,
-          customFields: item.mappedMember.customFields,
+          customFields: mergedCustomFields,
         };
 
         studentList.push(newStudent);
@@ -333,10 +341,12 @@ export class MigrationEngine {
     const durationMs = Date.now() - startTime;
 
     let overallStatus: 'SUCCESS' | 'PARTIAL' | 'FAILED' = 'SUCCESS';
-    if (errorCount > 0 && importedCount === 0 && updatedCount === 0) {
+    if (totalRecords === 0) {
+      overallStatus = 'SUCCESS';
+    } else if (errorCount > 0 && importedCount === 0 && updatedCount === 0) {
       overallStatus = 'FAILED';
-    } else if (errorCount > 0 || warningCount > 0) {
-      overallStatus = 'PARTIAL';
+    } else if (errorCount > 0 || skippedCount > 0 || warningCount > 0) {
+      overallStatus = (errorCount > 0 || skippedCount > 0) ? 'PARTIAL' : 'SUCCESS';
     }
 
     const report: MigrationReport = {

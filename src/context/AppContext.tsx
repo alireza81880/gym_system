@@ -46,7 +46,14 @@ import { AccessPolicyEngine, AccessPolicyConfig } from '../services/accessPolicy
 import { LockerEngine } from '../services/lockerService';
 import { AuditService } from '../services/auditService';
 import { SyncEngine } from '../services/syncService';
-import { MigrationService, ImportValidationItem } from '../services/migrationService';
+import { 
+  MigrationService, 
+  ImportValidationItem,
+  ImportMode,
+  HistoricalMigrationScope,
+  CurrencyUnit,
+  MigrationProgressState
+} from '../services/migrationService';
 import { MemberService } from '../services/memberService';
 import { getAdapterForVendor, createNormalizedHardwareEvent } from '../services/hardwareAdapters';
 import { MemberRepository } from '../services/repositories/memberRepository';
@@ -129,8 +136,17 @@ export interface AppContextType {
   executeMigration: (
     validatedItems: ImportValidationItem[],
     conflictResolutions: Record<string, DuplicateResolution>,
-    options: { sourceType: string; fileName?: string }
-  ) => MigrationReport;
+    options: { 
+      sourceType: string; 
+      fileName?: string;
+      importMode?: ImportMode;
+      scope?: HistoricalMigrationScope;
+      currencyUnit?: CurrencyUnit;
+      preserveMemberNumbers?: boolean;
+      defaultCoachId?: string;
+    },
+    onProgress?: (progress: MigrationProgressState) => void
+  ) => Promise<MigrationReport>;
   rollbackMigration: (snapshotId: string) => boolean;
 
   // Navigation & Feature Visibility
@@ -401,37 +417,83 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     migrationActions.deleteMappingProfile(id);
   }, []);
 
-  const executeMigration = useCallback((
+  const executeMigration = useCallback(async (
     validatedItems: ImportValidationItem[],
     conflictResolutions: Record<string, DuplicateResolution>,
-    options: { sourceType: string; fileName?: string }
-  ): MigrationReport => {
-    const result = MigrationService.executeImport(
-      validatedItems,
-      students,
-      conflictResolutions,
-      {
-        tenantId: organizationInfo.tenantId,
-        branchId: activeBranchId,
-        defaultCoachId: coaches[0]?.id || '',
-        sourceType: options.sourceType,
-        fileName: options.fileName,
-      }
-    );
-
-    memberActions.batchSet(result.updatedStudents);
-    migrationActions.addReport(result.report);
-    migrationActions.addSnapshot(result.snapshot);
-
-    const audit = AuditService.createLog(
+    options: { 
+      sourceType: string; 
+      fileName?: string;
+      importMode?: ImportMode;
+      scope?: HistoricalMigrationScope;
+      currencyUnit?: CurrencyUnit;
+      preserveMemberNumbers?: boolean;
+      defaultCoachId?: string;
+    },
+    onProgress?: (progress: MigrationProgressState) => void
+  ): Promise<MigrationReport> => {
+    const startAudit = AuditService.createLog(
       currentUser,
-      'MIGRATION_COMPLETED',
+      'MIGRATION_STARTED',
       'member',
-      `مهاجرت داده‌ها از منبع ${options.sourceType} انجام شد: ${result.report.importedCount} عضو جدید، ${result.report.updatedCount} به‌روزرسانی.`
+      `شروع فرآیند انتقال داده‌ها از منبع ${options.sourceType} (${validatedItems.length} رکورد)`
     );
-    setAuditLogs(prev => [audit, ...prev]);
+    setAuditLogs(prev => [startAudit, ...prev]);
 
-    return result.report;
+    try {
+      const result = await MigrationService.executeImport(
+        validatedItems,
+        students,
+        conflictResolutions,
+        {
+          tenantId: organizationInfo.tenantId,
+          branchId: activeBranchId,
+          defaultCoachId: options.defaultCoachId || coaches[0]?.id || '',
+          sourceType: options.sourceType,
+          fileName: options.fileName,
+          importMode: options.importMode,
+          scope: options.scope,
+          currencyUnit: options.currencyUnit,
+          preserveMemberNumbers: options.preserveMemberNumbers,
+        },
+        onProgress
+      );
+
+      if (result.report.status === 'FAILED') {
+        const failAudit = AuditService.createLog(
+          currentUser,
+          'MIGRATION_FAILED',
+          'member',
+          `عملیات انتقال داده‌ها ناموفق بود: ${result.report.errors?.[0]?.message || 'خطای ساختار داده'}`
+        );
+        setAuditLogs(prev => [failAudit, ...prev]);
+        migrationActions.addReport(result.report);
+        return result.report;
+      }
+
+      memberActions.batchSet(result.updatedStudents);
+      migrationActions.addReport(result.report);
+      migrationActions.addSnapshot(result.snapshot);
+
+      const auditAction = result.report.status === 'PARTIAL' ? 'MIGRATION_PARTIAL' : 'MIGRATION_COMPLETED';
+      const completeAudit = AuditService.createLog(
+        currentUser,
+        auditAction,
+        'member',
+        `مهاجرت داده‌ها از منبع ${options.sourceType} با وضعیت ${result.report.status} پایان یافت: ${result.report.importedCount} عضو جدید، ${result.report.updatedCount} به‌روزرسانی.`
+      );
+      setAuditLogs(prev => [completeAudit, ...prev]);
+
+      return result.report;
+    } catch (err) {
+      const failAudit = AuditService.createLog(
+        currentUser,
+        'MIGRATION_FAILED',
+        'member',
+        `انتقال اطلاعات با خطای سیستمی مواجه شد: ${(err as Error).message}`
+      );
+      setAuditLogs(prev => [failAudit, ...prev]);
+      throw err;
+    }
   }, [students, organizationInfo.tenantId, activeBranchId, coaches, currentUser]);
 
   const rollbackMigration = useCallback((snapshotId: string): boolean => {
