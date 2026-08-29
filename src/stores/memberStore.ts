@@ -2,7 +2,10 @@ import { useMemo } from 'react';
 import { createStore, useStore } from './createStore';
 import { Student, PaymentMethod, PackageType } from '../types';
 import { MemberRepository, MemberQueryParams, PaginatedResult } from '../services/repositories/memberRepository';
-import { PaymentRepository } from '../services/repositories/paymentRepository';
+import { FinanceService } from '../services/finance/financeService';
+import { notifyFinanceChange } from './financeStore';
+import { generateFinancialId } from '../utils/idGenerator';
+import { DateService } from '../services/dateService';
 
 export interface MemberState {
   version: number;
@@ -20,7 +23,7 @@ export const memberStore = createStore<MemberState>({
   expiringCount: MemberRepository.getExpiringCount(),
 });
 
-function notifyMemberChange(): void {
+export function notifyMemberChange(): void {
   memberStore.setState({
     version: memberStore.getState().version + 1,
     totalCount: MemberRepository.getCount(),
@@ -36,36 +39,41 @@ export const memberActions = {
     initialPayment = 0,
     paymentMethod: PaymentMethod = 'pos'
   ): Student {
-    const studentId = `std-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const remainingDebt = Math.max(0, studentData.totalFee - initialPayment);
+    const studentId = generateFinancialId('std');
+    const totalFee = Math.max(0, Math.round(Number(studentData.totalFee) || 0));
+    const safeInitial = Math.max(0, Math.round(Number(initialPayment) || 0));
+    const remainingDebt = Math.max(0, totalFee - safeInitial);
 
     const newStudent: Student = {
       ...studentData,
       id: studentId,
-      paidAmount: initialPayment,
+      totalFee,
+      paidAmount: safeInitial,
       remainingDebt,
     };
 
     MemberRepository.addMember(newStudent);
 
-    if (initialPayment > 0) {
-      PaymentRepository.addPayment({
-        id: `pay-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        tenantId: newStudent.tenantId || 'gym-org-1',
-        branchId: newStudent.branchId || 'branch-tehran-central',
-        studentId,
-        studentName: newStudent.fullName,
-        amount: initialPayment,
-        date: new Date().toLocaleDateString('fa-IR'),
-        paymentMethod,
-        type: 'tuition',
-        description: `شهریه ثبت‌نام اولیه (${newStudent.packageType})`,
-        receiptNumber: `REC-${Date.now().toString().slice(-6)}`,
-        recordedBy: 'پذیرش',
-      });
-    }
+    // Record Financial Charge & Payment
+    FinanceService.recordMembershipSale({
+      memberId: studentId,
+      memberName: newStudent.fullName,
+      packageType: newStudent.packageType,
+      packageName: newStudent.packageType,
+      basePrice: totalFee,
+      discountAmount: 0,
+      initialPayment: safeInitial,
+      paymentMethod,
+      startDate: newStudent.registrationDate || DateService.getTodayJalali(),
+      expireDate: newStudent.expireDate || DateService.addDaysToJalali(DateService.getTodayJalali(), 30),
+      sessionsTotal: newStudent.sessionsTotal || 12,
+      coachId: newStudent.coachId,
+      branchId: newStudent.branchId || 'branch-tehran-central',
+      tenantId: newStudent.tenantId || 'gym-org-1',
+    });
 
     notifyMemberChange();
+    notifyFinanceChange();
     return newStudent;
   },
 
@@ -77,7 +85,10 @@ export const memberActions = {
 
   deleteStudent(id: string): boolean {
     const res = MemberRepository.deleteMember(id);
-    if (res) notifyMemberChange();
+    if (res) {
+      notifyMemberChange();
+      notifyFinanceChange();
+    }
     return res;
   },
 
@@ -90,30 +101,17 @@ export const memberActions = {
     const student = MemberRepository.getById(studentId);
     if (!student || amount <= 0) return;
 
-    const newPaid = (student.paidAmount || 0) + amount;
-    const newDebt = Math.max(0, (student.remainingDebt || 0) - amount);
-
-    MemberRepository.updateMember(studentId, {
-      paidAmount: newPaid,
-      remainingDebt: newDebt,
-    });
-
-    PaymentRepository.addPayment({
-      id: `pay-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      tenantId: student.tenantId || 'gym-org-1',
-      branchId: student.branchId || 'branch-tehran-central',
-      studentId,
-      studentName: student.fullName,
+    FinanceService.allocatePayment({
+      memberId: studentId,
       amount,
-      date: new Date().toLocaleDateString('fa-IR'),
       paymentMethod,
-      type: 'tuition',
-      description: description || `تسویه بدهی شهریه (${student.fullName})`,
-      receiptNumber: `REC-${Date.now().toString().slice(-6)}`,
-      recordedBy: 'پذیرش',
+      description,
+      branchId: student.branchId,
+      tenantId: student.tenantId,
     });
 
     notifyMemberChange();
+    notifyFinanceChange();
   },
 
   renewStudentMembership(
@@ -127,37 +125,29 @@ export const memberActions = {
     const student = MemberRepository.getById(studentId);
     if (!student) return;
 
-    const remainingDebt = Math.max(0, totalFee - paidAmount);
+    const safeTotal = Math.max(0, Math.round(Number(totalFee) || 0));
+    const safePaid = Math.max(0, Math.round(Number(paidAmount) || 0));
+    const todayJalali = DateService.getTodayJalali();
 
-    MemberRepository.updateMember(studentId, {
-      packageType: packageType as PackageType,
-      registrationDate: new Date().toLocaleDateString('fa-IR'),
+    FinanceService.recordMembershipSale({
+      memberId: studentId,
+      memberName: student.fullName,
+      packageType: String(packageType),
+      packageName: String(packageType),
+      basePrice: safeTotal,
+      discountAmount: 0,
+      initialPayment: safePaid,
+      paymentMethod,
+      startDate: todayJalali,
       expireDate: newExpireDate,
-      totalFee,
-      paidAmount,
-      remainingDebt,
-      status: 'active',
-      sessionsAttended: 0,
+      sessionsTotal: student.sessionsTotal || 12,
+      coachId: student.coachId,
+      branchId: student.branchId,
+      tenantId: student.tenantId,
     });
 
-    if (paidAmount > 0) {
-      PaymentRepository.addPayment({
-        id: `pay-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        tenantId: student.tenantId || 'gym-org-1',
-        branchId: student.branchId || 'branch-tehran-central',
-        studentId,
-        studentName: student.fullName,
-        amount: paidAmount,
-        date: new Date().toLocaleDateString('fa-IR'),
-        paymentMethod,
-        type: 'tuition',
-        description: `تمدید اشتراک دوره جدید (${packageType})`,
-        receiptNumber: `REC-${Date.now().toString().slice(-6)}`,
-        recordedBy: 'پذیرش',
-      });
-    }
-
     notifyMemberChange();
+    notifyFinanceChange();
   },
 
   batchSet(students: Student[]): void {
@@ -174,6 +164,7 @@ export const memberActions = {
   restoreSampleData(): void {
     MemberRepository.restoreSampleData();
     notifyMemberChange();
+    notifyFinanceChange();
   }
 };
 

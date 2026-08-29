@@ -30,4 +30,62 @@ export class AuditService {
       correlationId: `corr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     };
   }
+
+  static logEvent(
+    actionOrDetails: string | {
+      action: string;
+      category?: string;
+      details?: string;
+      targetId?: string;
+      branchId?: string;
+      userId?: string;
+      userName?: string;
+      userRole?: UserRole;
+      entityType?: 'member' | 'payment' | 'locker' | 'hardware' | 'setting' | 'attendance' | 'auth';
+      entityId?: string;
+      description?: string;
+      beforeState?: Record<string, unknown> | string;
+      afterState?: Record<string, unknown> | string;
+      [key: string]: unknown;
+    },
+    detailsArg?: {
+      userId?: string;
+      userName?: string;
+      userRole?: UserRole;
+      entityType?: 'member' | 'payment' | 'locker' | 'hardware' | 'setting' | 'attendance' | 'auth';
+      entityId?: string;
+      description?: string;
+      beforeState?: Record<string, unknown> | string;
+      afterState?: Record<string, unknown> | string;
+      [key: string]: unknown;
+    }
+  ): AuditLog {
+    let action = '';
+    let details: Record<string, any> = {};
+
+    if (typeof actionOrDetails === 'string') {
+      action = actionOrDetails;
+      details = detailsArg || {};
+    } else {
+      action = actionOrDetails.action;
+      details = actionOrDetails;
+    }
+
+    const user = {
+      id: details.userId || 'system',
+      fullName: details.userName || 'مدیر سیستم',
+      role: (details.userRole || 'admin') as UserRole,
+    };
+    return this.createLog(
+      user,
+      action,
+      details.entityType || 'payment',
+      details.description || details.details || action,
+      {
+        entityId: details.entityId || details.targetId,
+        beforeState: details.beforeState,
+        afterState: details.afterState,
+      }
+    );
+  }
 }

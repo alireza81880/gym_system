@@ -10,7 +10,9 @@ import {
   Layers,
   Users,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  RotateCcw,
+  Download
 } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 import { 
@@ -37,7 +39,17 @@ import { MigrationReportModal } from './components/MigrationReportModal';
 import { MigrationHistory } from './components/MigrationHistory';
 import { MappingProfileManager } from './components/MappingProfileManager';
 
-export const MigrationCenter: React.FC = () => {
+import { SampleExcelGenerator } from '../../services/migration/sampleExcelGenerator';
+
+interface MigrationCenterProps {
+  onBack?: () => void;
+  isInitialSetup?: boolean;
+}
+
+export const MigrationCenter: React.FC<MigrationCenterProps> = ({ 
+  onBack,
+  isInitialSetup = false 
+}) => {
   const { 
     students, 
     coaches, 
@@ -48,7 +60,9 @@ export const MigrationCenter: React.FC = () => {
     deleteMappingProfile, 
     migrationReports, 
     rollbackMigration,
-    executeMigration 
+    executeMigration,
+    completeInstallation,
+    isInstalled
   } = useAppContext();
 
   // Primary top-level navigation
@@ -185,6 +199,17 @@ export const MigrationCenter: React.FC = () => {
 
       setLatestReport(report);
       setCurrentStep('report');
+      if (isInitialSetup && !isInstalled) {
+        completeInstallation({
+          orgData: {
+            name: organizationInfo.name || 'باشگاه ورزشی',
+            managerName: organizationInfo.managerName || 'مدیریت',
+            phone: organizationInfo.phone || '۰۹۱۲۰۰۰۰۰۰۰',
+            city: organizationInfo.city || 'تهران',
+          },
+          lockerCount: 0,
+        });
+      }
     } catch (err) {
       console.error('Migration execution error:', err);
       alert(`انتقال اطلاعات ناموفق بود: ${(err as Error).message}`);
@@ -209,6 +234,16 @@ export const MigrationCenter: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800">
         <div className="space-y-1">
           <div className="flex items-center gap-3">
+            {onBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer"
+                title="بازگشت"
+              >
+                <ArrowRight className="w-5 h-5" />
+              </button>
+            )}
             <span className="p-2.5 rounded-2xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 text-emerald-400 border border-emerald-500/30 shadow-lg shadow-emerald-950/40">
               <Database className="w-7 h-7" />
             </span>
@@ -226,46 +261,68 @@ export const MigrationCenter: React.FC = () => {
           </p>
         </div>
 
-        {/* Top-level Navigation Tabs */}
-        <div className="flex items-center gap-2 bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800 self-start md:self-center shadow-lg">
+        <div className="flex flex-wrap items-center gap-2.5 self-start md:self-center">
           <button
             type="button"
-            onClick={() => setActiveMainTab('wizard')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeMainTab === 'wizard'
-                ? 'bg-emerald-500 text-slate-950 shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
+            onClick={() => SampleExcelGenerator.downloadSampleExcel()}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-850 text-emerald-400 border border-slate-800 hover:border-emerald-500/40 text-xs font-bold transition-all cursor-pointer shadow-sm"
           >
-            <Sparkles className="w-4 h-4" />
-            <span>شروع انتقال داده</span>
+            <Download className="w-3.5 h-3.5" />
+            <span>دانلود فایل نمونه اکسل</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveMainTab('history')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeMainTab === 'history'
-                ? 'bg-emerald-500 text-slate-950 shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <History className="w-4 h-4" />
-            <span>تاریخچه و Rollback</span>
-          </button>
+          {currentStep !== 'source' && (
+            <button
+              type="button"
+              onClick={handleResetToStart}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-850 text-slate-300 border border-slate-800 text-xs font-medium transition-all cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>شروع انتقال جدید</span>
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={() => setActiveMainTab('profiles')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              activeMainTab === 'profiles'
-                ? 'bg-emerald-500 text-slate-950 shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Bookmark className="w-4 h-4" />
-            <span>الگوهای نگاشت</span>
-          </button>
+          {/* Top-level Navigation Tabs */}
+          <div className="flex items-center gap-1 bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800 shadow-lg">
+            <button
+              type="button"
+              onClick={() => setActiveMainTab('wizard')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeMainTab === 'wizard'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>انتقال داده</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveMainTab('history')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeMainTab === 'history'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>تاریخچه</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveMainTab('profiles')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeMainTab === 'profiles'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Bookmark className="w-3.5 h-3.5" />
+              <span>الگوها</span>
+            </button>
+          </div>
         </div>
       </div>
 

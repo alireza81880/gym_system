@@ -146,10 +146,12 @@ const MainLayout: React.FC = () => {
     }
     if (isMigrationSetupOpen) {
       return (
-        <MigrationSetup
-          onBack={() => setIsMigrationSetupOpen(false)}
-          onComplete={handleCompleteMigrationSetup}
-        />
+        <div className="min-h-screen bg-slate-950 text-slate-100 overflow-y-auto p-4 sm:p-6" dir="rtl">
+          <MigrationCenter
+            isInitialSetup={true}
+            onBack={() => setIsMigrationSetupOpen(false)}
+          />
+        </div>
       );
     }
     return (

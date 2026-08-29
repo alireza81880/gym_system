@@ -14,7 +14,10 @@ import {
   RefreshCw,
   Layers,
   KeyRound,
-  Sliders
+  Sliders,
+  Download,
+  PlayCircle,
+  Sparkles
 } from 'lucide-react';
 import { 
   MigrationSourceType, 
@@ -27,6 +30,7 @@ import { JsonImporter } from '../../../services/migration/importers/jsonImporter
 import { SqlImporter } from '../../../services/migration/importers/sqlImporter';
 import { ApiImporter } from '../../../services/migration/importers/apiImporter';
 import { VendorImporter } from '../../../services/migration/importers/vendorImporter';
+import { SampleExcelGenerator } from '../../../services/migration/sampleExcelGenerator';
 
 interface FileUploaderProps {
   sourceType: MigrationSourceType;
@@ -169,6 +173,29 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
       onDataParsed(result, selectedFile || undefined);
     } catch (err) {
       setErrorMessage((err as Error).message);
+    }
+  };
+
+  // Direct load sample excel workbook for immediate instant testing
+  const handleLoadSampleExcelDirectly = async () => {
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      const data = SampleExcelGenerator.generateSampleWorkbook();
+      const sampleFile = new File([data], 'gym_members_sample.xlsx', {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      setSelectedFile(sampleFile);
+      const result = await ExcelImporter.parse(sampleFile);
+      if (result.sheets && result.sheets.length > 1) {
+        setExcelSheets(result.sheets);
+        setSelectedSheet(result.sheets[0].name);
+      }
+      onDataParsed(result, sampleFile);
+    } catch (err) {
+      setErrorMessage((err as Error).message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -403,6 +430,48 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
       ) : (
         /* File Upload Box */
         <div className="space-y-4">
+          {sourceType === 'xlsx' && (
+            <div className="p-4 bg-emerald-950/40 border border-emerald-500/30 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
+              <div className="flex items-center gap-3">
+                <span className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </span>
+                <div>
+                  <h4 className="text-xs font-bold text-emerald-200">فایل نمونه استاندارد اکسل (۳۲ عضو با تمام حالات تستی)</h4>
+                  <p className="text-[11px] text-slate-400">شامل اعضای فعال، دارای بدهی، کدهای ملی، اعداد فارسی و موارد تکراری</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button
+                  type="button"
+                  id="btn-download-sample-excel-uploader"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    SampleExcelGenerator.downloadSampleExcel();
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-850 border border-slate-700 text-slate-200 text-xs font-semibold transition-all cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>دانلود فایل (.xlsx)</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="btn-load-sample-excel-directly"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleLoadSampleExcelDirectly();
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-md cursor-pointer"
+                >
+                  <PlayCircle className="w-3.5 h-3.5" />
+                  <span>تست سریع با فایل نمونه</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           <input
             ref={fileInputRef}
             type="file"

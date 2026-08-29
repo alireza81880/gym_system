@@ -9,9 +9,11 @@ import {
   ArrowLeft, 
   ShieldCheck, 
   Sparkles,
-  Zap
+  Zap,
+  Download
 } from 'lucide-react';
 import { MigrationSourceType } from '../../../services/migration/migrationTypes';
+import { SampleExcelGenerator } from '../../../services/migration/sampleExcelGenerator';
 
 interface SourceSelectorProps {
   selectedSource: MigrationSourceType;
@@ -24,6 +26,10 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
   onSelectSource,
   onNext,
 }) => {
+  const handleDownloadSample = () => {
+    SampleExcelGenerator.downloadSampleExcel();
+  };
+
   const sources: {
     id: MigrationSourceType;
     title: string;
@@ -86,23 +92,35 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
 
   return (
     <div className="space-y-8 animate-fadeIn" id="migration-source-selector">
-      {/* Intro section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-800/80 shadow-lg">
-        <div className="space-y-1">
+      {/* Intro section with Sample Excel Download Action */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-6 bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-800 shadow-xl">
+        <div className="space-y-1.5">
           <div className="flex items-center gap-2">
             <span className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               <Sparkles className="w-4 h-4" />
             </span>
             <h2 className="text-lg font-bold text-white">انتخاب منبع داده برای انتقال</h2>
           </div>
-          <p className="text-sm text-slate-400">
-            برای شروع، لطفاً قالبی که داده‌های اعضا، بدهی‌ها یا سوابق باشگاه شما در آن ذخیره شده را مشخص فرمایید.
+          <p className="text-xs sm:text-sm text-slate-400 max-w-2xl">
+            قالب داده‌های سوابق باشگاه خود را انتخاب نمایید یا از فایل نمونه استاندارد اکسل جهت تست و ارزیابی استفاده کنید.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/80 px-3.5 py-2 rounded-xl border border-slate-700/60 self-start md:self-center">
-          <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          <span>پشتیبان‌گیری خودکار قبل از هرگونه تغییر</span>
+        <div className="flex flex-wrap items-center gap-3 self-start lg:self-center">
+          <button
+            type="button"
+            id="btn-download-sample-excel-source"
+            onClick={handleDownloadSample}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-emerald-950/60 border border-emerald-500/40 hover:border-emerald-500 text-emerald-300 hover:text-emerald-200 text-xs font-bold transition-all shadow-md cursor-pointer group"
+          >
+            <Download className="w-4 h-4 text-emerald-400 group-hover:-translate-y-0.5 transition-transform" />
+            <span>دانلود فایل نمونه Excel (۳۲ عضو با حالات خاص)</span>
+          </button>
+
+          <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-950/80 px-3.5 py-2 rounded-xl border border-slate-800">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>پشتیبان‌گیری خودکار و Rollback فعال</span>
+          </div>
         </div>
       </div>
 

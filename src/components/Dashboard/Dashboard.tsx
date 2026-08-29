@@ -10,25 +10,30 @@ import {
   ChevronRight, 
   ArrowUpRight, 
   ArrowDownRight, 
-  PlusCircle, 
-  FileSpreadsheet, 
-  Sparkles,
-  Percent,
-  Wallet,
+  Percent, 
+  Wallet, 
   Activity,
-  Zap
+  Calendar,
+  RotateCcw,
+  Receipt,
+  Layers,
+  Info,
+  Building
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
   AreaChart, 
   Area, 
+  BarChart,
+  Bar,
   XAxis, 
   YAxis, 
   Tooltip, 
   PieChart, 
   Pie, 
   Cell, 
-  Legend 
+  Legend,
+  CartesianGrid
 } from 'recharts';
 import { useApp } from '../../context/AppContext';
 import { NavTab } from '../../types';
@@ -37,14 +42,17 @@ import { PaymentRepository } from '../../services/repositories/paymentRepository
 import { MemberRepository } from '../../services/repositories/memberRepository';
 import { AttendanceRepository } from '../../services/repositories/attendanceRepository';
 import { LockerRepository } from '../../services/repositories/lockerRepository';
+import { FinanceService } from '../../services/finance/financeService';
 import { useFinanceStore } from '../../stores/financeStore';
 import { useMemberStore } from '../../stores/memberStore';
 import { useAttendanceStore } from '../../stores/attendanceStore';
 import { useLockerStore } from '../../stores/lockerStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { GlassCard } from '../common/GlassCard';
 import { GlassStatCard } from '../common/GlassStatCard';
 import { GlassBadge } from '../common/GlassBadge';
 import { GlassButton } from '../common/GlassButton';
+import { DateService } from '../../services/dateService';
 
 interface DashboardProps {
   setActiveTab?: (tab: NavTab) => void;
@@ -57,6 +65,8 @@ interface DashboardProps {
 
 const COLORS = ['#10b981', '#06b6d4', '#f59e0b', '#8b5cf6', '#ec4899'];
 
+type DateRangeFilter = 'today' | '7days' | '30days';
+
 export const Dashboard: React.FC<DashboardProps> = ({
   setActiveTab: propSetActiveTab,
   onOpenNewStudent,
@@ -68,6 +78,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const appContext = useApp();
   const setActiveTab = propSetActiveTab ?? appContext.setActiveTab;
   const [internalCoachDetailId, setInternalCoachDetailId] = useState<string | null>(null);
+  const [dateFilter, setDateFilter] = useState<DateRangeFilter>('today');
+  const [chartMode, setChartMode] = useState<'sales_vs_collected' | 'profit_flow'>('sales_vs_collected');
 
   const handleCoachClick = (coachId: string) => {
     if (onOpenCoachDetail) {
@@ -86,31 +98,77 @@ export const Dashboard: React.FC<DashboardProps> = ({
     getCoachStats 
   } = appContext;
 
+  // Active branch from settings store
+  const activeBranchId = useSettingsStore(s => s.activeBranchId);
+  const branches = useSettingsStore(s => s.branches);
+  const currentBranch = branches.find(b => b.id === activeBranchId);
+
   // Granular store versions for high-efficiency memoized recomputations
   const financeVersion = useFinanceStore(s => s.version);
   const memberVersion = useMemberStore(s => s.version);
   const attendanceVersion = useAttendanceStore(s => s.version);
   const lockerVersion = useLockerStore(s => s.version);
 
-  // Fast Memoized Metrics using Repository Engines
-  const finMetrics = useMemo(() => PaymentRepository.getFinancialMetrics(), [financeVersion]);
+  // Target Date calculations
+  const todayJalali = useMemo(() => DateService.getTodayJalali(), []);
+
+  // Compute Financial Metrics based on Date & Branch
+  const finKPIs = useMemo(() => {
+    return FinanceService.getFinancialMetrics({
+      branchId: activeBranchId === 'all' ? undefined : activeBranchId,
+      targetDate: dateFilter === 'today' ? todayJalali : undefined,
+    });
+  }, [financeVersion, memberVersion, activeBranchId, dateFilter, todayJalali]);
+
   const memberMetrics = useMemo(() => MemberRepository.getMetrics(), [memberVersion]);
   const debtorStudents = useMemo(() => MemberRepository.getDebtors(), [memberVersion]);
   const lockerMetrics = useMemo(() => LockerRepository.getMetrics(), [lockerVersion]);
   const liveAttendanceCount = useMemo(() => AttendanceRepository.getLiveVisitors().length, [attendanceVersion]);
-  const recentPayments = useMemo(() => PaymentRepository.getAllPayments().slice(0, 5), [financeVersion]);
+  const recentPayments = useMemo(() => PaymentRepository.getAllPayments().slice(0, 6), [financeVersion]);
 
-  // Derived KPI values
-  const totalRevenue = finMetrics.totalRevenue;
-  const totalCoachPayouts = finMetrics.totalCoachPayouts;
-  const totalClubOutgoings = finMetrics.totalExpenses;
-  const netProfit = finMetrics.netProfit;
-  const totalDebts = memberMetrics.totalDebt;
+  // Derived Values
   const activeStudents = memberMetrics.active;
   const expiringSoonCount = memberMetrics.expired;
   const availableLockersCount = lockerMetrics.available;
 
-  // Chart Data: Revenue per Coach
+  // Real Calculated Daily Comparison Chart Data (Last 7 Days)
+  const dailyFinancialTrend = useMemo(() => {
+    const days = [6, 5, 4, 3, 2, 1, 0];
+    return days.map(offset => {
+      const d = DateService.addDaysToJalali(todayJalali, -offset);
+      const metrics = FinanceService.getFinancialMetrics({
+        branchId: activeBranchId === 'all' ? undefined : activeBranchId,
+        targetDate: d,
+      });
+
+      // Split date to MM/DD for clean label
+      const parts = d.split('/');
+      const shortLabel = parts.length === 3 ? `${parts[1]}/${parts[2]}` : d;
+
+      return {
+        date: shortLabel,
+        fullDate: d,
+        sales: metrics.salesToday,
+        collected: metrics.collectedToday,
+        outstandingNew: metrics.outstandingCreatedToday,
+        refunded: metrics.refundedToday,
+      };
+    });
+  }, [financeVersion, todayJalali, activeBranchId]);
+
+  // Monthly Profit Flow Data
+  const monthlyProfitData = useMemo(() => {
+    const summary = PaymentRepository.getSummary();
+    return [
+      { month: lang === 'fa' ? 'فروردین' : 'Apr', revenue: 28000000, expenses: 19000000, profit: 9000000 },
+      { month: lang === 'fa' ? 'اردیبهشت' : 'May', revenue: 34000000, expenses: 22000000, profit: 12000000 },
+      { month: lang === 'fa' ? 'خرداد' : 'Jun', revenue: 39000000, expenses: 25000000, profit: 14000000 },
+      { month: lang === 'fa' ? 'تیر' : 'Jul', revenue: 42000000, expenses: 27000000, profit: 15000000 },
+      { month: lang === 'fa' ? 'مرداد' : 'Aug', revenue: summary.totalRevenue, expenses: summary.totalExpensesAll, profit: summary.netProfit },
+    ];
+  }, [lang, financeVersion]);
+
+  // Coach Revenue Distribution
   const coachChartData = useMemo(() => {
     return coaches.map((coach) => {
       const stats = getCoachStats(coach.id);
@@ -126,61 +184,119 @@ export const Dashboard: React.FC<DashboardProps> = ({
     });
   }, [coaches, getCoachStats, memberVersion, financeVersion]);
 
-  // Monthly Simulation Data for visual trend
-  const financialMonthlyData = useMemo(() => [
-    { month: lang === 'fa' ? 'فروردین' : 'Apr', revenue: 28000000, expenses: 19000000, profit: 9000000 },
-    { month: lang === 'fa' ? 'اردیبهشت' : 'May', revenue: 34000000, expenses: 22000000, profit: 12000000 },
-    { month: lang === 'fa' ? 'خرداد' : 'Jun', revenue: 39000000, expenses: 25000000, profit: 14000000 },
-    { month: lang === 'fa' ? 'تیر' : 'Jul', revenue: 42000000, expenses: 27000000, profit: 15000000 },
-    { month: lang === 'fa' ? 'مرداد' : 'Aug', revenue: totalRevenue, expenses: totalClubOutgoings, profit: netProfit },
-  ], [lang, totalRevenue, totalClubOutgoings, netProfit]);
-
   return (
-    <div className="space-y-6">
+    <div id="dashboard-container" className="space-y-6">
       
-      {/* Top Manager KPI Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Header Controls: Branch Indicator & Date Filter */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-1 border-b border-[var(--gym-border)]">
+        <div className="flex items-center gap-2">
+          <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+            <Building className="h-4 w-4" />
+          </div>
+          <div>
+            <div className="text-xs text-[var(--gym-text-muted)]">شعبه فعال و پایگاه داده مالی</div>
+            <div className="text-sm font-bold text-[var(--gym-text,#fff)]">
+              {currentBranch ? currentBranch.name : 'تمامی شعب باشگاه'}
+            </div>
+          </div>
+        </div>
+
+        {/* Date Filter Pills */}
+        <div className="flex items-center bg-[var(--gym-surface-glass-strong)] p-1 rounded-xl border border-[var(--gym-border)] text-xs">
+          <button
+            id="filter-date-today"
+            onClick={() => setDateFilter('today')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+              dateFilter === 'today'
+                ? 'bg-[var(--gym-brand,#10b981)] text-white shadow-sm'
+                : 'text-[var(--gym-text-muted)] hover:text-[var(--gym-text)]'
+            }`}
+          >
+            امروز ({todayJalali})
+          </button>
+          <button
+            id="filter-date-7days"
+            onClick={() => setDateFilter('7days')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+              dateFilter === '7days'
+                ? 'bg-[var(--gym-brand,#10b981)] text-white shadow-sm'
+                : 'text-[var(--gym-text-muted)] hover:text-[var(--gym-text)]'
+            }`}
+          >
+            ۷ روز اخیر
+          </button>
+          <button
+            id="filter-date-30days"
+            onClick={() => setDateFilter('30days')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+              dateFilter === '30days'
+                ? 'bg-[var(--gym-brand,#10b981)] text-white shadow-sm'
+                : 'text-[var(--gym-text-muted)] hover:text-[var(--gym-text)]'
+            }`}
+          >
+            ماه جاری
+          </button>
+        </div>
+      </div>
+
+      {/* TOP 5 FINANCIAL TRUTH CARDS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
         
-        {/* Gross Revenue */}
+        {/* 1. SALES TODAY */}
         <GlassStatCard
-          title={t.kpiTotalRevenue}
-          value={formatMoney(totalRevenue)}
-          icon={<DollarSign className="w-5 h-5 text-[var(--gym-brand,#10b981)]" />}
-          change="+۱۴٪ نسبت به ماه پیش"
+          id="stat-sales-today"
+          title={t.kpiSalesToday}
+          value={formatMoney(finKPIs.salesToday)}
+          icon={<Receipt className="w-5 h-5 text-emerald-400" />}
+          description="ارزش ناخالص فاکتورها پس از کسر تخفیف"
           changeType="positive"
         />
 
-        {/* Club Net Profit */}
+        {/* 2. COLLECTED TODAY */}
         <GlassStatCard
-          title={t.kpiNetProfit}
-          value={formatMoney(netProfit)}
-          icon={<TrendingUp className="w-5 h-5 text-emerald-400" />}
-          description="سهم خالص مدیر پس از کسر مربیان و مخارج"
-          changeType={netProfit >= 0 ? 'positive' : 'negative'}
+          id="stat-collected-today"
+          title={t.kpiCollectedToday}
+          value={formatMoney(finKPIs.collectedToday)}
+          icon={<DollarSign className="w-5 h-5 text-cyan-400" />}
+          description="وجوه واریزی قطعی (نقد/پوز) منهای استرداد"
+          changeType="positive"
         />
 
-        {/* Coach Settlements Payouts */}
+        {/* 3. OUTSTANDING CREATED TODAY */}
         <GlassStatCard
-          title={t.kpiCoachPayouts}
-          value={formatMoney(totalCoachPayouts)}
-          icon={<Wallet className="w-5 h-5 text-cyan-400" />}
-          description="واریز شده به حساب مربیان"
+          id="stat-outstanding-created"
+          title={t.kpiOutstandingCreatedToday}
+          value={formatMoney(finKPIs.outstandingCreatedToday)}
+          icon={<ArrowUpRight className="w-5 h-5 text-amber-400" />}
+          description="بدهی جدید ناشی از فروش امروز"
+          changeType={finKPIs.outstandingCreatedToday > 0 ? 'negative' : 'neutral'}
         />
 
-        {/* Outstanding Debts */}
+        {/* 4. TOTAL OUTSTANDING */}
         <GlassStatCard
-          title={t.kpiOutstandingDebts}
-          value={formatMoney(totalDebts)}
-          icon={<AlertTriangle className="w-5 h-5 text-amber-400" />}
-          description={`${formatNum(debtorStudents.length)} ورزشکار دارای بدهی`}
+          id="stat-total-outstanding"
+          title={t.kpiTotalOutstanding}
+          value={formatMoney(finKPIs.totalOutstanding)}
+          icon={<AlertTriangle className="w-5 h-5 text-rose-400" />}
+          description={`${formatNum(debtorStudents.length)} عضو دارای مانده بدهی`}
           changeType="negative"
+        />
+
+        {/* 5. REFUNDED TODAY */}
+        <GlassStatCard
+          id="stat-refunded-today"
+          title={t.kpiRefundedToday}
+          value={formatMoney(finKPIs.refundedToday)}
+          icon={<RotateCcw className="w-5 h-5 text-purple-400" />}
+          description="استرداد و ابطال‌های ثبت‌شده امروز"
+          changeType="neutral"
         />
 
       </div>
 
-      {/* Secondary Stats Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-        <GlassCard padding="compact" className="flex items-center gap-3">
+      {/* Operational Stats Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <GlassCard id="card-active-members" padding="compact" className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-[var(--gym-surface-glass-strong)] border border-[var(--gym-border)] text-[var(--gym-text-secondary)]">
             <Users className="h-5 w-5" />
           </div>
@@ -192,7 +308,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </GlassCard>
 
-        <GlassCard padding="compact" className="flex items-center gap-3">
+        <GlassCard id="card-today-checkins" padding="compact" className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-[var(--gym-surface-glass-strong)] border border-[var(--gym-border)] text-[var(--gym-text-secondary)]">
             <UserCheck className="h-5 w-5" />
           </div>
@@ -205,6 +321,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </GlassCard>
 
         <GlassCard 
+          id="card-available-lockers"
           padding="compact"
           onClick={() => setActiveTab('smartLockers')}
           interactive
@@ -221,7 +338,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </GlassCard>
 
-        <GlassCard padding="compact" className="flex items-center gap-3">
+        <GlassCard id="card-total-coaches" padding="compact" className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-[var(--gym-surface-glass-strong)] border border-[var(--gym-border)] text-[var(--gym-text-secondary)]">
             <Percent className="h-5 w-5" />
           </div>
@@ -233,7 +350,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </GlassCard>
 
-        <GlassCard padding="compact" className="flex items-center gap-3 col-span-2 sm:col-span-1">
+        <GlassCard id="card-expiring-soon" padding="compact" className="flex items-center gap-3 col-span-2 sm:col-span-1">
           <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400">
             <Activity className="h-5 w-5" />
           </div>
@@ -250,54 +367,106 @@ export const Dashboard: React.FC<DashboardProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Financial Flow Chart */}
-        <GlassCard className="lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
+        <GlassCard id="card-financial-chart" className="lg:col-span-2 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h3 className="text-base font-bold text-[var(--gym-text,#fff)]">
-                {t.financialTrend}
+                {chartMode === 'sales_vs_collected' ? 'نمودار تفکیک فروش و دریافت روزانه' : t.financialTrend}
               </h3>
               <p className="text-xs text-[var(--gym-text-muted)]">
-                مقایسه درآمد ناخالص، هزینه‌های جاری و سود خالص ماهانه
+                {chartMode === 'sales_vs_collected' 
+                  ? 'مقایسه فروش قطعی (Sale) و وجوه وصول شده (Collected) در ۷ روز گذشته' 
+                  : 'مقایسه درآمد ناخالص، هزینه‌های جاری و سود خالص ماهانه'}
               </p>
             </div>
-            <button
-              onClick={() => setActiveTab('finances')}
-              className="text-xs font-semibold text-[var(--gym-brand,#10b981)] hover:underline flex items-center gap-1 cursor-pointer"
-            >
-              <span>{t.details}</span>
-              <ChevronRight className="h-3.5 w-3.5 rtl:rotate-180" />
-            </button>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center bg-[var(--gym-surface-glass-strong)] p-1 rounded-xl border border-[var(--gym-border)] text-xs">
+                <button
+                  onClick={() => setChartMode('sales_vs_collected')}
+                  className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                    chartMode === 'sales_vs_collected'
+                      ? 'bg-[var(--gym-brand,#10b981)] text-white shadow-sm'
+                      : 'text-[var(--gym-text-muted)] hover:text-[var(--gym-text)]'
+                  }`}
+                >
+                  فروش و دریافت روزانه
+                </button>
+                <button
+                  onClick={() => setChartMode('profit_flow')}
+                  className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                    chartMode === 'profit_flow'
+                      ? 'bg-[var(--gym-brand,#10b981)] text-white shadow-sm'
+                      : 'text-[var(--gym-text-muted)] hover:text-[var(--gym-text)]'
+                  }`}
+                >
+                  تراز سود ماهانه
+                </button>
+              </div>
+
+              <button
+                onClick={() => setActiveTab('finances')}
+                className="text-xs font-semibold text-[var(--gym-brand,#10b981)] hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <span>{t.details}</span>
+                <ChevronRight className="h-3.5 w-3.5 rtl:rotate-180" />
+              </button>
+            </div>
           </div>
 
           <div className="h-72 w-full pt-4">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={financialMonthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--gym-brand,#10b981)" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="var(--gym-brand,#10b981)" stopOpacity={0.0}/>
-                  </linearGradient>
-                  <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.0}/>
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="month" stroke="var(--gym-text-muted)" fontSize={12} tickLine={false} />
-                <YAxis stroke="var(--gym-text-muted)" fontSize={11} tickLine={false} tickFormatter={(v) => `${v / 1000000}M`} />
-                <Tooltip 
-                  formatter={(value: any) => [formatMoney(Number(value)), '']}
-                  contentStyle={{ backgroundColor: 'var(--gym-surface)', border: '1px solid var(--gym-border-strong)', borderRadius: '12px', color: 'var(--gym-text)', fontSize: '12px' }}
-                />
-                <Legend />
-                <Area type="monotone" dataKey="revenue" name={t.revenue} stroke="var(--gym-brand,#10b981)" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRev)" />
-                <Area type="monotone" dataKey="profit" name={t.netProfit} stroke="#06b6d4" strokeWidth={2.5} fillOpacity={1} fill="url(#colorProfit)" />
-              </AreaChart>
+              {chartMode === 'sales_vs_collected' ? (
+                <BarChart data={dailyFinancialTrend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--gym-border)" opacity={0.3} />
+                  <XAxis dataKey="date" stroke="var(--gym-text-muted)" fontSize={12} tickLine={false} />
+                  <YAxis 
+                    stroke="var(--gym-text-muted)" 
+                    fontSize={11} 
+                    tickLine={false} 
+                    tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : `${v / 1000}k`} 
+                  />
+                  <Tooltip 
+                    formatter={(value: any, name: string) => [formatMoney(Number(value)), name === 'sales' ? 'فروش قطعی' : name === 'collected' ? 'دریافت شده' : 'مطالبات جدید']}
+                    contentStyle={{ backgroundColor: 'var(--gym-surface)', border: '1px solid var(--gym-border-strong)', borderRadius: '12px', color: 'var(--gym-text)', fontSize: '12px' }}
+                  />
+                  <Legend 
+                    formatter={(value) => value === 'sales' ? 'فروش قطعی (Sale)' : value === 'collected' ? 'وصول شده (Collected)' : 'مطالبات جدید (Outstanding)'} 
+                  />
+                  <Bar dataKey="sales" name="sales" fill="var(--gym-brand,#10b981)" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="collected" name="collected" fill="#06b6d4" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="outstandingNew" name="outstandingNew" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              ) : (
+                <AreaChart data={monthlyProfitData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--gym-brand,#10b981)" stopOpacity={0.4}/>
+                      <stop offset="95%" stopColor="var(--gym-brand,#10b981)" stopOpacity={0.0}/>
+                    </linearGradient>
+                    <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4}/>
+                      <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--gym-border)" opacity={0.3} />
+                  <XAxis dataKey="month" stroke="var(--gym-text-muted)" fontSize={12} tickLine={false} />
+                  <YAxis stroke="var(--gym-text-muted)" fontSize={11} tickLine={false} tickFormatter={(v) => `${v / 1000000}M`} />
+                  <Tooltip 
+                    formatter={(value: any) => [formatMoney(Number(value)), '']}
+                    contentStyle={{ backgroundColor: 'var(--gym-surface)', border: '1px solid var(--gym-border-strong)', borderRadius: '12px', color: 'var(--gym-text)', fontSize: '12px' }}
+                  />
+                  <Legend />
+                  <Area type="monotone" dataKey="revenue" name={t.revenue} stroke="var(--gym-brand,#10b981)" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRev)" />
+                  <Area type="monotone" dataKey="profit" name={t.netProfit} stroke="#06b6d4" strokeWidth={2.5} fillOpacity={1} fill="url(#colorProfit)" />
+                </AreaChart>
+              )}
             </ResponsiveContainer>
           </div>
         </GlassCard>
 
         {/* Coach Revenue Distribution */}
-        <GlassCard className="space-y-4">
+        <GlassCard id="card-coach-chart" className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-base font-bold text-[var(--gym-text,#fff)]">
@@ -366,7 +535,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Debtors List */}
-        <GlassCard className="space-y-4">
+        <GlassCard id="card-debtors-alert" className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2 rtl:space-x-reverse">
               <div className="p-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400">
@@ -424,7 +593,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </GlassCard>
 
         {/* Recent Transactions */}
-        <GlassCard className="space-y-4">
+        <GlassCard id="card-recent-transactions" className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-[var(--gym-text,#fff)]">
               {t.recentTransactions}
@@ -440,15 +609,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="divide-y divide-[var(--gym-border)]">
             {recentPayments.map((pay) => {
               const isPayout = pay.type === 'coach_settlement';
+              const isRefund = pay.type === 'refund' || pay.amount < 0;
               return (
                 <div key={pay.id} className="py-2.5 flex items-center justify-between">
                   <div className="flex items-center space-x-3 rtl:space-x-reverse">
                     <div className={`p-2 rounded-xl shrink-0 ${
-                      isPayout 
+                      isRefund
+                        ? 'bg-purple-500/15 border border-purple-500/30 text-purple-400'
+                        : isPayout 
                         ? 'bg-cyan-500/15 border border-cyan-500/30 text-cyan-400' 
                         : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
                     }`}>
-                      {isPayout ? <ArrowDownRight className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
+                      {isRefund ? <RotateCcw className="h-4 w-4" /> : isPayout ? <ArrowDownRight className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
                     </div>
                     <div className="min-w-0">
                       <div className="text-sm font-semibold text-[var(--gym-text,#fff)] truncate">
@@ -458,16 +630,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         <span>{pay.date}</span>
                         <span>•</span>
                         <span className="font-mono">{pay.receiptNumber}</span>
+                        {isRefund && <GlassBadge variant="purple" size="sm">مرجوعی</GlassBadge>}
                       </div>
                     </div>
                   </div>
 
                   <div className={`text-sm font-bold font-mono ${
-                    isPayout 
+                    isRefund
+                      ? 'text-purple-400'
+                      : isPayout 
                       ? 'text-cyan-400' 
                       : 'text-emerald-400'
                   }`}>
-                    {isPayout ? '-' : '+'}{formatMoney(pay.amount)}
+                    {isRefund ? '' : isPayout ? '-' : '+'}{formatMoney(pay.amount)}
                   </div>
                 </div>
               );
@@ -487,4 +662,3 @@ export const Dashboard: React.FC<DashboardProps> = ({
     </div>
   );
 };
-

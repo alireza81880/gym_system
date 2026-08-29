@@ -4,6 +4,9 @@ import { useApp } from '../../context/AppContext';
 import { PaymentMethod, TransactionType } from '../../types';
 import { MoneyInput } from '../common/MoneyInput';
 
+import { DateService } from '../../services/dateService';
+import { generateReceiptNumber } from '../../utils/idGenerator';
+
 interface NewPaymentModalProps {
   onClose: () => void;
 }
@@ -29,11 +32,13 @@ export const NewPaymentModal: React.FC<NewPaymentModalProps> = ({ onClose }) => 
     } else {
       addPayment({
         amount,
-        date: new Date().toLocaleDateString('fa-IR'),
+        date: DateService.getTodayJalali(),
+        timestamp: new Date().toISOString(),
         paymentMethod,
         type: 'supplement_sale',
         description: description || 'فروش بوفه / مکمل',
-        receiptNumber: `REC-${Math.floor(10000 + Math.random() * 90000)}`,
+        receiptNumber: generateReceiptNumber('BUF'),
+        status: 'completed',
       });
     }
 

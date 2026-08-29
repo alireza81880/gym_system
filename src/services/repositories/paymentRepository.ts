@@ -2,6 +2,8 @@ import { PaymentRecord, ExpenseRecord } from '../../types';
 import { initialPayments, initialExpenses } from '../../data/initialData';
 import { PersistenceManager } from './persistenceManager';
 import { PaginatedResult } from './memberRepository';
+import { generateFinancialId, generateReceiptNumber } from '../../utils/idGenerator';
+import { DateService } from '../dateService';
 
 export interface FinanceSummaryMetrics {
   totalRevenue: number;
@@ -44,8 +46,12 @@ export class PaymentRepository {
     let coachPayouts = 0;
 
     for (const p of this.paymentsList) {
+      if (p.status === 'voided') continue; // Exclude voided payments from totals
+
       if (p.type === 'coach_settlement') {
         coachPayouts += p.amount;
+      } else if (p.type === 'refund' || p.amount < 0) {
+        rev -= Math.abs(p.amount);
       } else {
         rev += p.amount;
       }
@@ -117,18 +123,21 @@ export class PaymentRepository {
 
     // Create a reversal entry rather than hard-deleting
     const reversal: PaymentRecord = {
-      id: `rev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: generateFinancialId('rev'),
       tenantId: existing.tenantId,
       branchId: existing.branchId,
       studentId: existing.studentId,
       studentName: existing.studentName,
       amount: -Math.abs(existing.amount),
-      date: new Date().toLocaleDateString('fa-IR'),
+      date: DateService.getTodayJalali(),
+      timestamp: new Date().toISOString(),
       paymentMethod: existing.paymentMethod,
       type: existing.type,
       description: `برگشت/ابطال تراکنش #${existing.receiptNumber || existing.id}: ${reason}`,
-      receiptNumber: `REV-${Date.now().toString().slice(-6)}`,
+      receiptNumber: generateReceiptNumber('REV'),
       recordedBy: 'مدیر مالی',
+      status: 'completed',
+      relatedPaymentId: existing.id,
     };
 
     this.addPayment(reversal);
@@ -141,18 +150,21 @@ export class PaymentRepository {
     if (!existing || refundAmount <= 0) return null;
 
     const refundEntry: PaymentRecord = {
-      id: `ref-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: generateFinancialId('ref'),
       tenantId: existing.tenantId,
       branchId: existing.branchId,
       studentId: existing.studentId,
       studentName: existing.studentName,
       amount: -Math.abs(refundAmount),
-      date: new Date().toLocaleDateString('fa-IR'),
+      date: DateService.getTodayJalali(),
+      timestamp: new Date().toISOString(),
       paymentMethod: existing.paymentMethod,
-      type: existing.type,
+      type: 'refund',
       description: `استرداد وجه برای #${existing.receiptNumber || existing.id}: ${reason}`,
-      receiptNumber: `REF-${Date.now().toString().slice(-6)}`,
+      receiptNumber: generateReceiptNumber('REF'),
       recordedBy: 'مدیر مالی',
+      status: 'completed',
+      relatedPaymentId: existing.id,
     };
 
     this.addPayment(refundEntry);
@@ -169,6 +181,18 @@ export class PaymentRepository {
     this.paymentsList = [payment, ...this.paymentsList];
     this.recalculateSummary();
     PersistenceManager.setBatched('payments', this.paymentsList);
+  }
+
+  static updatePayment(id: string, partial: Partial<PaymentRecord>): PaymentRecord | undefined {
+    this.initialize();
+    const idx = this.paymentsList.findIndex(p => p.id === id);
+    if (idx !== -1) {
+      this.paymentsList[idx] = { ...this.paymentsList[idx], ...partial };
+      this.recalculateSummary();
+      PersistenceManager.setBatched('payments', this.paymentsList);
+      return this.paymentsList[idx];
+    }
+    return undefined;
   }
 
   static deletePayment(id: string): void {

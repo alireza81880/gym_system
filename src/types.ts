@@ -55,9 +55,9 @@ export interface MembershipPackage {
 export type MemberStatus = 'active' | 'expired' | 'pending_renewal' | 'suspended' | 'inactive';
 export type StudentStatus = MemberStatus; // Compatibility alias
 
-export type PaymentMethod = 'pos' | 'cash' | 'card_transfer' | 'online' | 'installment';
+export type PaymentMethod = 'pos' | 'cash' | 'card_transfer' | 'online' | 'installment' | 'bank_transfer' | 'other';
 
-export type TransactionType = 'tuition' | 'coach_settlement' | 'supplement_sale' | 'buffet' | 'expense' | 'other_income' | 'personal_training' | 'locker_rent' | 'guest_entry' | 'penalty';
+export type TransactionType = 'tuition' | 'coach_settlement' | 'supplement_sale' | 'buffet' | 'expense' | 'other_income' | 'personal_training' | 'locker_rent' | 'guest_entry' | 'penalty' | 'refund' | 'sale';
 
 export type ExpenseCategory = 'rent' | 'salary' | 'utility' | 'equipment' | 'maintenance' | 'marketing' | 'buffet_stock' | 'other';
 
@@ -136,25 +136,111 @@ export interface Student {
 
 export type Member = Student; // Clean domain alias
 
+export interface PaymentRefundItem {
+  id: string;
+  amount: number;
+  date: string;
+  timestamp: string;
+  reason?: string;
+  recordedBy?: string;
+}
+
 export interface PaymentRecord {
   id: string;
   tenantId?: string;
   branchId?: string;
   studentId?: string;
   studentName?: string;
+  membershipId?: string;
+  chargeId?: string;
   coachId?: string;
   coachName?: string;
   amount: number;
   date: string;
+  timestamp?: string;
   paymentMethod: PaymentMethod;
   type: TransactionType;
   description: string;
   receiptNumber: string;
   recordedBy: string;
   status?: 'completed' | 'voided' | 'refunded';
+  refundedAmount?: number;
+  refunds?: PaymentRefundItem[];
+  relatedPaymentId?: string;
   voidReason?: string;
   voidedAt?: string;
   voidedBy?: string;
+}
+
+export interface FinancialCharge {
+  id: string;
+  tenantId?: string;
+  branchId?: string;
+  memberId: string;
+  memberName?: string;
+  membershipId?: string;
+  packageType: string;
+  packageName?: string;
+  basePrice: number;
+  discountAmount: number;
+  discountReason?: string;
+  approvedBy?: string;
+  finalPrice: number; // basePrice - discountAmount
+  paidAmount: number; // accumulated paid towards this charge
+  outstandingAmount: number; // finalPrice - paidAmount
+  date: string; // Jalali date (e.g. 1403/05/22)
+  timestamp: string; // ISO 8601
+  status: 'active' | 'settled' | 'cancelled' | 'free';
+  isFree?: boolean;
+  notes?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export type SaleRecord = FinancialCharge;
+
+export interface FinancialKPIs {
+  salesToday: number;
+  collectedToday: number;
+  outstandingCreatedToday: number;
+  totalOutstanding: number;
+  refundedToday: number;
+  netProfitToday?: number;
+  totalRevenue?: number;
+  totalOperationalExpenses?: number;
+  totalCoachPayouts?: number;
+  netProfit?: number;
+  debtorCount?: number;
+}
+
+export interface CashboxSession {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  openedAt: string;
+  closedAt?: string;
+  openedBy: string;
+  closedBy?: string;
+  openingBalance: number;
+  closingBalance?: number;
+  actualCashCount?: number;
+  difference?: number;
+  status: 'open' | 'closed';
+  notes?: string;
+}
+
+export interface CashMovement {
+  id: string;
+  cashboxSessionId: string;
+  tenantId: string;
+  branchId: string;
+  type: 'inflow' | 'outflow' | 'adjustment';
+  amount: number;
+  reason: string;
+  relatedPaymentId?: string;
+  relatedExpenseId?: string;
+  timestamp: string;
+  recordedBy: string;
 }
 
 export interface CoachSettlement {
