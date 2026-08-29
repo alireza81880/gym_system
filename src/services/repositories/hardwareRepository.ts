@@ -85,6 +85,15 @@ export class HardwareRepository {
     this.eventsRingBuffer = [event, ...this.eventsRingBuffer].slice(0, this.MAX_EVENTS_BUFFER);
     PersistenceManager.setBatched('hardware_events', this.eventsRingBuffer);
 
+    // Process in Shadow Mode Pilot Comparison
+    try {
+      import('../hardware/pilotComparisonService').then(({ PilotComparisonService }) => {
+        PilotComparisonService.processHardwareEvent(event);
+      });
+    } catch {
+      // safe fallback
+    }
+
     // Notify listeners selectively
     this.listeners.forEach(listener => {
       try {
@@ -93,6 +102,24 @@ export class HardwareRepository {
         console.error('[HardwareRepository] Listener error:', err);
       }
     });
+  }
+
+  static addDevice(device: HardwareDevice): void {
+    this.initialize();
+    this.devicesList = [device, ...this.devicesList];
+    PersistenceManager.setBatched('hardware_devices', this.devicesList);
+  }
+
+  static updateDevice(deviceId: string, updates: Partial<HardwareDevice>): void {
+    this.initialize();
+    this.devicesList = this.devicesList.map(d => d.id === deviceId ? { ...d, ...updates } : d);
+    PersistenceManager.setBatched('hardware_devices', this.devicesList);
+  }
+
+  static removeDevice(deviceId: string): void {
+    this.initialize();
+    this.devicesList = this.devicesList.filter(d => d.id !== deviceId);
+    PersistenceManager.setBatched('hardware_devices', this.devicesList);
   }
 
   static subscribeToEvents(callback: EventListener): () => void {

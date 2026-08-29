@@ -7,3 +7,4 @@ export * from './adapters/supremaAdapter';
 export * from './adapters/genericRelayAdapter';
 export * from './adapters/genericWiegandAdapter';
 export * from './adapters/simulatorAdapter';
+export * from './pilotComparisonService';

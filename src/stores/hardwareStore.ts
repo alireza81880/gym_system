@@ -45,6 +45,21 @@ export const hardwareActions = {
     notifyHardwareChange();
   },
 
+  addDevice(device: HardwareDevice): void {
+    HardwareRepository.addDevice(device);
+    notifyHardwareChange();
+  },
+
+  updateDevice(deviceId: string, updates: Partial<HardwareDevice>): void {
+    HardwareRepository.updateDevice(deviceId, updates);
+    notifyHardwareChange();
+  },
+
+  removeDevice(deviceId: string): void {
+    HardwareRepository.removeDevice(deviceId);
+    notifyHardwareChange();
+  },
+
   async testRelayPulse(deviceId: string): Promise<{ success: boolean; latency: number }> {
     const res = await HardwareRepository.testRelayPulse(deviceId);
     notifyHardwareChange();

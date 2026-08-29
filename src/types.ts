@@ -354,7 +354,67 @@ export type HardwareCapability =
   | 'EVENT_PULL'
   | 'EVENT_STREAM_PUSH'
   | 'USER_ENROLLMENT'
-  | 'DEVICE_TIME_SYNC';
+  | 'DEVICE_TIME_SYNC'
+  // Normalized tokens for Phase 9 & real ZKTeco/Controller specs
+  | 'FACE'
+  | 'RFID'
+  | 'QR'
+  | 'PIN'
+  | 'DOOR_CONTROL'
+  | 'DOOR_STATUS'
+  | 'DOOR_SENSOR'
+  | 'EXIT_BUTTON'
+  | 'WIEGAND'
+  | 'RS485'
+  | 'AUX_INPUT'
+  | 'AUX_OUTPUT'
+  | 'EVENT_STREAM'
+  | 'EVENT_RECORDING'
+  | 'USER_READ'
+  | 'USER_SYNC'
+  | 'ACCESS_LOG';
+
+export interface DeviceUserMapping {
+  id: string;
+  deviceId: string;
+  externalUserId: string;
+  memberId: string;
+  memberName?: string;
+  credentialTypes?: ('FACE' | 'FINGERPRINT' | 'RFID' | 'CARD' | 'PIN')[];
+  cardUid?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface DeviceUser {
+  externalUserId: string;
+  name: string;
+  credentialTypes: ('FACE' | 'FINGERPRINT' | 'RFID' | 'CARD' | 'PIN')[];
+  privilege?: 'user' | 'admin' | 'guest';
+  cardUid?: string;
+  hasFace?: boolean;
+  hasFingerprint?: boolean;
+  enabled?: boolean;
+}
+
+export interface PilotAccessComparison {
+  id: string;
+  timestamp: string;
+  deviceTimestamp?: string;
+  receivedAt: string;
+  deviceId: string;
+  deviceName: string;
+  method: 'FACE' | 'FINGERPRINT' | 'RFID' | 'QR' | 'PIN';
+  externalUserId?: string;
+  memberId?: string;
+  memberName?: string;
+  externalResult: 'ALLOW' | 'DENY' | 'UNKNOWN';
+  gymOsDecision: 'ALLOW' | 'DENY' | 'ALLOW_WITH_WARNING' | 'UNKNOWN';
+  comparison: 'MATCH' | 'MISMATCH' | 'UNKNOWN' | 'ERROR';
+  reason?: string;
+  rawEvent?: string;
+  correlationId: string;
+}
 
 export interface HardwareDevice {
   id: string;
@@ -364,7 +424,7 @@ export interface HardwareDevice {
   vendor: HardwareVendor;
   model: string;
   type: HardwareDeviceType;
-  status: 'online' | 'offline' | 'warning' | 'simulated';
+  status: 'online' | 'offline' | 'warning' | 'error' | 'degraded' | 'simulated';
   ipAddress: string;
   port: number;
   protocol: HardwareProtocol;
@@ -378,9 +438,14 @@ export interface HardwareDevice {
   firmware?: string;
   serialNumber?: string;
   isSimulated?: boolean;
+  macAddress?: string;
+  consecutiveFailures?: number;
+  lastError?: string;
+  integrationMode?: IntegrationMode;
 }
 
 export type HardwareEventType = 
+  | 'ACCESS_ATTEMPT'
   | 'ACCESS_GRANTED'
   | 'ACCESS_DENIED'
   | 'FACE_MATCH'
@@ -403,6 +468,7 @@ export type HardwareEventType =
 
 export interface HardwareEvent {
   id: string;
+  organizationId?: string;
   tenantId?: string;
   branchId?: string;
   deviceId: string;
@@ -410,6 +476,8 @@ export interface HardwareEvent {
   vendor?: HardwareVendor;
   eventType: HardwareEventType;
   timestamp: string;
+  deviceTimestamp?: string;
+  receivedAt?: string;
   externalUserId?: string;
   memberId?: string;
   memberName?: string;

@@ -247,6 +247,9 @@ export interface AppContextType {
   simulateIdentityScan: (method: 'face_recognition' | 'rfid_card' | 'fingerprint' | 'qr_code', query: string) => ScanResult;
   toggleDeviceOnline: (deviceId: string) => void;
   testRelayPulse: (deviceId: string) => Promise<{ success: boolean; latency: number }>;
+  addHardwareDevice: (device: HardwareDevice) => void;
+  updateHardwareDevice: (id: string, updates: Partial<HardwareDevice>) => void;
+  removeHardwareDevice: (id: string) => void;
   
   // Workout & Diet
   saveWorkoutPlan: (plan: WorkoutPlan) => void;
@@ -943,6 +946,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return hardwareActions.testRelayPulse(deviceId);
   }, []);
 
+  const addHardwareDevice = useCallback((device: HardwareDevice) => {
+    hardwareActions.addDevice(device);
+  }, []);
+
+  const updateHardwareDevice = useCallback((id: string, updates: Partial<HardwareDevice>) => {
+    hardwareActions.updateDevice(id, updates);
+  }, []);
+
+  const removeHardwareDevice = useCallback((id: string) => {
+    hardwareActions.removeDevice(id);
+  }, []);
+
   // Workout & Diet
   const saveWorkoutPlan = useCallback((plan: WorkoutPlan) => {
     setWorkoutPlans(prev => {
@@ -1105,6 +1120,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     simulateIdentityScan,
     toggleDeviceOnline,
     testRelayPulse,
+    addHardwareDevice,
+    updateHardwareDevice,
+    removeHardwareDevice,
     saveWorkoutPlan,
     deleteWorkoutPlan,
     saveDietPlan,
@@ -1211,6 +1229,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     simulateIdentityScan,
     toggleDeviceOnline,
     testRelayPulse,
+    addHardwareDevice,
+    updateHardwareDevice,
+    removeHardwareDevice,
     saveWorkoutPlan,
     deleteWorkoutPlan,
     saveDietPlan,
