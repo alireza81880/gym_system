@@ -13,6 +13,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useSettings, useMembers, useFinance, useAttendance } from '../../stores';
 import { GlassPageHeader } from '../common/GlassPageHeader';
 import { GlassCard } from '../common/GlassCard';
 import { GlassStatCard } from '../common/GlassStatCard';
@@ -21,24 +22,27 @@ import { GlassBadge } from '../common/GlassBadge';
 
 export const ManagerReports: React.FC = () => {
   const { 
-    coaches, 
-    students, 
-    payments, 
-    expenses, 
-    attendance, 
-    getCoachStats, 
     formatMoney, 
     formatNum, 
     t, 
     lang 
   } = useApp();
 
+  const { 
+    coaches, 
+    getCoachStats, 
+  } = useSettings();
+
+  const { students } = useMembers();
+  const { summary, kpis, expenses } = useFinance();
+  const { attendance } = useAttendance();
+
   const [selectedCoach, setSelectedCoach] = useState('all');
 
-  // Calculations
-  const totalRevenue = students.reduce((sum, s) => sum + s.totalFee, 0);
-  const totalPaidRevenue = students.reduce((sum, s) => sum + s.paidAmount, 0);
-  const totalDebts = students.reduce((sum, s) => sum + s.remainingDebt, 0);
+  // Authoritative Calculations derived from Finance domain
+  const totalPaidRevenue = summary.totalRevenue;
+  const totalDebts = kpis.totalOutstanding;
+  const totalRevenue = totalPaidRevenue + totalDebts;
   
   const totalCoachCommissions = coaches.reduce((sum, c) => {
     const stats = getCoachStats(c.id);

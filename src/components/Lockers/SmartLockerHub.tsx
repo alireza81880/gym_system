@@ -43,15 +43,17 @@ import { GlassButton } from '../common/GlassButton';
 import { GlassBadge } from '../common/GlassBadge';
 import { GlassModal } from '../common/GlassModal';
 import { LockerRepository } from '../../services/repositories/lockerRepository';
+import { useLockers, useHardware, useMembers, useAttendance } from '../../stores';
 
 export const SmartLockerHub: React.FC = () => {
   const { 
     t, 
     lang, 
-    smartLockers, 
-    hardwareDevices, 
-    accessLogs, 
-    students,
+    formatNum 
+  } = useApp();
+
+  const {
+    lockers: smartLockers,
     addLocker,
     updateLocker,
     deleteLocker,
@@ -60,12 +62,34 @@ export const SmartLockerHub: React.FC = () => {
     assignLocker,
     toggleLockerMaintenance,
     triggerMasterUnlock,
-    simulateIdentityScan,
+    setLockerCount,
+  } = useLockers();
+
+  const {
+    hardwareDevices,
+    recentEvents: hardwareEvents,
     toggleDeviceOnline,
     testRelayPulse,
-    setLockerCount,
-    formatNum 
-  } = useApp();
+  } = useHardware();
+
+  const accessLogs = useMemo(() => {
+    return (hardwareEvents || []).map(evt => ({
+      id: evt.id,
+      timestamp: evt.timestamp,
+      studentName: evt.memberName || 'نامشخص',
+      deviceType: evt.deviceName || 'گیت / سنسور',
+      message: evt.accessReason || `تردد ${evt.direction === 'exit' ? 'خروج' : 'ورود'} - ${evt.credentialType || 'سنسور'}`,
+      result: evt.accessResult || 'granted',
+    }));
+  }, [hardwareEvents]);
+
+  const {
+    students,
+  } = useMembers();
+
+  const {
+    simulateIdentityScan,
+  } = useAttendance();
 
   // Tab View Selection
   const [activeTab, setActiveTab] = useState<'matrix' | 'history'>('matrix');
@@ -232,7 +256,7 @@ export const SmartLockerHub: React.FC = () => {
         number: num,
         zone: 'general',
         relayPort: ((num - 1) % 32) + 1,
-        lockType: 'solenoid_12v',
+        lockType: 'solenoid',
         status: 'available',
         isLocked: true,
       });

@@ -653,6 +653,18 @@ export interface StaffUser {
   avatar?: string;
   isActive: boolean;
   lastLogin?: string;
+  pinCode?: string;
+}
+
+export interface AuthSession {
+  sessionId: string;
+  user: StaffUser;
+  token: string;
+  loginTime: string;
+  lastActive: string;
+  expiresAt: string;
+  tenantId: string;
+  branchId: string;
 }
 
 export type PermissionKey = 
@@ -671,8 +683,22 @@ export type PermissionKey =
   | 'lockers.masterUnlock'
   | 'reports.view'
   | 'settings.manage'
+  | 'migration.import'
+  | 'migration.rollback'
   | 'audit.view'
   | 'insights.view';
+
+export type AuditEntityType = 
+  | 'member' 
+  | 'payment' 
+  | 'locker' 
+  | 'hardware' 
+  | 'setting' 
+  | 'attendance' 
+  | 'auth'
+  | 'backup'
+  | 'migration'
+  | 'security';
 
 export interface AuditLog {
   id: string;
@@ -682,7 +708,8 @@ export interface AuditLog {
   userName: string;
   userRole: UserRole;
   action: string;
-  entityType: 'member' | 'payment' | 'locker' | 'hardware' | 'setting' | 'attendance' | 'auth';
+  category?: string;
+  entityType: AuditEntityType;
   entityId?: string;
   description: string;
   beforeState?: string;
@@ -690,6 +717,8 @@ export interface AuditLog {
   timestamp: string;
   ipAddress?: string;
   correlationId?: string;
+  result?: 'success' | 'failure' | 'denied';
+  metadata?: Record<string, unknown>;
 }
 
 // ----------------------------------------------------
@@ -935,6 +964,8 @@ export interface ImportMappingProfile {
   sourceType: MigrationSourceType;
   sourceVendor?: string; // 'zkteco' | 'legacy_a' | 'generic'
   mappings: Record<string, string>; // e.g. { 'نام': 'firstName', 'شماره تماس': 'phone' }
+  fullNameMode?: 'combined' | 'split' | 'preserve';
+  currencyUnit?: string;
   defaultValues?: Record<string, any>;
   customTransforms?: Record<string, string>;
   createdAt: string;

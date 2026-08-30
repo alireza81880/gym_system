@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
 import { X, Search, CheckCircle2, UserCheck, KeyRound } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useMembers, useAttendance, useSettings } from '../../stores';
 
 interface QuickCheckInModalProps {
   onClose: () => void;
 }
 
 export const QuickCheckInModal: React.FC<QuickCheckInModalProps> = ({ onClose }) => {
-  const { students, coaches, checkInStudent, t } = useApp();
+  const { t } = useApp();
+  const { students } = useMembers();
+  const { checkInStudent } = useAttendance();
+  const { coaches } = useSettings();
   const [searchTerm, setSearchTerm] = useState('');
   const [lockerNumber, setLockerNumber] = useState<number>(0);
   const [feedback, setFeedback] = useState<string | null>(null);

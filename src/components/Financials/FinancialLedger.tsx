@@ -16,6 +16,7 @@ import {
   ShoppingBag
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useFinance } from '../../stores';
 import { ExpenseCategory, PaymentMethod, TransactionType, PaymentRecord, ExpenseRecord } from '../../types';
 import { GlassPageHeader } from '../common/GlassPageHeader';
 import { GlassCard } from '../common/GlassCard';
@@ -40,16 +41,19 @@ const PAGE_SIZE = 15;
 
 export const FinancialLedger: React.FC = () => {
   const { 
+    formatMoney, 
+    formatNum, 
+    t, 
+  } = useApp();
+
+  const {
     payments, 
     expenses, 
     addExpense, 
     deleteExpense, 
     addPayment, 
     deletePayment, 
-    formatMoney, 
-    formatNum, 
-    t, 
-  } = useApp();
+  } = useFinance();
 
   const [activeSubTab, setActiveSubTab] = useState<'all' | 'incomes' | 'expenses' | 'coach_payouts'>('all');
   const [searchTerm, setSearchTerm] = useState('');

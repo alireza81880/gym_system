@@ -37,25 +37,19 @@ import {
   LockerZone
 } from '../types';
 import { 
-  initialWorkoutPlans, 
-  initialDietPlans, 
   initialAccessLogs, 
 } from '../data/initialData';
 import { translations, formatCurrency, formatNumber } from '../i18n/translations';
-import { AccessPolicyEngine, AccessPolicyConfig } from '../services/accessPolicyService';
-import { LockerEngine } from '../services/lockerService';
+import { AccessPolicyConfig } from '../services/accessPolicyService';
 import { AuditService } from '../services/auditService';
 import { SyncEngine } from '../services/syncService';
 import { 
-  MigrationService, 
   ImportValidationItem,
   ImportMode,
   HistoricalMigrationScope,
   CurrencyUnit,
   MigrationProgressState
 } from '../services/migrationService';
-import { MemberService } from '../services/memberService';
-import { getAdapterForVendor, createNormalizedHardwareEvent } from '../services/hardwareAdapters';
 import { MemberRepository } from '../services/repositories/memberRepository';
 import { PaymentRepository } from '../services/repositories/paymentRepository';
 import { AttendanceRepository } from '../services/repositories/attendanceRepository';
@@ -66,31 +60,15 @@ import { LocalDatabase } from '../services/database/localDatabase';
 import { PerformanceDiagnostics } from '../services/diagnostics/performanceMetrics';
 import { useMemberStore, memberActions } from '../stores/memberStore';
 import { useFinanceStore, financeActions } from '../stores/financeStore';
-import { useAttendanceStore, attendanceActions } from '../stores/attendanceStore';
+import { useAttendanceStore, attendanceActions, ScanResult } from '../stores/attendanceStore';
 import { useHardwareStore, hardwareActions } from '../stores/hardwareStore';
 import { useLockerStore, lockerActions } from '../stores/lockerStore';
-import { useSettingsStore, settingsStore, settingsActions } from '../stores/settingsStore';
+import { useSettingsStore, settingsActions, CoachFinancialStats } from '../stores/settingsStore';
 import { useThemeStore, themeActions } from '../stores/themeStore';
 import { useMigrationStore, migrationActions } from '../stores/migrationStore';
+import { usePlanStore, planActions } from '../stores/planStore';
 
-interface CoachFinancialStats {
-  totalStudents: number;
-  totalGeneratedRevenue: number;
-  totalCoachShare: number;
-  totalClubShare: number;
-  totalPaidOut: number;
-  remainingBalance: number;
-}
-
-export interface ScanResult {
-  success: boolean;
-  student?: Student;
-  lockerNumber?: number;
-  message: string;
-  alertType: 'success' | 'warning' | 'error';
-  method: 'face_recognition' | 'rfid_card' | 'fingerprint' | 'qr_code' | 'manual_override';
-  decisionCode?: string;
-}
+export type { ScanResult, CoachFinancialStats };
 
 export interface AppContextType {
   lang: Language;
@@ -272,21 +250,17 @@ export interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-let uidCounter = 0;
-const generateUid = (prefix: string) => `${prefix}-${Date.now()}-${++uidCounter}-${Math.random().toString(36).slice(2, 7)}`;
-
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Bootstrap & Cross-Cutting Global States
   const [lang, setLang] = useState<Language>('fa');
   const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
-  const [workoutPlans, setWorkoutPlans] = useState<WorkoutPlan[]>(() => PersistenceManager.get('workout_plans', initialWorkoutPlans));
-  const [dietPlans, setDietPlans] = useState<DietPlan[]>(() => PersistenceManager.get('diet_plans', initialDietPlans));
-  const [accessLogs, setAccessLogs] = useState<AccessLog[]>(() => PersistenceManager.get('access_logs', initialAccessLogs));
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => PersistenceManager.get('audit_logs', []));
+  const [accessLogs] = useState<AccessLog[]>(() => PersistenceManager.get('access_logs', initialAccessLogs));
+  const [auditLogs] = useState<AuditLog[]>(() => PersistenceManager.get('audit_logs', []));
   const [syncState, setSyncState] = useState<SyncState>('ONLINE');
   const [syncQueue, setSyncQueue] = useState<SyncJob[]>([]);
   const [pilotComparisonLogs] = useState<PilotComparisonLog[]>([]);
 
-  // Domain Store Subscriptions
+  // Domain Store Selectors
   const theme = useThemeStore(s => s.theme);
   const activeThemeKey = useThemeStore(s => s.activeThemeKey);
 
@@ -299,10 +273,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const customFields = useSettingsStore(s => s.customFields);
   const packages = useSettingsStore(s => s.packages);
   const coaches = useSettingsStore(s => s.coaches);
-  const accessPolicyConfig = useSettingsStore(s => s.accessPolicyConfig);
   const dashboardWidgets = useSettingsStore(s => s.dashboardWidgets);
   const moduleFeatures = useSettingsStore(s => s.moduleFeatures);
   const integrationMode = useSettingsStore(s => s.integrationMode);
+  const accessPolicyConfig = useSettingsStore(s => s.accessPolicyConfig);
 
   const memberVersion = useMemberStore(s => s.version);
   const students = useMemo(() => MemberRepository.getAll(), [memberVersion]);
@@ -314,51 +288,87 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const attendanceVersion = useAttendanceStore(s => s.version);
   const attendance = useMemo(() => AttendanceRepository.getAll(), [attendanceVersion]);
 
+  const lockerVersion = useLockerStore(s => s.version);
+  const smartLockers = useMemo(() => LockerRepository.getAll(), [lockerVersion]);
+
   const hardwareVersion = useHardwareStore(s => s.version);
   const hardwareDevices = useMemo(() => HardwareRepository.getDevices(), [hardwareVersion]);
   const hardwareEvents = useMemo(() => HardwareRepository.getRecentEvents(100), [hardwareVersion]);
 
-  const lockerVersion = useLockerStore(s => s.version);
-  const smartLockers = useMemo(() => LockerRepository.getAll(), [lockerVersion]);
+  const workoutPlans = usePlanStore(s => s.workoutPlans);
+  const dietPlans = usePlanStore(s => s.dietPlans);
 
   const mappingProfiles = useMigrationStore(s => s.mappingProfiles);
   const migrationReports = useMigrationStore(s => s.migrationReports);
   const migrationSnapshots = useMigrationStore(s => s.migrationSnapshots);
 
-  const t = translations[lang];
-
-  // Initialize Local Production Data Core & Apply Migrations
+  // App Initialization
   useEffect(() => {
-    PerformanceDiagnostics.measure('DatabaseInitialization', async () => {
-      try {
-        const report = await LocalDatabase.initialize();
-        if (report.detectedLegacy && report.status === 'SUCCESS') {
-          console.log(`[GymOS] ${report.message}`);
-        }
-      } catch (err) {
-        console.error('[GymOS] Failed to initialize local database core:', err);
-      }
-    });
+    try {
+      LocalDatabase.initialize();
+      const summary = PerformanceDiagnostics.getSummary();
+      console.log('[LocalDataCore] Production Database Initialized:', summary);
+    } catch (err) {
+      console.error('[LocalDataCore] Initialization error:', err);
+    }
   }, []);
 
-  // Language & Theme
+  // Sync state listener
+  useEffect(() => {
+    const unsub = SyncEngine.subscribe(state => {
+      setSyncState(state.syncState);
+      setSyncQueue(state.queue);
+    });
+    return unsub;
+  }, []);
+
+  // I18n & Theme toggles
   const toggleLanguage = useCallback(() => {
     setLang(prev => (prev === 'fa' ? 'en' : 'fa'));
-  }, []);
-
-  const setTheme = useCallback((newTheme: Theme) => {
-    themeActions.setTheme(newTheme);
   }, []);
 
   const toggleTheme = useCallback(() => {
     themeActions.toggleTheme();
   }, []);
 
-  const setActiveThemeKey = useCallback((key: ThemeKey) => {
-    themeActions.setThemeKey(key);
+  const setTheme = useCallback((t: Theme) => {
+    themeActions.setTheme(t);
   }, []);
 
-  // Installation & Demo Sandbox
+  const setActiveThemeKey = useCallback((key: ThemeKey) => {
+    themeActions.setActiveThemeKey(key);
+  }, []);
+
+  const t = useMemo(() => {
+    return translations[lang] || translations.fa;
+  }, [lang]);
+
+  const formatMoney = useCallback((amount: number) => {
+    return formatCurrency(amount, lang);
+  }, [lang]);
+
+  const formatNum = useCallback((num: number) => {
+    return formatNumber(num, lang);
+  }, [lang]);
+
+  // Feature Toggles
+  const toggleFeatureEnabled = useCallback((featureId: NavTab) => {
+    const next = moduleFeatures.map(f => f.id === featureId ? { ...f, isEnabled: !f.isEnabled } : f);
+    settingsActions.updateModuleFeatures(next);
+  }, [moduleFeatures]);
+
+  const toggleFeaturePinned = useCallback((featureId: NavTab) => {
+    const next = moduleFeatures.map(f => f.id === featureId ? { ...f, isPinned: !f.isPinned } : f);
+    settingsActions.updateModuleFeatures(next);
+  }, [moduleFeatures]);
+
+  const restoreDefaultFeatures = useCallback(() => {
+    import('../data/featureModules').then(({ initialModuleFeatures }) => {
+      settingsActions.updateModuleFeatures(initialModuleFeatures);
+    });
+  }, []);
+
+  // Installation & Demo Sandbox Handlers
   const completeInstallation = useCallback((params: {
     orgData: Partial<OrganizationInfo>;
     lockerCount: number;
@@ -371,31 +381,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (params.lockerCount > 0) {
       lockerActions.setLockerCount(params.lockerCount);
     }
-    if (params.firstPackage) {
-      const newPkg: MembershipPackage = {
-        id: 'pkg-default-1',
-        tenantId: organizationInfo.tenantId,
-        branchId: activeBranchId,
-        name: params.firstPackage.name || 'عضویت طلایی ماهانه',
-        type: '1_month',
-        price: params.firstPackage.price || 1500000,
-        sessionsCount: params.firstPackage.sessionsCount || 24,
+    if (params.firstPackage?.name && params.firstPackage?.price) {
+      settingsActions.addPackage({
+        name: params.firstPackage.name,
+        type: params.firstPackage.type || '1_month',
+        price: Number(params.firstPackage.price) || 0,
         validityDays: params.firstPackage.validityDays || 30,
-        description: 'اشتراک پیش‌فرض باشگاه',
+        sessionsCount: params.firstPackage.sessionsCount || 12,
+        includesLocker: true,
         isActive: true,
-      };
-      settingsActions.updatePackages([newPkg]);
+      });
     }
     if (params.accessPolicy) {
       settingsActions.setAccessPolicyConfig(prev => ({ ...prev, ...params.accessPolicy }));
     }
+    settingsActions.setCurrentUserRole('gym_owner');
     settingsActions.setIsInstalled(true);
     settingsActions.setIsDemoMode(false);
-  }, [organizationInfo.tenantId, activeBranchId]);
+  }, []);
 
   const enterDemoMode = useCallback(() => {
     settingsActions.setIsDemoMode(true);
-    settingsActions.setIsInstalled(true);
   }, []);
 
   const exitDemoMode = useCallback(() => {
@@ -403,628 +409,70 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const resetToEmptyProduction = useCallback(() => {
-    localStorage.clear();
-    window.location.reload();
-  }, []);
-
-  const updateOrganizationInfo = useCallback((info: Partial<OrganizationInfo>) => {
-    settingsActions.updateOrganizationInfo(info);
-  }, []);
-
-  const saveCustomField = useCallback((field: CustomField) => {
-    const existing = customFields;
-    const idx = existing.findIndex(f => f.id === field.id);
-    let next: CustomField[];
-    if (idx >= 0) {
-      next = [...existing];
-      next[idx] = field;
-    } else {
-      next = [...existing, field];
-    }
-    settingsActions.updateCustomFields(next);
-  }, [customFields]);
-
-  const deleteCustomField = useCallback((id: string) => {
-    settingsActions.updateCustomFields(customFields.filter(f => f.id !== id));
-  }, [customFields]);
-
-  const saveMappingProfile = useCallback((profile: ImportMappingProfile) => {
-    migrationActions.saveMappingProfile(profile);
-  }, []);
-
-  const deleteMappingProfile = useCallback((id: string) => {
-    migrationActions.deleteMappingProfile(id);
-  }, []);
-
-  const executeMigration = useCallback(async (
-    validatedItems: ImportValidationItem[],
-    conflictResolutions: Record<string, DuplicateResolution>,
-    options: { 
-      sourceType: string; 
-      fileName?: string;
-      importMode?: ImportMode;
-      scope?: HistoricalMigrationScope;
-      currencyUnit?: CurrencyUnit;
-      preserveMemberNumbers?: boolean;
-      defaultCoachId?: string;
-    },
-    onProgress?: (progress: MigrationProgressState) => void
-  ): Promise<MigrationReport> => {
-    const startAudit = AuditService.createLog(
-      currentUser,
-      'MIGRATION_STARTED',
-      'member',
-      `شروع فرآیند انتقال داده‌ها از منبع ${options.sourceType} (${validatedItems.length} رکورد)`
-    );
-    setAuditLogs(prev => [startAudit, ...prev]);
-
-    try {
-      const result = await MigrationService.executeImport(
-        validatedItems,
-        students,
-        conflictResolutions,
-        {
-          tenantId: organizationInfo.tenantId,
-          branchId: activeBranchId,
-          defaultCoachId: options.defaultCoachId || coaches[0]?.id || '',
-          sourceType: options.sourceType,
-          fileName: options.fileName,
-          importMode: options.importMode,
-          scope: options.scope,
-          currencyUnit: options.currencyUnit,
-          preserveMemberNumbers: options.preserveMemberNumbers,
-        },
-        onProgress
-      );
-
-      if (result.report.status === 'FAILED') {
-        const failAudit = AuditService.createLog(
-          currentUser,
-          'MIGRATION_FAILED',
-          'member',
-          `عملیات انتقال داده‌ها ناموفق بود: ${result.report.errors?.[0]?.message || 'خطای ساختار داده'}`
-        );
-        setAuditLogs(prev => [failAudit, ...prev]);
-        migrationActions.addReport(result.report);
-        return result.report;
-      }
-
-      memberActions.batchSet(result.updatedStudents);
-      migrationActions.addReport(result.report);
-      migrationActions.addSnapshot(result.snapshot);
-
-      const auditAction = result.report.status === 'PARTIAL' ? 'MIGRATION_PARTIAL' : 'MIGRATION_COMPLETED';
-      const completeAudit = AuditService.createLog(
-        currentUser,
-        auditAction,
-        'member',
-        `مهاجرت داده‌ها از منبع ${options.sourceType} با وضعیت ${result.report.status} پایان یافت: ${result.report.importedCount} عضو جدید، ${result.report.updatedCount} به‌روزرسانی.`
-      );
-      setAuditLogs(prev => [completeAudit, ...prev]);
-
-      return result.report;
-    } catch (err) {
-      const failAudit = AuditService.createLog(
-        currentUser,
-        'MIGRATION_FAILED',
-        'member',
-        `انتقال اطلاعات با خطای سیستمی مواجه شد: ${(err as Error).message}`
-      );
-      setAuditLogs(prev => [failAudit, ...prev]);
-      throw err;
-    }
-  }, [students, organizationInfo.tenantId, activeBranchId, coaches, currentUser]);
-
-  const rollbackMigration = useCallback((snapshotId: string): boolean => {
-    const snapshot = migrationSnapshots.find(s => s.id === snapshotId);
-    if (!snapshot) return false;
-
-    try {
-      const restored = MigrationService.rollback(snapshot);
-      memberActions.batchSet(restored);
-      migrationActions.removeSnapshot(snapshotId);
-
-      const audit = AuditService.createLog(
-        currentUser,
-        'MIGRATION_ROLLBACK',
-        'member',
-        `بازگردانی داده‌های مهاجرت با شناسه snapshot #${snapshotId} با موفقیت انجام شد.`
-      );
-      setAuditLogs(prev => [audit, ...prev]);
-      return true;
-    } catch {
-      return false;
-    }
-  }, [migrationSnapshots, currentUser]);
-
-  const setLockerCount = useCallback((newCount: number, defaultZone: LockerZone = 'general') => {
-    const res = lockerActions.setLockerCount(newCount, defaultZone);
-    const audit = AuditService.createLog(
-      currentUser,
-      'LOCKER_RESIZE',
-      'locker',
-      `تعداد کل کمدهای سالن به ${newCount} کمد تغییر یافت.`
-    );
-    setAuditLogs(prev => [audit, ...prev]);
-    return res;
-  }, [currentUser]);
-
-  const updateDashboardWidgets = useCallback((widgets: DashboardWidgetConfig[]) => {
-    settingsActions.updateDashboardWidgets(widgets);
-  }, []);
-
-  const toggleFeatureEnabled = useCallback((featureId: NavTab) => {
-    settingsActions.updateModuleFeatures(
-      moduleFeatures.map(f => f.id === featureId ? { ...f, isEnabled: !f.isEnabled } : f)
-    );
-  }, [moduleFeatures]);
-
-  const toggleFeaturePinned = useCallback((featureId: NavTab) => {
-    settingsActions.updateModuleFeatures(
-      moduleFeatures.map(f => f.id === featureId ? { ...f, isPinned: !f.isPinned } : f)
-    );
-  }, [moduleFeatures]);
-
-  const restoreDefaultFeatures = useCallback(() => {
-    settingsActions.updateModuleFeatures(moduleFeatures);
-  }, [moduleFeatures]);
-
-  const setActiveBranchId = useCallback((branchId: string) => {
-    settingsStore.setState({ activeBranchId: branchId });
-  }, []);
-
-  const setCurrentUserRole = useCallback((role: UserRole) => {
-    settingsStore.setState({ currentUser: { ...currentUser, role } });
-  }, [currentUser]);
-
-  const setIntegrationMode = useCallback((mode: IntegrationMode) => {
-    settingsActions.setIntegrationMode(mode);
-  }, []);
-
-  const setAccessPolicyConfig = useCallback((config: React.SetStateAction<AccessPolicyConfig>) => {
-    settingsActions.setAccessPolicyConfig(config);
-  }, []);
-
-  const triggerCloudSync = useCallback(async () => {
-    setSyncState('SYNCING');
-    const result = await SyncEngine.processQueue();
-    setSyncState(SyncEngine.getState());
-    setSyncQueue(SyncEngine.getQueue());
-    
-    const syncAudit = AuditService.createLog(
-      currentUser,
-      'CLOUD_SYNC_TRIGGERED',
-      'setting',
-      `همگام‌سازی ابری انجام شد (${result.processedCount} رکورد ارسال شد).`
-    );
-    setAuditLogs(prev => [syncAudit, ...prev]);
-  }, [currentUser]);
-
-  // Coaches CRUD
-  const addCoach = useCallback((coachData: Omit<Coach, 'id'>) => {
-    const newCoach: Coach = {
-      ...coachData,
-      id: generateUid('coach'),
-      tenantId: organizationInfo.tenantId,
-      branchId: activeBranchId,
-    };
-    settingsActions.updateCoaches([newCoach, ...coaches]);
-    SyncEngine.enqueue('coach', newCoach.id, 'INSERT', newCoach);
-    setAuditLogs(prev => [
-      AuditService.createLog(currentUser, 'COACH_ADDED', 'setting', `مربی جدید «${newCoach.fullName}» اضافه شد.`),
-      ...prev
-    ]);
-  }, [coaches, organizationInfo.tenantId, activeBranchId, currentUser]);
-
-  const updateCoach = useCallback((id: string, coachData: Partial<Coach>) => {
-    settingsActions.updateCoaches(coaches.map(c => c.id === id ? { ...c, ...coachData } : c));
-    SyncEngine.enqueue('coach', id, 'UPDATE', coachData);
-  }, [coaches]);
-
-  const deleteCoach = useCallback((id: string) => {
-    const coach = coaches.find(c => c.id === id);
-    settingsActions.updateCoaches(coaches.filter(c => c.id !== id));
-    SyncEngine.enqueue('coach', id, 'DELETE', { id });
-    if (coach) {
-      setAuditLogs(prev => [
-        AuditService.createLog(currentUser, 'COACH_DELETED', 'setting', `مربی «${coach.fullName}» حذف شد.`),
-        ...prev
-      ]);
-    }
-  }, [coaches, currentUser]);
-
-  // Students CRUD
-  const addStudent = useCallback((
-    studentData: Omit<Student, 'id' | 'remainingDebt'>,
-    initialPayment = 0,
-    paymentMethod: PaymentMethod = 'pos'
-  ) => {
-    const memberNum = studentData.memberNumber || MemberService.calculateNextMemberNumber(students);
-    const newStudent = memberActions.addStudent({
-      ...studentData,
-      tenantId: organizationInfo.tenantId,
-      branchId: activeBranchId,
-      memberNumber: memberNum,
-    }, initialPayment, paymentMethod);
-
-    SyncEngine.enqueue('student', newStudent.id, 'INSERT', newStudent);
-
-    setAuditLogs(prev => [
-      AuditService.createLog(currentUser, 'STUDENT_REGISTERED', 'member', `ورزشکار جدید «${newStudent.fullName}» (${organizationInfo.memberNumberLabel}: ${memberNum}) ثبت‌نام شد.`),
-      ...prev
-    ]);
-  }, [students, organizationInfo.tenantId, organizationInfo.memberNumberLabel, activeBranchId, currentUser]);
-
-  const updateStudent = useCallback((id: string, studentData: Partial<Student>) => {
-    memberActions.updateStudent(id, studentData);
-    SyncEngine.enqueue('student', id, 'UPDATE', studentData);
-  }, []);
-
-  const deleteStudent = useCallback((id: string) => {
-    const student = MemberRepository.getById(id);
-    memberActions.deleteStudent(id);
-    SyncEngine.enqueue('student', id, 'DELETE', { id });
-    if (student) {
-      setAuditLogs(prev => [
-        AuditService.createLog(currentUser, 'STUDENT_DELETED', 'member', `ورزشکار «${student.fullName}» حذف شد.`),
-        ...prev
-      ]);
-    }
-  }, [currentUser]);
-
-  const recordStudentPayment = useCallback((
-    studentId: string,
-    amount: number,
-    paymentMethod: PaymentMethod,
-    description?: string
-  ) => {
-    memberActions.recordStudentPayment(studentId, amount, paymentMethod, description);
-    const student = MemberRepository.getById(studentId);
-    if (student) {
-      setAuditLogs(prev => [
-        AuditService.createLog(currentUser, 'PAYMENT_RECORDED', 'payment', `مبلغ ${formatCurrency(amount, lang)} برای «${student.fullName}» ثبت شد.`),
-        ...prev
-      ]);
-    }
-  }, [currentUser, lang]);
-
-  const renewStudentMembership = useCallback((
-    studentId: string, 
-    packageType: string, 
-    totalFee: number, 
-    paidAmount: number, 
-    paymentMethod: PaymentMethod, 
-    newExpireDate: string
-  ) => {
-    memberActions.renewStudentMembership(studentId, packageType, totalFee, paidAmount, paymentMethod, newExpireDate);
-    const student = MemberRepository.getById(studentId);
-    if (student) {
-      setAuditLogs(prev => [
-        AuditService.createLog(currentUser, 'MEMBERSHIP_RENEWED', 'member', `عضویت «${student.fullName}» تمدید شد.`),
-        ...prev
-      ]);
-    }
-  }, [currentUser]);
-
-  // Expenses & Payments CRUD
-  const addExpense = useCallback((expenseData: Omit<ExpenseRecord, 'id'>) => {
-    const newExpense = financeActions.addExpense({
-      ...expenseData,
-      tenantId: organizationInfo.tenantId,
-      branchId: activeBranchId,
-      receiptNumber: `EXP-${Date.now().toString().slice(-6)}`,
-      status: 'completed',
+    memberActions.batchSet([]);
+    financeActions.batchSet([], []);
+    attendanceActions.batchSet([]);
+    AuditService.logEvent({
+      action: 'SYSTEM_RESET_PRODUCTION',
+      details: 'اطلاعات عملیاتی سیستم ریست شد.',
+      userName: currentUser.fullName,
     });
-    SyncEngine.enqueue('expense', newExpense.id, 'INSERT', newExpense);
-    setAuditLogs(prev => [
-      AuditService.createLog(currentUser, 'EXPENSE_RECORDED', 'payment', `هزینه «${newExpense.title}» به مبلغ ${formatCurrency(newExpense.amount, lang)} ثبت شد.`),
-      ...prev
-    ]);
-  }, [organizationInfo.tenantId, activeBranchId, currentUser, lang]);
+    settingsActions.setIsInstalled(false);
+    settingsActions.setIsDemoMode(false);
+  }, [currentUser.fullName]);
 
-  const updateExpense = useCallback((id: string, expenseData: Partial<ExpenseRecord>) => {
-    financeActions.updateExpense(id, expenseData);
-    SyncEngine.enqueue('expense', id, 'UPDATE', expenseData);
-  }, []);
-
-  const deleteExpense = useCallback((id: string) => {
-    financeActions.deleteExpense(id);
-    SyncEngine.enqueue('expense', id, 'DELETE', { id });
-  }, []);
-
-  const voidExpense = useCallback((id: string, reason: string) => {
-    financeActions.updateExpense(id, { status: 'voided', voidReason: reason });
-    SyncEngine.enqueue('expense', id, 'UPDATE', { status: 'voided', voidReason: reason });
-  }, []);
-
-  const addPayment = useCallback((paymentData: Omit<PaymentRecord, 'id'>) => {
-    const newPayment = financeActions.addPayment({
-      ...paymentData,
-      tenantId: organizationInfo.tenantId,
-      branchId: activeBranchId,
-      receiptNumber: `REC-${Date.now().toString().slice(-6)}`,
-      recordedBy: currentUser.fullName,
-      status: 'completed',
+  const resetToSampleData = useCallback(() => {
+    memberActions.restoreSampleData();
+    AuditService.logEvent({
+      action: 'DATA_RESTORED_SAMPLE',
+      category: 'system',
+      details: 'داده‌های تستی نمونه سیستم بازیابی شد.',
+      userName: currentUser.fullName,
     });
-    SyncEngine.enqueue('payment', newPayment.id, 'INSERT', newPayment);
-  }, [organizationInfo.tenantId, activeBranchId, currentUser.fullName]);
+  }, [currentUser.fullName]);
 
-  const deletePayment = useCallback((id: string) => {
-    financeActions.deletePayment(id);
-    SyncEngine.enqueue('payment', id, 'DELETE', { id });
-  }, []);
-
-  const voidPayment = useCallback((id: string, reason: string) => {
-    financeActions.deletePayment(id);
-    SyncEngine.enqueue('payment', id, 'UPDATE', { status: 'voided', voidReason: reason });
-  }, []);
-
-  // Packages CRUD
-  const addPackage = useCallback((pkgData: Omit<MembershipPackage, 'id'>) => {
-    const newPkg: MembershipPackage = {
-      ...pkgData,
-      id: generateUid('pkg'),
-      tenantId: organizationInfo.tenantId,
-      branchId: activeBranchId,
-    };
-    settingsActions.updatePackages([...packages, newPkg]);
-    SyncEngine.enqueue('package', newPkg.id, 'INSERT', newPkg);
-  }, [packages, organizationInfo.tenantId, activeBranchId]);
-
-  const updatePackage = useCallback((id: string, pkgData: Partial<MembershipPackage>) => {
-    settingsActions.updatePackages(packages.map(p => p.id === id ? { ...p, ...pkgData } : p));
-    SyncEngine.enqueue('package', id, 'UPDATE', pkgData);
-  }, [packages]);
-
-  const deletePackage = useCallback((id: string) => {
-    settingsActions.updatePackages(packages.filter(p => p.id !== id));
-    SyncEngine.enqueue('package', id, 'DELETE', { id });
-  }, [packages]);
-
-  // Coach Settlement
-  const settleCoachPayment = useCallback((coachId: string, amount: number, paymentMethod: PaymentMethod, notes?: string) => {
-    const coach = coaches.find(c => c.id === coachId);
-    if (!coach) return;
-
-    financeActions.settleCoachPayment(coachId, coach.fullName, amount, paymentMethod, notes);
-
-    setAuditLogs(prev => [
-      AuditService.createLog(currentUser, 'COACH_SETTLEMENT', 'payment', `مبلغ ${formatCurrency(amount, lang)} به مربی «${coach.fullName}» پرداخت شد.`),
-      ...prev
-    ]);
-  }, [coaches, currentUser, lang]);
-
-  const getCoachStats = useCallback((coachId: string): CoachFinancialStats => {
-    const coach = coaches.find(c => c.id === coachId);
-    if (!coach) {
-      return { totalStudents: 0, totalGeneratedRevenue: 0, totalCoachShare: 0, totalClubShare: 0, totalPaidOut: 0, remainingBalance: 0 };
-    }
-
-    const coachStudents = students.filter(s => s.coachId === coachId);
-    const totalGeneratedRevenue = coachStudents.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
-    const rate = (coach.commissionRate || 0) / 100;
-    const totalCoachShare = Math.round(totalGeneratedRevenue * rate);
-    const totalClubShare = totalGeneratedRevenue - totalCoachShare;
-
-    const paidExpenses = expenses.filter(e => e.paidTo === coach.fullName && e.category === 'salary' && e.status !== 'voided');
-    const totalPaidOut = paidExpenses.reduce((sum, e) => sum + e.amount, 0);
-    const remainingBalance = Math.max(0, totalCoachShare - totalPaidOut);
-
-    return {
-      totalStudents: coachStudents.length,
-      totalGeneratedRevenue,
-      totalCoachShare,
-      totalClubShare,
-      totalPaidOut,
-      remainingBalance,
-    };
-  }, [coaches, students, expenses]);
-
-  // Access Evaluation & Check-in
-  const evaluateMemberAccess = useCallback((studentId: string): AccessDecision => {
-    const student = MemberRepository.getById(studentId);
-    return AccessPolicyEngine.evaluate(student, packages, accessPolicyConfig);
-  }, [packages, accessPolicyConfig]);
-
-  const checkInStudent = useCallback((
-    studentId: string, 
-    lockerNumber?: number, 
-    method: AttendanceRecord['method'] = 'manual'
-  ) => {
-    return attendanceActions.checkInStudent(studentId, lockerNumber, method);
-  }, []);
-
-  // Smart Lockers
-  const addLocker = useCallback((lockerData: Omit<SmartLocker, 'id'>) => {
-    const newLocker: SmartLocker = {
-      ...lockerData,
-      id: generateUid('lck'),
-      tenantId: organizationInfo.tenantId,
-      branchId: activeBranchId,
-    };
-    lockerActions.batchSet([...smartLockers, newLocker].sort((a, b) => a.number - b.number));
-  }, [smartLockers, organizationInfo.tenantId, activeBranchId]);
-
-  const updateLocker = useCallback((id: string, lockerData: Partial<SmartLocker>) => {
-    lockerActions.batchSet(smartLockers.map(l => l.id === id ? { ...l, ...lockerData } : l));
-  }, [smartLockers]);
-
-  const deleteLocker = useCallback((id: string) => {
-    lockerActions.batchSet(smartLockers.filter(l => l.id !== id));
-  }, [smartLockers]);
-
-  const openLocker = useCallback(async (lockerNumber: number, reason = 'بازگشایی از پذیرش'): Promise<boolean> => {
-    const timestamp = new Date().toISOString();
-    lockerActions.batchSet(smartLockers.map(l => l.number === lockerNumber ? {
-      ...l,
-      isLocked: false,
-      lastUnlockedAt: timestamp,
-    } : l));
-
-    setAuditLogs(prev => [
-      AuditService.createLog(currentUser, 'LOCKER_OPENED', 'locker', `کمد شماره #${lockerNumber} بازگشایی شد (${reason}).`),
-      ...prev
-    ]);
-    return true;
-  }, [smartLockers, currentUser]);
-
-  const releaseLocker = useCallback((lockerNumber: number) => {
-    lockerActions.releaseLocker(lockerNumber);
-    setAuditLogs(prev => [
-      AuditService.createLog(currentUser, 'LOCKER_RELEASED', 'locker', `کمد شماره #${lockerNumber} آزاد شد.`),
-      ...prev
-    ]);
-  }, [currentUser]);
-
-  const assignLocker = useCallback((lockerNumber: number, studentId: string): boolean => {
-    return lockerActions.assignLocker(lockerNumber, studentId);
-  }, []);
-
-  const toggleLockerMaintenance = useCallback((lockerNumber: number) => {
-    lockerActions.toggleMaintenance(lockerNumber);
-  }, []);
-
-  const triggerMasterUnlock = useCallback((reason = 'بازگشایی اضطراری کلیه کمدها') => {
-    const updated = LockerEngine.masterEmergencyUnlockAll(smartLockers);
-    lockerActions.batchSet(updated);
-
-    const audit = AuditService.createLog(
-      currentUser,
-      'MASTER_LOCKER_UNLOCK_EMERGENCY',
-      'locker',
-      `هشدار: بازگشایی سراسری تمام ${smartLockers.length} کمد توسط ${currentUser.fullName} اجرا شد. دلیل: ${reason}`
-    );
-    setAuditLogs(prev => [audit, ...prev]);
-  }, [smartLockers, currentUser]);
-
-  const simulateIdentityScan = useCallback((
-    method: 'face_recognition' | 'rfid_card' | 'fingerprint' | 'qr_code',
-    query: string
-  ): ScanResult => {
-    let matchedStudent: Student | undefined;
-
-    if (method === 'rfid_card') {
-      matchedStudent = students.find(s => s.rfidCardUid === query || s.phone.endsWith(query) || s.memberNumber === query);
-    } else if (method === 'face_recognition') {
-      matchedStudent = students.find(s => s.fullName.includes(query) || s.id === query);
-    } else {
-      matchedStudent = students.find(s => s.nationalId === query || s.phone === query || s.memberNumber === query);
-    }
-
-    if (!matchedStudent) {
-      return {
-        success: false,
-        message: 'شناسه یا چهره در بانک اطلاعاتی شناسایی نشد.',
-        alertType: 'error',
-        method,
-      };
-    }
-
-    const decision = evaluateMemberAccess(matchedStudent.id);
-
-    let assignedLockerNum: number | undefined;
-    if (decision.result === 'ALLOW' || decision.result === 'ALLOW_WITH_WARNING') {
-      const checkInRes = checkInStudent(matchedStudent.id, undefined, 'rfid_wristband');
-      assignedLockerNum = checkInRes.lockerNumber;
-    }
-
-    return {
-      success: decision.result !== 'DENY',
-      student: matchedStudent,
-      lockerNumber: assignedLockerNum,
-      message: decision.messageFa,
-      alertType: decision.result === 'ALLOW' ? 'success' : decision.result === 'ALLOW_WITH_WARNING' ? 'warning' : 'error',
-      method,
-    };
-  }, [students, evaluateMemberAccess, checkInStudent]);
-
-  const toggleDeviceOnline = useCallback((deviceId: string) => {
-    hardwareActions.toggleDeviceOnline(deviceId);
-  }, []);
-
-  const testRelayPulse = useCallback(async (deviceId: string): Promise<{ success: boolean; latency: number }> => {
-    return hardwareActions.testRelayPulse(deviceId);
-  }, []);
-
-  const addHardwareDevice = useCallback((device: HardwareDevice) => {
-    hardwareActions.addDevice(device);
-  }, []);
-
-  const updateHardwareDevice = useCallback((id: string, updates: Partial<HardwareDevice>) => {
-    hardwareActions.updateDevice(id, updates);
-  }, []);
-
-  const removeHardwareDevice = useCallback((id: string) => {
-    hardwareActions.removeDevice(id);
-  }, []);
-
-  // Workout & Diet
-  const saveWorkoutPlan = useCallback((plan: WorkoutPlan) => {
-    setWorkoutPlans(prev => {
-      const idx = prev.findIndex(p => p.id === plan.id);
-      const copy = idx >= 0 ? [...prev] : [plan, ...prev];
-      if (idx >= 0) copy[idx] = plan;
-      PersistenceManager.setBatched('workout_plans', copy);
-      return copy;
-    });
-  }, []);
-
-  const deleteWorkoutPlan = useCallback((id: string) => {
-    setWorkoutPlans(prev => {
-      const next = prev.filter(p => p.id !== id);
-      PersistenceManager.setBatched('workout_plans', next);
-      return next;
-    });
-  }, []);
-
-  const saveDietPlan = useCallback((plan: DietPlan) => {
-    setDietPlans(prev => {
-      const idx = prev.findIndex(p => p.id === plan.id);
-      const copy = idx >= 0 ? [...prev] : [plan, ...prev];
-      if (idx >= 0) copy[idx] = plan;
-      PersistenceManager.setBatched('diet_plans', copy);
-      return copy;
-    });
-  }, []);
-
-  const deleteDietPlan = useCallback((id: string) => {
-    setDietPlans(prev => {
-      const next = prev.filter(p => p.id !== id);
-      PersistenceManager.setBatched('diet_plans', next);
-      return next;
-    });
-  }, []);
-
-  // Backup & Restore
+  // Database Backup / Import
   const exportDatabaseJson = useCallback(() => {
-    const backupStr = PersistenceManager.exportFullBackup();
-    const blob = new Blob([backupStr], { type: 'application/json' });
+    const json = PersistenceManager.exportFullBackup();
+    const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `gym-os-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `gym-os-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }, []);
 
-  const importDatabaseJson = useCallback((jsonString: string): boolean => {
-    const res = PersistenceManager.importFullBackup(jsonString);
-    if (res.success) {
-      window.location.reload();
+  const importDatabaseJson = useCallback((jsonString: string) => {
+    const result = PersistenceManager.importFullBackup(jsonString);
+    if (result.success) {
+      memberActions.batchSet(MemberRepository.getAll());
+      financeActions.batchSet(PaymentRepository.getAllPayments(), PaymentRepository.getAllExpenses());
+      attendanceActions.batchSet(AttendanceRepository.getAll());
+      lockerActions.batchSet(LockerRepository.getAll());
       return true;
     }
     return false;
   }, []);
 
-  const resetToSampleData = useCallback(() => {
-    localStorage.clear();
-    window.location.reload();
+
+  // Async Cloud Sync
+  const triggerCloudSync = useCallback(async () => {
+    setSyncState('SYNCING');
+    try {
+      await SyncEngine.syncNow();
+      setSyncState('ONLINE');
+    } catch {
+      setSyncState('OFFLINE');
+    }
   }, []);
 
-  const formatMoney = useCallback((amt: number) => formatCurrency(amt, lang), [lang]);
-  const formatNum = useCallback((num: number) => formatNumber(num, lang), [lang]);
+  // Direct delegation to domain stores
+  const openLocker = useCallback(async (lockerNumber: number, reason?: string) => {
+    return lockerActions.openLocker(lockerNumber, reason, currentUser.fullName);
+  }, [currentUser.fullName]);
 
-  const value = useMemo<AppContextType>(() => ({
+  const value: AppContextType = useMemo(() => ({
     lang,
     setLang,
     theme,
@@ -1041,19 +489,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     exitDemoMode,
     resetToEmptyProduction,
     organizationInfo,
-    updateOrganizationInfo,
+    updateOrganizationInfo: settingsActions.updateOrganizationInfo,
     customFields,
-    saveCustomField,
-    deleteCustomField,
+    saveCustomField: settingsActions.saveCustomField,
+    deleteCustomField: settingsActions.deleteCustomField,
     mappingProfiles,
-    saveMappingProfile,
-    deleteMappingProfile,
+    saveMappingProfile: migrationActions.saveMappingProfile,
+    deleteMappingProfile: migrationActions.deleteMappingProfile,
     migrationReports,
     migrationSnapshots,
-    executeMigration,
-    rollbackMigration,
+    executeMigration: migrationActions.executeMigration.bind(migrationActions),
+    rollbackMigration: migrationActions.rollbackMigration.bind(migrationActions),
     dashboardWidgets,
-    updateDashboardWidgets,
+    updateDashboardWidgets: settingsActions.updateDashboardWidgets,
     activeTab,
     setActiveTab,
     moduleFeatures,
@@ -1061,14 +509,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     toggleFeaturePinned,
     restoreDefaultFeatures,
     activeBranchId,
-    setActiveBranchId,
+    setActiveBranchId: settingsActions.setActiveBranchId,
     branches,
     currentUser,
-    setCurrentUserRole,
+    setCurrentUserRole: settingsActions.setCurrentUserRole,
     integrationMode,
-    setIntegrationMode,
+    setIntegrationMode: settingsActions.setIntegrationMode,
     accessPolicyConfig,
-    setAccessPolicyConfig,
+    setAccessPolicyConfig: settingsActions.setAccessPolicyConfig,
     coaches,
     students,
     payments,
@@ -1077,7 +525,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     workoutPlans,
     dietPlans,
     smartLockers,
-    setLockerCount,
+    setLockerCount: lockerActions.setLockerCount,
     hardwareDevices,
     hardwareEvents,
     pilotComparisonLogs,
@@ -1087,46 +535,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     syncState,
     syncQueue,
     triggerCloudSync,
-    addCoach,
-    updateCoach,
-    deleteCoach,
-    addStudent,
-    updateStudent,
-    deleteStudent,
-    recordStudentPayment,
-    renewStudentMembership,
-    addExpense,
-    updateExpense,
-    deleteExpense,
-    voidExpense,
-    addPayment,
-    deletePayment,
-    voidPayment,
-    addPackage,
-    updatePackage,
-    deletePackage,
-    settleCoachPayment,
-    getCoachStats,
-    evaluateMemberAccess,
-    checkInStudent,
-    addLocker,
-    updateLocker,
-    deleteLocker,
+    addCoach: (c) => settingsActions.addCoach(c, currentUser.fullName),
+    updateCoach: settingsActions.updateCoach,
+    deleteCoach: (id) => settingsActions.deleteCoach(id, currentUser.fullName),
+    addStudent: memberActions.addStudent,
+    updateStudent: memberActions.updateStudent,
+    deleteStudent: memberActions.deleteStudent,
+    recordStudentPayment: memberActions.recordStudentPayment,
+    renewStudentMembership: memberActions.renewStudentMembership,
+    addExpense: (e) => financeActions.addExpense({
+      ...e,
+      tenantId: organizationInfo.tenantId,
+      branchId: activeBranchId,
+      receiptNumber: `EXP-${Date.now().toString().slice(-6)}`,
+      status: 'completed',
+    }),
+    updateExpense: financeActions.updateExpense,
+    deleteExpense: financeActions.deleteExpense,
+    voidExpense: (id, reason) => financeActions.updateExpense(id, { status: 'voided', voidReason: reason }),
+    addPayment: (p) => financeActions.addPayment({
+      ...p,
+      tenantId: organizationInfo.tenantId,
+      branchId: activeBranchId,
+      receiptNumber: `REC-${Date.now().toString().slice(-6)}`,
+      recordedBy: currentUser.fullName,
+      status: 'completed',
+    }),
+    deletePayment: financeActions.deletePayment,
+    voidPayment: (id, reason) => financeActions.deletePayment(id),
+    addPackage: settingsActions.addPackage,
+    updatePackage: settingsActions.updatePackage,
+    deletePackage: settingsActions.deletePackage,
+    settleCoachPayment: (coachId, amount, paymentMethod, notes) => {
+      const coach = coaches.find(c => c.id === coachId);
+      if (!coach) return;
+      financeActions.settleCoachPayment(coachId, coach.fullName, amount, paymentMethod, notes);
+    },
+    getCoachStats: settingsActions.getCoachStats,
+    evaluateMemberAccess: attendanceActions.evaluateMemberAccess,
+    checkInStudent: attendanceActions.checkInStudent,
+    addLocker: lockerActions.addLocker,
+    updateLocker: lockerActions.updateLocker,
+    deleteLocker: lockerActions.deleteLocker,
     openLocker,
-    releaseLocker,
-    assignLocker,
-    toggleLockerMaintenance,
-    triggerMasterUnlock,
-    simulateIdentityScan,
-    toggleDeviceOnline,
-    testRelayPulse,
-    addHardwareDevice,
-    updateHardwareDevice,
-    removeHardwareDevice,
-    saveWorkoutPlan,
-    deleteWorkoutPlan,
-    saveDietPlan,
-    deleteDietPlan,
+    releaseLocker: (num) => lockerActions.releaseLocker(num, currentUser.fullName),
+    assignLocker: lockerActions.assignLocker,
+    toggleLockerMaintenance: lockerActions.toggleMaintenance,
+    triggerMasterUnlock: (reason) => lockerActions.triggerMasterUnlock(reason, currentUser.fullName),
+    simulateIdentityScan: attendanceActions.simulateIdentityScan.bind(attendanceActions),
+    toggleDeviceOnline: hardwareActions.toggleDeviceOnline,
+    testRelayPulse: hardwareActions.testRelayPulse,
+    addHardwareDevice: hardwareActions.addDevice,
+    updateHardwareDevice: hardwareActions.updateDevice,
+    removeHardwareDevice: hardwareActions.removeDevice,
+    saveWorkoutPlan: planActions.saveWorkoutPlan,
+    deleteWorkoutPlan: planActions.deleteWorkoutPlan,
+    saveDietPlan: planActions.saveDietPlan,
+    deleteDietPlan: planActions.deleteDietPlan,
     exportDatabaseJson,
     importDatabaseJson,
     resetToSampleData,
@@ -1137,9 +602,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     formatNum,
   }), [
     lang,
+    setLang,
     theme,
-    toggleTheme,
     setTheme,
+    toggleTheme,
     toggleLanguage,
     t,
     activeThemeKey,
@@ -1151,33 +617,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     exitDemoMode,
     resetToEmptyProduction,
     organizationInfo,
-    updateOrganizationInfo,
     customFields,
-    saveCustomField,
-    deleteCustomField,
     mappingProfiles,
-    saveMappingProfile,
-    deleteMappingProfile,
     migrationReports,
     migrationSnapshots,
-    executeMigration,
-    rollbackMigration,
     dashboardWidgets,
-    updateDashboardWidgets,
     activeTab,
+    setActiveTab,
     moduleFeatures,
     toggleFeatureEnabled,
     toggleFeaturePinned,
     restoreDefaultFeatures,
     activeBranchId,
-    setActiveBranchId,
     branches,
     currentUser,
-    setCurrentUserRole,
     integrationMode,
-    setIntegrationMode,
     accessPolicyConfig,
-    setAccessPolicyConfig,
     coaches,
     students,
     payments,
@@ -1186,7 +641,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     workoutPlans,
     dietPlans,
     smartLockers,
-    setLockerCount,
     hardwareDevices,
     hardwareEvents,
     pilotComparisonLogs,
@@ -1196,46 +650,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     syncState,
     syncQueue,
     triggerCloudSync,
-    addCoach,
-    updateCoach,
-    deleteCoach,
-    addStudent,
-    updateStudent,
-    deleteStudent,
-    recordStudentPayment,
-    renewStudentMembership,
-    addExpense,
-    updateExpense,
-    deleteExpense,
-    voidExpense,
-    addPayment,
-    deletePayment,
-    voidPayment,
-    addPackage,
-    updatePackage,
-    deletePackage,
-    settleCoachPayment,
-    getCoachStats,
-    evaluateMemberAccess,
-    checkInStudent,
-    addLocker,
-    updateLocker,
-    deleteLocker,
     openLocker,
-    releaseLocker,
-    assignLocker,
-    toggleLockerMaintenance,
-    triggerMasterUnlock,
-    simulateIdentityScan,
-    toggleDeviceOnline,
-    testRelayPulse,
-    addHardwareDevice,
-    updateHardwareDevice,
-    removeHardwareDevice,
-    saveWorkoutPlan,
-    deleteWorkoutPlan,
-    saveDietPlan,
-    deleteDietPlan,
     exportDatabaseJson,
     importDatabaseJson,
     resetToSampleData,

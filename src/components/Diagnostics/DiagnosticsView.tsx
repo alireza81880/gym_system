@@ -17,6 +17,7 @@ import {
   Server
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useSettings, useHardware, useMembers, useLockers } from '../../stores';
 import { LocalDbRepository } from '../../services/localDb';
 
 export const DiagnosticsView: React.FC = () => {
@@ -26,14 +27,26 @@ export const DiagnosticsView: React.FC = () => {
     syncState, 
     syncQueue, 
     triggerCloudSync, 
-    integrationMode, 
-    setIntegrationMode, 
-    hardwareDevices, 
-    students, 
-    coaches, 
-    smartLockers,
     lang 
   } = useApp();
+
+  const {
+    integrationMode, 
+    setIntegrationMode, 
+    coaches, 
+  } = useSettings();
+
+  const {
+    hardwareDevices, 
+  } = useHardware();
+
+  const {
+    students, 
+  } = useMembers();
+
+  const {
+    lockers: smartLockers,
+  } = useLockers();
 
   const [activeSubTab, setActiveSubTab] = useState<'pilot' | 'system' | 'audit'>('pilot');
   const [copied, setCopied] = useState(false);

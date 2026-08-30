@@ -1,6 +1,7 @@
 import { PaymentRecord, ExpenseRecord } from '../../types';
 import { initialPayments, initialExpenses } from '../../data/initialData';
 import { PersistenceManager } from './persistenceManager';
+import { ChargeRepository } from './chargeRepository';
 import { PaginatedResult } from './memberRepository';
 import { generateFinancialId, generateReceiptNumber } from '../../utils/idGenerator';
 import { DateService } from '../dateService';
@@ -113,7 +114,11 @@ export class PaymentRepository {
 
   static getOutstanding(): number {
     this.initialize();
-    return this.cachedSummary.netProfit;
+    ChargeRepository.initialize();
+    const allCharges = ChargeRepository.getAll();
+    return allCharges
+      .filter(c => c.status !== 'cancelled' && c.status !== 'free' && c.status !== 'settled')
+      .reduce((sum, c) => sum + (c.outstandingAmount !== undefined ? c.outstandingAmount : Math.max(0, c.finalPrice - (c.paidAmount || 0))), 0);
   }
 
   static reverse(paymentId: string, reason = 'ابطال فاکتور'): PaymentRecord | null {

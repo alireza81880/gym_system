@@ -12,6 +12,7 @@ import {
   Sparkles 
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useAttendance, useSettings } from '../../stores';
 import { MemberRepository } from '../../services/repositories/memberRepository';
 import { LockerRepository } from '../../services/repositories/lockerRepository';
 import { GlassPageHeader } from '../common/GlassPageHeader';
@@ -23,12 +24,18 @@ const PAGE_SIZE = 15;
 
 export const AttendanceManager: React.FC = () => {
   const { 
-    coaches, 
-    attendance, 
-    checkInStudent, 
     formatNum, 
     t, 
   } = useApp();
+
+  const {
+    attendance, 
+    checkInStudent, 
+  } = useAttendance();
+
+  const {
+    coaches,
+  } = useSettings();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [customLocker, setCustomLocker] = useState<number | ''>('');

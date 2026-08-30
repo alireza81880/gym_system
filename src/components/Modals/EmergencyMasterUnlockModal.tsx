@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AlertTriangle, KeyRound, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useLockers, useSettings } from '../../stores';
 import { GlassModal } from '../common/GlassModal';
 import { GlassButton } from '../common/GlassButton';
 
@@ -10,12 +11,15 @@ interface EmergencyMasterUnlockModalProps {
 }
 
 export const EmergencyMasterUnlockModal: React.FC<EmergencyMasterUnlockModalProps> = ({ isOpen, onClose }) => {
-  const { triggerMasterUnlock, smartLockers, currentUser, lang } = useApp();
+  const { lang } = useApp();
+  const { triggerMasterUnlock, lockers: smartLockers } = useLockers();
+  const { currentUser } = useSettings();
   const [reason, setReason] = useState('تخلیه و نظافت پایان روز');
   const [customReason, setCustomReason] = useState('');
   const [confirmStep, setConfirmStep] = useState<1 | 2>(1);
   const [isExecuting, setIsExecuting] = useState(false);
   const [successDone, setSuccessDone] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -23,17 +27,23 @@ export const EmergencyMasterUnlockModal: React.FC<EmergencyMasterUnlockModalProp
 
   const handleExecute = () => {
     setIsExecuting(true);
+    setErrorMessage(null);
     const finalReason = reason === 'other' ? (customReason || 'عملیات اضطراری متفرقه') : reason;
     
     setTimeout(() => {
-      triggerMasterUnlock(finalReason);
-      setIsExecuting(false);
-      setSuccessDone(true);
-      setTimeout(() => {
-        setSuccessDone(false);
-        setConfirmStep(1);
-        onClose();
-      }, 1500);
+      try {
+        triggerMasterUnlock(finalReason);
+        setIsExecuting(false);
+        setSuccessDone(true);
+        setTimeout(() => {
+          setSuccessDone(false);
+          setConfirmStep(1);
+          onClose();
+        }, 1500);
+      } catch (err) {
+        setIsExecuting(false);
+        setErrorMessage((err as Error).message || 'خطای امنیتی: عدم دسترسی به این عملیات.');
+      }
     }, 600);
   };
 
@@ -70,6 +80,17 @@ export const EmergencyMasterUnlockModal: React.FC<EmergencyMasterUnlockModalProp
               </div>
             </div>
           </div>
+
+          {/* Error Message */}
+          {errorMessage && (
+            <div className="p-3.5 rounded-2xl bg-rose-500/20 border border-rose-500/50 text-xs text-rose-200 flex items-start gap-2.5">
+              <ShieldAlert className="h-5 w-5 shrink-0 text-rose-400 mt-0.5" />
+              <div>
+                <div className="font-bold text-rose-300">عدم دسترسی / خطای امنیتی:</div>
+                <div className="mt-0.5">{errorMessage}</div>
+              </div>
+            </div>
+          )}
 
           {/* Step 1: Form */}
           {confirmStep === 1 ? (

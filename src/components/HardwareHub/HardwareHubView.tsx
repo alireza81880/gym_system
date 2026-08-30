@@ -27,26 +27,36 @@ import {
   RefreshCw,
   Eye
 } from 'lucide-react';
-import { useApp } from '../../context/AppContext';
 import { HardwareDevice, HardwareVendor, IntegrationMode, HardwareEvent } from '../../types';
 import { DeviceDiscoveryModal } from './DeviceDiscoveryModal';
 import { DeviceDetailModal } from './DeviceDetailModal';
 import { PilotComparisonView } from './PilotComparisonView';
 import { PilotComparisonService } from '../../services/hardware/pilotComparisonService';
-import { hardwareActions } from '../../stores/hardwareStore';
+import { useHardware, useSettings, useMembers, useAttendance, hardwareActions } from '../../stores';
 
 export const HardwareHubView: React.FC = () => {
   const { 
-    hardwareDevices, 
-    hardwareEvents, 
+    devices: hardwareDevices, 
+    recentEvents: hardwareEvents, 
     toggleDeviceOnline, 
     testRelayPulse, 
+    addHardwareDevice,
+    updateDevice,
+    addEvent,
+  } = useHardware();
+
+  const {
     integrationMode, 
     setIntegrationMode, 
+  } = useSettings();
+
+  const {
     students,
+  } = useMembers();
+
+  const {
     simulateIdentityScan,
-    addHardwareDevice,
-  } = useApp();
+  } = useAttendance();
 
   const [selectedDevice, setSelectedDevice] = useState<HardwareDevice | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);

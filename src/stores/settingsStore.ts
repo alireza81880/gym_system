@@ -9,12 +9,23 @@ import {
   DashboardWidgetConfig, 
   ModuleFeature, 
   IntegrationMode, 
-  AccessPolicyConfig 
+  AccessPolicyConfig,
+  UserRole,
+  PaymentMethod,
 } from '../types';
 import { initialCoaches, initialPackages } from '../data/initialData';
 import { initialModuleFeatures } from '../data/featureModules';
 import { defaultAccessPolicyConfig } from '../services/accessPolicyService';
 import { PersistenceManager } from '../services/repositories/persistenceManager';
+import { AuditService } from '../services/auditService';
+import { SyncEngine } from '../services/syncService';
+import { MemberRepository } from '../services/repositories/memberRepository';
+import { PaymentRepository } from '../services/repositories/paymentRepository';
+import { DateService } from '../services/dateService';
+import { financeActions } from './financeStore';
+import { AuthService } from '../services/auth/authService';
+import { RBACService } from '../services/rbacService';
+
 
 export const defaultOrganizationInfo: OrganizationInfo = {
   id: 'org-main',
@@ -115,14 +126,7 @@ export const settingsStore = createStore<SettingsState>({
   isInstalled: PersistenceManager.get<boolean>('gym_installed', true),
   isDemoMode: PersistenceManager.get<boolean>('gym_demo_mode', false),
   organizationInfo: PersistenceManager.get<OrganizationInfo>('organization_info', defaultOrganizationInfo),
-  currentUser: PersistenceManager.get<StaffUser>('current_user', {
-    id: 'usr-admin-1',
-    username: 'admin',
-    fullName: 'مهندس علیرضا حسینی',
-    role: 'gym_owner',
-    phone: '09121112233',
-    isActive: true,
-  }),
+  currentUser: AuthService.getCurrentUser(),
   branches: PersistenceManager.get<Branch[]>('branches', initialBranches),
   activeBranchId: 'branch-tehran-central',
   customFields: PersistenceManager.get<CustomField[]>('custom_fields', defaultCustomFields),
@@ -134,6 +138,22 @@ export const settingsStore = createStore<SettingsState>({
   integrationMode: PersistenceManager.get<IntegrationMode>('integration_mode', 'shadow'),
 });
 
+// Auto-sync settingsStore currentUser whenever AuthService session updates
+AuthService.subscribe((session) => {
+  if (session && session.user) {
+    settingsStore.setState({ currentUser: session.user });
+  }
+});
+
+export interface CoachFinancialStats {
+  totalStudents: number;
+  totalGeneratedRevenue: number;
+  totalCoachShare: number;
+  totalClubShare: number;
+  totalPaidOut: number;
+  remainingBalance: number;
+}
+
 export const settingsActions = {
   updateOrganizationInfo(partial: Partial<OrganizationInfo>): void {
     const updated = { ...settingsStore.getState().organizationInfo, ...partial };
@@ -141,9 +161,58 @@ export const settingsActions = {
     PersistenceManager.setBatched('organization_info', updated);
   },
 
+  saveCustomField(field: CustomField): void {
+    const existing = settingsStore.getState().customFields;
+    const idx = existing.findIndex(f => f.id === field.id);
+    let next: CustomField[];
+    if (idx >= 0) {
+      next = [...existing];
+      next[idx] = field;
+    } else {
+      next = [...existing, field];
+    }
+    settingsStore.setState({ customFields: next });
+    PersistenceManager.setBatched('custom_fields', next);
+  },
+
+  deleteCustomField(id: string): void {
+    const next = settingsStore.getState().customFields.filter(f => f.id !== id);
+    settingsStore.setState({ customFields: next });
+    PersistenceManager.setBatched('custom_fields', next);
+  },
+
   updateCustomFields(fields: CustomField[]): void {
     settingsStore.setState({ customFields: fields });
     PersistenceManager.setBatched('custom_fields', fields);
+  },
+
+  addPackage(pkgData: Omit<MembershipPackage, 'id'>): MembershipPackage {
+    const state = settingsStore.getState();
+    const newPkg: MembershipPackage = {
+      ...pkgData,
+      id: `pkg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      tenantId: state.organizationInfo.tenantId,
+      branchId: state.activeBranchId,
+    };
+    const next = [...state.packages, newPkg];
+    settingsStore.setState({ packages: next });
+    PersistenceManager.setBatched('packages', next);
+    SyncEngine.enqueue('package', newPkg.id, 'INSERT', newPkg);
+    return newPkg;
+  },
+
+  updatePackage(id: string, pkgData: Partial<MembershipPackage>): void {
+    const next = settingsStore.getState().packages.map(p => p.id === id ? { ...p, ...pkgData } : p);
+    settingsStore.setState({ packages: next });
+    PersistenceManager.setBatched('packages', next);
+    SyncEngine.enqueue('package', id, 'UPDATE', pkgData);
+  },
+
+  deletePackage(id: string): void {
+    const next = settingsStore.getState().packages.filter(p => p.id !== id);
+    settingsStore.setState({ packages: next });
+    PersistenceManager.setBatched('packages', next);
+    SyncEngine.enqueue('package', id, 'DELETE', { id });
   },
 
   updatePackages(packages: MembershipPackage[]): void {
@@ -151,9 +220,106 @@ export const settingsActions = {
     PersistenceManager.setBatched('packages', packages);
   },
 
+  addCoach(coachData: Omit<Coach, 'id'>, recordedBy = 'مدیر سیستم'): Coach {
+    const state = settingsStore.getState();
+    const newCoach: Coach = {
+      ...coachData,
+      id: `coach-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      tenantId: state.organizationInfo.tenantId,
+      branchId: state.activeBranchId,
+    };
+    const next = [newCoach, ...state.coaches];
+    settingsStore.setState({ coaches: next });
+    PersistenceManager.setBatched('coaches', next);
+    SyncEngine.enqueue('coach', newCoach.id, 'INSERT', newCoach);
+    AuditService.logEvent({
+      action: 'COACH_ADDED',
+      category: 'setting',
+      details: `مربی جدید «${newCoach.fullName}» اضافه شد.`,
+      userName: recordedBy,
+    });
+    return newCoach;
+  },
+
+  updateCoach(id: string, coachData: Partial<Coach>): void {
+    const next = settingsStore.getState().coaches.map(c => c.id === id ? { ...c, ...coachData } : c);
+    settingsStore.setState({ coaches: next });
+    PersistenceManager.setBatched('coaches', next);
+    SyncEngine.enqueue('coach', id, 'UPDATE', coachData);
+  },
+
+  deleteCoach(id: string, recordedBy = 'مدیر سیستم'): void {
+    const coach = settingsStore.getState().coaches.find(c => c.id === id);
+    const next = settingsStore.getState().coaches.filter(c => c.id !== id);
+    settingsStore.setState({ coaches: next });
+    PersistenceManager.setBatched('coaches', next);
+    SyncEngine.enqueue('coach', id, 'DELETE', { id });
+    if (coach) {
+      AuditService.logEvent({
+        action: 'COACH_DELETED',
+        category: 'setting',
+        details: `مربی «${coach.fullName}» حذف شد.`,
+        userName: recordedBy,
+      });
+    }
+  },
+
   updateCoaches(coaches: Coach[]): void {
     settingsStore.setState({ coaches });
     PersistenceManager.setBatched('coaches', coaches);
+  },
+
+  getCoachStats(coachId: string): CoachFinancialStats {
+    const coach = settingsStore.getState().coaches.find(c => c.id === coachId);
+    if (!coach) {
+      return { totalStudents: 0, totalGeneratedRevenue: 0, totalCoachShare: 0, totalClubShare: 0, totalPaidOut: 0, remainingBalance: 0 };
+    }
+
+    const students = MemberRepository.getAll();
+    const coachStudents = students.filter(s => s.coachId === coachId);
+    const totalGeneratedRevenue = coachStudents.reduce((sum, s) => sum + (s.paidAmount || 0), 0);
+    const rate = (coach.commissionRate || 0) / 100;
+    const totalCoachShare = Math.round(totalGeneratedRevenue * rate);
+    const totalClubShare = totalGeneratedRevenue - totalCoachShare;
+
+    const expenses = PaymentRepository.getAllExpenses();
+    const paidExpenses = expenses.filter(e => e.paidTo === coach.fullName && e.category === 'salary' && e.status !== 'voided');
+    const totalPaidOut = paidExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const remainingBalance = Math.max(0, totalCoachShare - totalPaidOut);
+
+    return {
+      totalStudents: coachStudents.length,
+      totalGeneratedRevenue,
+      totalCoachShare,
+      totalClubShare,
+      totalPaidOut,
+      remainingBalance,
+    };
+  },
+
+  setActiveBranchId(branchId: string): void {
+    settingsStore.setState({ activeBranchId: branchId });
+  },
+
+  setCurrentUserRole(role: import('../types').UserRole): { success: boolean; error?: string } {
+    const res = AuthService.switchUserRole(role);
+    if (res.success && res.user) {
+      settingsStore.setState({ currentUser: res.user });
+    }
+    return res;
+  },
+
+  login(identifier: string, roleOverride?: import('../types').UserRole) {
+    const res = AuthService.login(identifier, roleOverride);
+    if (res.success && res.session) {
+      settingsStore.setState({ currentUser: res.session.user });
+    }
+    return res;
+  },
+
+  logout(reason?: string): void {
+    AuthService.logout(reason);
+    settingsStore.setState({ currentUser: AuthService.getCurrentUser() });
   },
 
   updateDashboardWidgets(widgets: DashboardWidgetConfig[]): void {
@@ -185,9 +351,56 @@ export const settingsActions = {
   setIsDemoMode(demo: boolean): void {
     settingsStore.setState({ isDemoMode: demo });
     PersistenceManager.setBatched('gym_demo_mode', demo);
+  },
+
+  enterDemoMode(): void {
+    this.setIsDemoMode(true);
+  },
+
+  exitDemoMode(): void {
+    this.setIsDemoMode(false);
+  },
+
+  settleCoachPayment(
+    coachId: string,
+    amount: number,
+    paymentMethod: PaymentMethod = 'card_transfer',
+    notes = ''
+  ): void {
+    const coach = settingsStore.getState().coaches.find(c => c.id === coachId);
+    if (!coach) return;
+    const { organizationInfo, activeBranchId, currentUser } = settingsStore.getState();
+    financeActions.addExpense({
+      title: `تسویه حساب پورسانت مربی (${coach.fullName})`,
+      category: 'salary',
+      amount,
+      paidTo: coach.fullName,
+      paymentMethod,
+      date: DateService.getTodayJalali(),
+      description: notes || `تسویه پورسانت مربیگری ${coach.fullName}`,
+      tenantId: organizationInfo.tenantId,
+      branchId: activeBranchId,
+      receiptNumber: `EXP-${Date.now().toString().slice(-6)}`,
+      status: 'completed',
+    });
+    AuditService.logEvent({
+      action: 'COACH_PAYOUT_SETTLED',
+      category: 'payment',
+      details: `مبلغ ${amount.toLocaleString('fa-IR')} تومان به عنوان تسویه پورسانت به ${coach.fullName} پرداخت شد.`,
+      userName: currentUser.fullName,
+    });
   }
 };
 
 export function useSettingsStore<S = SettingsState>(selector?: (state: SettingsState) => S): S {
   return useStore(settingsStore, selector);
 }
+
+export function useSettings() {
+  const state = useStore(settingsStore);
+  return {
+    ...state,
+    ...settingsActions,
+  };
+}
+

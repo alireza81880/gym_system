@@ -20,6 +20,7 @@ import {
   X
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useMembers, useSettings } from '../../stores';
 import { PackageType, PaymentMethod, MembershipPackage, Student } from '../../types';
 import { DateService } from '../../services/dateService';
 import { ValidationService } from '../../services/validationService';
@@ -42,16 +43,22 @@ export const MemberRegistrationDrawer: React.FC<MemberRegistrationDrawerProps> =
   onOpenMemberDetail,
 }) => {
   const { 
-    students, 
-    packages, 
-    coaches, 
-    customFields, 
-    addStudent, 
-    addPackage,
     formatMoney, 
     formatNum, 
     t 
   } = useApp();
+
+  const {
+    students,
+    addStudent,
+  } = useMembers();
+
+  const {
+    packages, 
+    coaches, 
+    customFields, 
+    addPackage,
+  } = useSettings();
 
   // Next sequential member number preview
   const nextMemberNumber = useMemo(() => {
@@ -356,7 +363,11 @@ export const MemberRegistrationDrawer: React.FC<MemberRegistrationDrawerProps> =
           customFields: customData,
         },
         financial.receivedAmount,
-        paymentMethod
+        paymentMethod,
+        {
+          basePrice: financial.basePrice,
+          discountAmount: financial.discountAmount,
+        }
       );
 
       // Show Success State

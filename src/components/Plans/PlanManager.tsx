@@ -13,6 +13,7 @@ import {
   Layers
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { usePlans, useMembers, useSettings } from '../../stores';
 import { WorkoutPlan, DietPlan } from '../../types';
 import { GlassPageHeader } from '../common/GlassPageHeader';
 import { GlassCard } from '../common/GlassCard';
@@ -22,17 +23,26 @@ import { GlassModal } from '../common/GlassModal';
 
 export const PlanManager: React.FC = () => {
   const { 
+    t, 
+    lang 
+  } = useApp();
+
+  const {
     workoutPlans, 
     dietPlans, 
     saveWorkoutPlan, 
     deleteWorkoutPlan, 
     saveDietPlan, 
     deleteDietPlan, 
-    students, 
-    coaches, 
-    t, 
-    lang 
-  } = useApp();
+  } = usePlans();
+
+  const {
+    students,
+  } = useMembers();
+
+  const {
+    coaches,
+  } = useSettings();
 
   const [activeTab, setActiveTab] = useState<'workout' | 'diet'>('workout');
   const [selectedPlanForPrint, setSelectedPlanForPrint] = useState<WorkoutPlan | DietPlan | null>(null);

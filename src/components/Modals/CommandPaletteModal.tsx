@@ -12,6 +12,7 @@ import {
   Command
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useMembers, useSettings, useLockers, useHardware } from '../../stores';
 import { NavTab } from '../../types';
 import { GlassBadge } from '../common/GlassBadge';
 
@@ -22,14 +23,15 @@ interface CommandPaletteModalProps {
 
 export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({ isOpen, onClose }) => {
   const { 
-    students, 
-    coaches, 
-    smartLockers, 
-    hardwareDevices, 
     setActiveTab, 
     lang, 
     formatMoney 
   } = useApp();
+
+  const { students } = useMembers();
+  const { coaches } = useSettings();
+  const { lockers: smartLockers } = useLockers();
+  const { hardwareDevices } = useHardware();
 
   const [query, setQuery] = useState('');
 

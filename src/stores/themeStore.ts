@@ -24,6 +24,10 @@ export const themeActions = {
     themeStore.setState({ activeThemeKey: key, theme: mode });
   },
 
+  setActiveThemeKey(key: ThemeKey): void {
+    this.setThemeKey(key);
+  },
+
   setTheme(theme: Theme): void {
     const fallbackKey: ThemeKey = theme === 'dark' ? 'obsidian' : 'pearl';
     this.setThemeKey(fallbackKey);
@@ -38,4 +42,15 @@ export const themeActions = {
 
 export function useThemeStore<S = ThemeState>(selector?: (state: ThemeState) => S): S {
   return useStore(themeStore, selector);
+}
+
+export function useTheme() {
+  const theme = useStore(themeStore, s => s.theme);
+  const activeThemeKey = useStore(themeStore, s => s.activeThemeKey);
+
+  return {
+    theme,
+    activeThemeKey,
+    ...themeActions,
+  };
 }

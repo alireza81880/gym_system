@@ -15,6 +15,7 @@ import {
   Briefcase
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useSettings } from '../../stores';
 import { Coach } from '../../types';
 import { CoachDetailModal } from './CoachDetailModal';
 import { GlassPageHeader } from '../common/GlassPageHeader';
@@ -25,16 +26,19 @@ import { GlassModal } from '../common/GlassModal';
 
 export const CoachList: React.FC = () => {
   const { 
-    coaches, 
-    addCoach, 
-    updateCoach, 
-    deleteCoach, 
-    getCoachStats, 
     formatMoney, 
     formatNum, 
     t, 
     lang 
   } = useApp();
+
+  const {
+    coaches, 
+    addCoach, 
+    updateCoach, 
+    deleteCoach, 
+    getCoachStats, 
+  } = useSettings();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSpecialty, setSelectedSpecialty] = useState('all');

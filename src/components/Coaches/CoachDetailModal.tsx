@@ -16,6 +16,7 @@ import {
   FileText
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useSettings, useMembers, useFinance } from '../../stores';
 import { Coach, PaymentMethod } from '../../types';
 import { GlassModal } from '../common/GlassModal';
 import { GlassCard } from '../common/GlassCard';
@@ -30,16 +31,20 @@ interface CoachDetailModalProps {
 
 export const CoachDetailModal: React.FC<CoachDetailModalProps> = ({ coachId, onClose }) => {
   const { 
-    coaches, 
-    students, 
-    payments, 
-    getCoachStats, 
-    settleCoachPayment, 
     formatMoney, 
     formatNum, 
     t, 
     lang 
   } = useApp();
+
+  const { 
+    coaches, 
+    getCoachStats, 
+    settleCoachPayment, 
+  } = useSettings();
+
+  const { students } = useMembers();
+  const { payments } = useFinance();
 
   const coach = coaches.find(c => c.id === coachId);
   const [showSettleForm, setShowSettleForm] = useState(false);

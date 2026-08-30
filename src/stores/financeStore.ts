@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 import { createStore, useStore } from './createStore';
-import { PaymentRecord, ExpenseRecord, PaymentMethod, FinancialKPIs, FinancialCharge } from '../types';
+import { PaymentRecord, ExpenseRecord, PaymentMethod, FinancialKPIs, FinancialCharge, StaffUser } from '../types';
 import { PaymentRepository, FinanceSummaryMetrics } from '../services/repositories/paymentRepository';
 import { PaginatedResult } from '../services/repositories/memberRepository';
 import { FinanceService } from '../services/finance/financeService';
 import { generateFinancialId, generateReceiptNumber } from '../utils/idGenerator';
 import { DateService } from '../services/dateService';
+import { settingsStore } from './settingsStore';
 
 export interface FinanceState {
   version: number;
@@ -47,21 +48,25 @@ export const financeActions = {
   },
 
   refundPayment(paymentId: string, amount: number, reason: string, recordedBy?: string): { refundTransaction: PaymentRecord; originalPayment: PaymentRecord } {
+    const actor = settingsStore.getState().currentUser;
     const res = FinanceService.refundPayment({
       paymentId,
       refundAmount: amount,
       reason,
-      recordedBy,
+      recordedBy: recordedBy || actor.fullName,
+      actor,
     });
     notifyFinanceChange();
     return res;
   },
 
   voidPayment(paymentId: string, reason: string, voidedBy?: string): PaymentRecord {
+    const actor = settingsStore.getState().currentUser;
     const res = FinanceService.voidPayment({
       paymentId,
       reason,
-      voidedBy,
+      voidedBy: voidedBy || actor.fullName,
+      actor,
     });
     notifyFinanceChange();
     return res;
@@ -141,6 +146,32 @@ export const financeActions = {
 
 export function useFinanceStore<S = FinanceState>(selector?: (state: FinanceState) => S): S {
   return useStore(financeStore, selector);
+}
+
+export function useFinance() {
+  const version = useStore(financeStore, s => s.version);
+  const summary = useStore(financeStore, s => s.summary);
+  const kpis = useStore(financeStore, s => s.kpis);
+  const payments = useMemo(() => PaymentRepository.getAllPayments(), [version]);
+  const expenses = useMemo(() => PaymentRepository.getAllExpenses(), [version]);
+
+  return {
+    version,
+    summary,
+    kpis,
+    totalRevenue: summary.totalRevenue,
+    totalExpenses: summary.totalExpensesAll,
+    totalExpensesAll: summary.totalExpensesAll,
+    netIncome: summary.netProfit,
+    netProfit: summary.netProfit,
+    totalCoachPayouts: summary.totalCoachPayouts,
+    totalOperationalExpenses: summary.totalOperationalExpenses,
+    todayRevenue: kpis.collectedToday,
+    todaySales: kpis.salesToday,
+    payments,
+    expenses,
+    ...financeActions,
+  };
 }
 
 export function useFinanceMetrics(options?: { branchId?: string; targetDate?: string }): FinancialKPIs {

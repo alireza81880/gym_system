@@ -156,17 +156,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
     });
   }, [financeVersion, todayJalali, activeBranchId]);
 
-  // Monthly Profit Flow Data
+  // Authoritative Monthly Profit Flow Data derived from real persisted records
   const monthlyProfitData = useMemo(() => {
-    const summary = PaymentRepository.getSummary();
-    return [
-      { month: lang === 'fa' ? 'فروردین' : 'Apr', revenue: 28000000, expenses: 19000000, profit: 9000000 },
-      { month: lang === 'fa' ? 'اردیبهشت' : 'May', revenue: 34000000, expenses: 22000000, profit: 12000000 },
-      { month: lang === 'fa' ? 'خرداد' : 'Jun', revenue: 39000000, expenses: 25000000, profit: 14000000 },
-      { month: lang === 'fa' ? 'تیر' : 'Jul', revenue: 42000000, expenses: 27000000, profit: 15000000 },
-      { month: lang === 'fa' ? 'مرداد' : 'Aug', revenue: summary.totalRevenue, expenses: summary.totalExpensesAll, profit: summary.netProfit },
-    ];
-  }, [lang, financeVersion]);
+    return FinanceService.getMonthlyProfitFlow({
+      branchId: activeBranchId === 'all' ? undefined : activeBranchId,
+      lang,
+    });
+  }, [lang, financeVersion, activeBranchId]);
 
   // Coach Revenue Distribution
   const coachChartData = useMemo(() => {

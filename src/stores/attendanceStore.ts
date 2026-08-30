@@ -1,12 +1,24 @@
 import { useMemo } from 'react';
 import { createStore, useStore } from './createStore';
-import { AttendanceRecord } from '../types';
+import { AttendanceRecord, Student, AccessDecision } from '../types';
 import { AttendanceRepository, LiveVisitor } from '../services/repositories/attendanceRepository';
 import { MemberRepository } from '../services/repositories/memberRepository';
 import { LockerRepository } from '../services/repositories/lockerRepository';
 import { HardwareRepository } from '../services/repositories/hardwareRepository';
 import { createNormalizedHardwareEvent } from '../services/hardwareAdapters';
 import { PaginatedResult } from '../services/repositories/memberRepository';
+import { AccessPolicyEngine } from '../services/accessPolicyService';
+import { settingsStore } from './settingsStore';
+
+export interface ScanResult {
+  success: boolean;
+  student?: Student;
+  lockerNumber?: number;
+  message: string;
+  alertType: 'success' | 'warning' | 'error';
+  method: 'face_recognition' | 'rfid_card' | 'fingerprint' | 'qr_code' | 'manual_override';
+  decisionCode?: string;
+}
 
 export interface AttendanceState {
   version: number;
@@ -20,7 +32,7 @@ export const attendanceStore = createStore<AttendanceState>({
   liveInsideCount: AttendanceRepository.getLiveInsideCount(),
 });
 
-function notifyAttendanceChange(): void {
+export function notifyAttendanceChange(): void {
   attendanceStore.setState({
     version: attendanceStore.getState().version + 1,
     todayCount: AttendanceRepository.getTodayCount(),
@@ -29,6 +41,12 @@ function notifyAttendanceChange(): void {
 }
 
 export const attendanceActions = {
+  evaluateMemberAccess(studentId: string): AccessDecision {
+    const student = MemberRepository.getById(studentId);
+    const { packages, accessPolicyConfig } = settingsStore.getState();
+    return AccessPolicyEngine.evaluate(student, packages, accessPolicyConfig);
+  },
+
   checkInStudent(
     studentId: string,
     lockerNumber?: number,
@@ -104,6 +122,48 @@ export const attendanceActions = {
     };
   },
 
+  simulateIdentityScan(
+    method: 'face_recognition' | 'rfid_card' | 'fingerprint' | 'qr_code',
+    query: string
+  ): ScanResult {
+    const students = MemberRepository.getAll();
+    let matchedStudent: Student | undefined;
+
+    if (method === 'rfid_card') {
+      matchedStudent = students.find(s => s.rfidCardUid === query || s.phone?.endsWith(query) || s.memberNumber === query);
+    } else if (method === 'face_recognition') {
+      matchedStudent = students.find(s => s.fullName.includes(query) || s.id === query);
+    } else {
+      matchedStudent = students.find(s => s.nationalId === query || s.phone === query || s.memberNumber === query);
+    }
+
+    if (!matchedStudent) {
+      return {
+        success: false,
+        message: 'شناسه یا چهره در بانک اطلاعاتی شناسایی نشد.',
+        alertType: 'error',
+        method,
+      };
+    }
+
+    const decision = this.evaluateMemberAccess(matchedStudent.id);
+
+    let assignedLockerNum: number | undefined;
+    if (decision.result === 'ALLOW' || decision.result === 'ALLOW_WITH_WARNING') {
+      const checkInRes = this.checkInStudent(matchedStudent.id, undefined, 'rfid_wristband');
+      assignedLockerNum = checkInRes.lockerNumber;
+    }
+
+    return {
+      success: decision.result !== 'DENY',
+      student: matchedStudent,
+      lockerNumber: assignedLockerNum,
+      message: decision.messageFa,
+      alertType: decision.result === 'ALLOW' ? 'success' : decision.result === 'ALLOW_WITH_WARNING' ? 'warning' : 'error',
+      method,
+    };
+  },
+
   batchSet(records: AttendanceRecord[]): void {
     AttendanceRepository.batchSet(records);
     notifyAttendanceChange();
@@ -132,3 +192,19 @@ export function usePaginatedAttendance(params: {
     return AttendanceRepository.queryPaginated(params);
   }, [version, params.page, params.pageSize, params.search, params.date]);
 }
+
+export function useAttendance() {
+  const version = useStore(attendanceStore, s => s.version);
+  const todayCount = useStore(attendanceStore, s => s.todayCount);
+  const liveInsideCount = useStore(attendanceStore, s => s.liveInsideCount);
+  const attendance = useMemo(() => AttendanceRepository.getAll(), [version]);
+
+  return {
+    version,
+    todayCount,
+    liveInsideCount,
+    attendance,
+    ...attendanceActions,
+  };
+}
+

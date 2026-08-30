@@ -32,6 +32,7 @@ import {
   ArrowRightLeft
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useTheme, useSettings, useLockers } from '../../stores';
 import { MembershipPackage, PackageType, CustomField, CustomFieldType, ThemeKey } from '../../types';
 import { ThemeEngineService } from '../../services/themeEngine';
 import { InstallationWizard } from '../Setup/InstallationWizard';
@@ -41,32 +42,41 @@ export const SettingsView: React.FC = () => {
   const { 
     lang, 
     setLang, 
+    resetToEmptyProduction,
+    resetToInitialData, 
+    exportAllDataAsJson, 
+    importDataFromJson, 
+    formatMoney,
+    formatNum,
+    t 
+  } = useApp();
+
+  const {
     theme, 
     setTheme, 
     activeThemeKey,
     setActiveThemeKey,
+  } = useTheme();
+
+  const {
     organizationInfo,
     updateOrganizationInfo,
     customFields,
     saveCustomField,
     deleteCustomField,
-    smartLockers,
-    setLockerCount,
     isDemoMode,
     enterDemoMode,
     exitDemoMode,
-    resetToEmptyProduction,
-    resetToInitialData, 
-    exportAllDataAsJson, 
-    importDataFromJson, 
     packages,
     addPackage,
     updatePackage,
     deletePackage,
-    formatMoney,
-    formatNum,
-    t 
-  } = useApp();
+  } = useSettings();
+
+  const {
+    lockers: smartLockers,
+    setLockerCount,
+  } = useLockers();
 
   // Active Sub-Tab
   const [activeTab, setActiveTab] = useState<'theme' | 'org' | 'packages' | 'lockers' | 'custom_fields' | 'migration' | 'backup'>('theme');

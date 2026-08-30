@@ -15,6 +15,7 @@ import {
   Download
 } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
+import { useMigration, useMembers, useSettings } from '../../stores';
 import { 
   MigrationSourceType, 
   MigrationStep, 
@@ -51,19 +52,28 @@ export const MigrationCenter: React.FC<MigrationCenterProps> = ({
   isInitialSetup = false 
 }) => {
   const { 
-    students, 
+    completeInstallation,
+    isInstalled
+  } = useAppContext();
+
+  const {
+    students,
+  } = useMembers();
+
+  const {
     coaches, 
     organizationInfo, 
     activeBranchId, 
+  } = useSettings();
+
+  const {
     mappingProfiles, 
     saveMappingProfile, 
     deleteMappingProfile, 
     migrationReports, 
     rollbackMigration,
     executeMigration,
-    completeInstallation,
-    isInstalled
-  } = useAppContext();
+  } = useMigration();
 
   // Primary top-level navigation
   const [activeMainTab, setActiveMainTab] = useState<'wizard' | 'history' | 'profiles'>('wizard');

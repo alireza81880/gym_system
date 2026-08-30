@@ -16,18 +16,20 @@ import {
   Filter
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useMembers, useAttendance, useFinance, useLockers } from '../../stores';
 import { SmartInsightsEngine } from '../../services/insightsService';
 
 export const SmartInsightsView: React.FC = () => {
   const { 
-    students, 
-    attendance, 
-    payments, 
-    smartLockers, 
     setActiveTab, 
     formatMoney, 
     lang 
   } = useApp();
+
+  const { students } = useMembers();
+  const { attendance } = useAttendance();
+  const { payments } = useFinance();
+  const { lockers: smartLockers } = useLockers();
 
   const [activeFilter, setActiveFilter] = useState<'all' | 'churn' | 'crowding' | 'expiring' | 'debt'>('all');
 

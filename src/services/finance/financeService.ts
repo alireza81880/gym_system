@@ -4,7 +4,8 @@ import {
   FinancialCharge, 
   FinancialKPIs, 
   PaymentMethod, 
-  Student
+  Student,
+  StaffUser
 } from '../../types';
 import { PaymentRepository } from '../repositories/paymentRepository';
 import { ChargeRepository } from '../repositories/chargeRepository';
@@ -13,6 +14,7 @@ import { MembershipRepository, Membership } from '../repositories/membershipRepo
 import { DateService } from '../dateService';
 import { generateFinancialId, generateReceiptNumber } from '../../utils/idGenerator';
 import { AuditService } from '../auditService';
+import { RBACService } from '../rbacService';
 
 export interface SaleBreakdownResult {
   basePrice: number;
@@ -51,6 +53,17 @@ export interface DailyTimeSeriesItem {
   expenses: number;
 }
 
+export interface MonthlyProfitFlowItem {
+  month: string;
+  monthIndex: number;
+  yearMonth: string;
+  revenue: number;
+  expenses: number;
+  coachPayouts: number;
+  profit: number;
+  sales: number;
+}
+
 export class FinanceService {
   /**
    * Pure calculation function for sale breakdown & discounting
@@ -65,7 +78,8 @@ export class FinanceService {
     const finalPrice = safeBase - safeDiscount;
     const safeReceived = Math.max(0, Math.round(Number(receivedAmount) || 0));
 
-    const remainingDebt = Math.max(0, finalPrice - safeReceived);
+    const effectivePaid = Math.min(finalPrice, safeReceived);
+    const remainingDebt = Math.max(0, finalPrice - effectivePaid);
     const isOverpaid = safeReceived > finalPrice && finalPrice > 0;
     const overpaidAmount = isOverpaid ? safeReceived - finalPrice : 0;
     const isFullPayment = safeReceived >= finalPrice && finalPrice > 0;
@@ -84,6 +98,63 @@ export class FinanceService {
       isFree,
       isZeroPayment,
     };
+  }
+
+  /**
+   * Reconciles a member's cached totals (totalFee, paidAmount, remainingDebt)
+   * strictly from the financial domain (ChargeRepository and PaymentRepository)
+   * Enforces Invariant 7: Financial truth is derived solely from financial records.
+   */
+  static reconcileMemberFinancials(memberId: string): void {
+    ChargeRepository.initialize();
+    PaymentRepository.initialize();
+    MemberRepository.initialize();
+
+    const member = MemberRepository.getById(memberId);
+    if (!member) return;
+
+    const charges = ChargeRepository.getByMemberId(memberId).filter(c => c.status !== 'cancelled');
+    const payments = PaymentRepository.getMemberPayments(memberId).filter(p => p.status !== 'voided');
+
+    let calculatedTotalFee = 0;
+    for (const c of charges) {
+      calculatedTotalFee += c.finalPrice;
+    }
+
+    let calculatedPaid = 0;
+    for (const p of payments) {
+      if (p.type === 'coach_settlement') continue;
+      if (p.type === 'refund' || p.amount < 0) {
+        calculatedPaid -= Math.abs(p.amount);
+      } else {
+        calculatedPaid += p.amount;
+      }
+    }
+    calculatedPaid = Math.max(0, calculatedPaid);
+
+    // If no charges recorded yet (legacy fallback), maintain base totalFee
+    if (charges.length === 0 && member.totalFee) {
+      calculatedTotalFee = member.totalFee;
+    }
+
+    const calculatedDebt = Math.max(0, calculatedTotalFee - calculatedPaid);
+
+    MemberRepository.updateMember(memberId, {
+      totalFee: calculatedTotalFee,
+      paidAmount: calculatedPaid,
+      remainingDebt: calculatedDebt,
+    });
+  }
+
+  /**
+   * Reconcile all members across the gym against financial records
+   */
+  static reconcileAllFinancials(): void {
+    MemberRepository.initialize();
+    const members = MemberRepository.getAll();
+    for (const m of members) {
+      this.reconcileMemberFinancials(m.id);
+    }
   }
 
   /**
@@ -147,7 +218,9 @@ export class FinanceService {
 
       // Total outstanding across all active/unsettled charges
       if (c.status !== 'settled' && c.status !== 'free') {
-        const out = Math.max(0, c.finalPrice - (c.paidAmount || 0));
+        const out = c.outstandingAmount !== undefined 
+          ? c.outstandingAmount 
+          : Math.max(0, c.finalPrice - (c.paidAmount || 0));
         totalOutstanding += out;
       }
     }
@@ -173,7 +246,6 @@ export class FinanceService {
         const refundVal = Math.abs(p.amount);
         if (isToday) {
           refundedToday += refundVal;
-          collectedToday -= refundVal;
         }
         totalRevenue -= refundVal;
       } else {
@@ -183,23 +255,14 @@ export class FinanceService {
           collectedToday += effectiveAmount;
         }
         totalRevenue += effectiveAmount;
-
-        // Check if any partial refund happened today on this payment
-        if (p.refunds && p.refunds.length > 0) {
-          for (const rf of p.refunds) {
-            if (rf.date === targetDate) {
-              refundedToday += rf.amount;
-              collectedToday -= rf.amount;
-            }
-          }
-        }
       }
     }
 
     // 6. Expenses
     let totalOperationalExpenses = 0;
     for (const e of allExpenses) {
-      if (branchId && e.branchId && e.branchId !== branchId) return;
+      if (branchId && e.branchId && e.branchId !== branchId) continue;
+      if (tenantId && e.tenantId && e.tenantId !== tenantId) continue;
       totalOperationalExpenses += e.amount;
     }
 
@@ -214,7 +277,7 @@ export class FinanceService {
 
     return {
       salesToday,
-      collectedToday: Math.max(0, collectedToday),
+      collectedToday: Math.max(0, collectedToday - refundedToday),
       outstandingCreatedToday,
       totalOutstanding,
       refundedToday,
@@ -224,6 +287,110 @@ export class FinanceService {
       netProfit,
       debtorCount: debtors.length,
     };
+  }
+
+  /**
+   * Get dynamic, real persisted monthly profit and cashflow data
+   * Replaces any mock or hardcoded monthly chart arrays
+   */
+  static getMonthlyProfitFlow(options: {
+    branchId?: string;
+    tenantId?: string;
+    lang?: 'fa' | 'en';
+  } = {}): MonthlyProfitFlowItem[] {
+    PaymentRepository.initialize();
+    ChargeRepository.initialize();
+
+    const branchId = options.branchId;
+    const tenantId = options.tenantId;
+    const lang = options.lang || 'fa';
+
+    const allPayments = PaymentRepository.getAllPayments().filter(p => {
+      if (p.status === 'voided') return false;
+      if (branchId && p.branchId && p.branchId !== branchId) return false;
+      if (tenantId && p.tenantId && p.tenantId !== tenantId) return false;
+      return true;
+    });
+
+    const allExpenses = PaymentRepository.getAllExpenses().filter(e => {
+      if (branchId && e.branchId && e.branchId !== branchId) return false;
+      if (tenantId && e.tenantId && e.tenantId !== tenantId) return false;
+      return true;
+    });
+
+    const allCharges = ChargeRepository.getAll().filter(c => {
+      if (c.status === 'cancelled') return false;
+      if (branchId && c.branchId && c.branchId !== branchId) return false;
+      if (tenantId && c.tenantId && c.tenantId !== tenantId) return false;
+      return true;
+    });
+
+    const todayJalali = DateService.getTodayJalali();
+    const todayParts = todayJalali.split('/');
+    const currentYear = todayParts[0] || '1403';
+    const currentMonthNum = parseInt(todayParts[1] || '5', 10);
+
+    const faMonths = [
+      'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
+      'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'
+    ];
+    const enMonths = [
+      'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
+      'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'
+    ];
+
+    // Build items for months up to current month (or at least 5 months)
+    const maxMonth = Math.max(5, currentMonthNum);
+    const result: MonthlyProfitFlowItem[] = [];
+
+    for (let m = 1; m <= maxMonth; m++) {
+      const monthStr = String(m).padStart(2, '0');
+      const yearMonthPrefix = `${currentYear}/${monthStr}`;
+
+      let monthRevenue = 0;
+      let monthCoachPayouts = 0;
+      let monthRefunds = 0;
+
+      for (const p of allPayments) {
+        if (!p.date || !p.date.startsWith(yearMonthPrefix)) continue;
+        if (p.type === 'coach_settlement') {
+          monthCoachPayouts += p.amount;
+        } else if (p.type === 'refund' || p.amount < 0) {
+          monthRefunds += Math.abs(p.amount);
+        } else {
+          monthRevenue += p.amount;
+        }
+      }
+
+      let monthExpenses = 0;
+      for (const e of allExpenses) {
+        if (!e.date || !e.date.startsWith(yearMonthPrefix)) continue;
+        monthExpenses += e.amount;
+      }
+
+      let monthSales = 0;
+      for (const c of allCharges) {
+        if (!c.date || !c.date.startsWith(yearMonthPrefix)) continue;
+        monthSales += c.finalPrice;
+      }
+
+      const netRev = Math.max(0, monthRevenue - monthRefunds);
+      const totalExp = monthExpenses + monthCoachPayouts;
+      const profit = netRev - totalExp;
+
+      result.push({
+        month: lang === 'fa' ? faMonths[m - 1] : enMonths[m - 1],
+        monthIndex: m,
+        yearMonth: yearMonthPrefix,
+        revenue: netRev,
+        expenses: totalExp,
+        coachPayouts: monthCoachPayouts,
+        profit,
+        sales: monthSales,
+      });
+    }
+
+    return result;
   }
 
   /**
@@ -571,13 +738,23 @@ export class FinanceService {
 
   /**
    * Refund an existing payment (Partially or Fully)
+   * Protected operation: requires finance.reverse permission at service level
    */
   static refundPayment(params: {
     paymentId: string;
     refundAmount: number;
     reason: string;
     recordedBy?: string;
+    actor?: StaffUser;
   }): { refundTransaction: PaymentRecord; originalPayment: PaymentRecord } {
+    // 1. Enforce RBAC Permission Check
+    RBACService.requirePermission('finance.reverse', params.actor, {
+      actionName: 'PAYMENT_REFUND',
+      entityType: 'payment',
+      entityId: params.paymentId,
+      description: `استرداد وجه به مبلغ ${params.refundAmount} برای تراکنش ${params.paymentId}`,
+    });
+
     PaymentRepository.initialize();
     ChargeRepository.initialize();
     MemberRepository.initialize();
@@ -604,9 +781,11 @@ export class FinanceService {
     }
 
     const todayJalali = DateService.getTodayJalali();
-    const recordedBy = params.recordedBy || 'مدیر مالی';
+    const recordedBy = params.recordedBy || params.actor?.fullName || 'مدیر مالی';
 
-    // 1. Create a distinct refund transaction
+    const beforeState = { ...originalPayment };
+
+    // 2. Create a distinct refund transaction
     const refundTransactionId = generateFinancialId('ref');
     const refundTransaction: PaymentRecord = {
       id: refundTransactionId,
@@ -629,7 +808,7 @@ export class FinanceService {
 
     PaymentRepository.addPayment(refundTransaction);
 
-    // 2. Update original payment's refundedAmount and refund array
+    // 3. Update original payment's refundedAmount and refund array
     const newRefundedTotal = alreadyRefunded + requestedRefund;
     const isFullyRefunded = newRefundedTotal >= originalPayment.amount;
 
@@ -651,7 +830,7 @@ export class FinanceService {
       refunds: updatedRefunds,
     });
 
-    // 3. Restore member and charge outstanding balances
+    // 4. Restore member and charge outstanding balances
     if (originalPayment.studentId) {
       const member = MemberRepository.getById(originalPayment.studentId);
       if (member) {
@@ -674,13 +853,20 @@ export class FinanceService {
       }
     }
 
-    // 4. Audit Log
-    AuditService.logEvent({
+    // 5. Authoritative Audit Log with before & after state
+    AuditService.logSensitiveMutation({
+      actor: params.actor || { id: 'usr-fin', fullName: recordedBy, role: 'accountant' },
       action: 'PAYMENT_REFUND',
-      category: 'FINANCE',
-      details: `استرداد وجه به مبلغ ${requestedRefund} برای تراکنش #${originalPayment.receiptNumber} به دلیل: ${params.reason}`,
-      targetId: originalPayment.studentId,
-      branchId: originalPayment.branchId,
+      entityType: 'payment',
+      entityId: originalPayment.id,
+      description: `استرداد وجه به مبلغ ${requestedRefund} برای تراکنش #${originalPayment.receiptNumber} به دلیل: ${params.reason}`,
+      beforeState,
+      afterState: {
+        refundTransactionId,
+        refundedAmount: newRefundedTotal,
+        status: isFullyRefunded ? 'refunded' : 'completed',
+      },
+      result: 'success',
     });
 
     return { refundTransaction, originalPayment };
@@ -688,12 +874,22 @@ export class FinanceService {
 
   /**
    * Void a payment entirely (reverses its financial impact without hard-deleting)
+   * Protected operation: requires finance.reverse permission at service level
    */
   static voidPayment(params: {
     paymentId: string;
     reason: string;
     voidedBy?: string;
+    actor?: StaffUser;
   }): PaymentRecord {
+    // 1. Enforce RBAC Permission Check
+    RBACService.requirePermission('finance.reverse', params.actor, {
+      actionName: 'PAYMENT_VOID',
+      entityType: 'payment',
+      entityId: params.paymentId,
+      description: `ابطال تراکنش مالی ${params.paymentId}`,
+    });
+
     PaymentRepository.initialize();
     ChargeRepository.initialize();
     MemberRepository.initialize();
@@ -707,10 +903,11 @@ export class FinanceService {
       throw new Error('این تراکنش قبلاً ابطال شده است.');
     }
 
-    const voidedBy = params.voidedBy || 'مدیر مالی';
+    const voidedBy = params.voidedBy || params.actor?.fullName || 'مدیر مالی';
     const voidedAt = new Date().toISOString();
+    const beforeState = { ...payment };
 
-    // 1. Mark status as voided
+    // 2. Mark status as voided
     PaymentRepository.updatePayment(payment.id, {
       status: 'voided',
       voidReason: params.reason,
@@ -718,7 +915,7 @@ export class FinanceService {
       voidedBy,
     });
 
-    // 2. Reverse impact on member balances
+    // 3. Reverse impact on member balances
     if (payment.studentId && payment.amount > 0) {
       const member = MemberRepository.getById(payment.studentId);
       if (member) {
@@ -741,13 +938,16 @@ export class FinanceService {
       }
     }
 
-    // 3. Audit Log
-    AuditService.logEvent({
+    // 4. Authoritative Audit Log with before & after state
+    AuditService.logSensitiveMutation({
+      actor: params.actor || { id: 'usr-fin', fullName: voidedBy, role: 'accountant' },
       action: 'PAYMENT_VOID',
-      category: 'FINANCE',
-      details: `ابطال تراکنش #${payment.receiptNumber} به مبلغ ${payment.amount} به دلیل: ${params.reason}`,
-      targetId: payment.studentId,
-      branchId: payment.branchId,
+      entityType: 'payment',
+      entityId: payment.id,
+      description: `ابطال تراکنش #${payment.receiptNumber} به مبلغ ${payment.amount} به دلیل: ${params.reason}`,
+      beforeState,
+      afterState: { status: 'voided', voidReason: params.reason, voidedAt, voidedBy },
+      result: 'success',
     });
 
     return payment;

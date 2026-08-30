@@ -10,7 +10,9 @@ import {
   FileText
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useMembers, useSettings, useFinance, useAttendance } from '../../stores';
 import { Student } from '../../types';
+import { FinanceService } from '../../services/finance/financeService';
 import { GlassModal } from '../common/GlassModal';
 import { GlassButton } from '../common/GlassButton';
 import { GlassBadge } from '../common/GlassBadge';
@@ -29,15 +31,21 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   onOpenRenew,
   onOpenPayDebt,
 }) => {
-  const { students, coaches, payments, attendance, customFields, formatMoney, formatNum, t } = useApp();
+  const { formatMoney, formatNum, t } = useApp();
+  const { students } = useMembers();
+  const { coaches, customFields } = useSettings();
+  const { payments } = useFinance();
+  const { attendance } = useAttendance();
 
   const student = students.find(s => s.id === studentId);
   if (!student) return null;
 
   const coach = coaches.find(c => c.id === student.coachId);
-  const studentPayments = payments.filter(p => p.studentId === student.id);
+  const finSummary = FinanceService.getMemberFinancialSummary(student.id);
+  const studentPayments = finSummary?.paymentHistory || payments.filter(p => p.studentId === student.id);
   const studentAttendance = attendance.filter(a => a.studentId === student.id);
   const studentCustomData = student.customFields || {};
+  const currentDebt = finSummary ? finSummary.totalOutstanding : student.remainingDebt;
 
   const handlePrint = () => {
     window.print();
@@ -97,21 +105,21 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
             <div>
               <span className="text-[var(--gym-text-muted)]">وضعیت مالی:</span>
               <div className="font-semibold font-mono text-[var(--gym-text,#fff)]">
-                {student.remainingDebt === 0 ? 'تسویه کامل ✓' : `بدهکار: ${formatMoney(student.remainingDebt)}`}
+                {currentDebt === 0 ? 'تسویه کامل ✓' : `بدهکار: ${formatMoney(currentDebt)}`}
               </div>
             </div>
           </div>
         </div>
 
         {/* Quick Actions if Debt or Expired */}
-        {(student.remainingDebt > 0 || student.status !== 'active') && (
+        {(currentDebt > 0 || student.status !== 'active') && (
           <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between no-print">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0" />
               <div className="text-xs">
-                {student.remainingDebt > 0 && (
+                {currentDebt > 0 && (
                   <div className="font-bold text-[var(--gym-text,#fff)]">
-                    بدهی فعلی: <span className="font-mono text-rose-400">{formatMoney(student.remainingDebt)}</span>
+                    بدهی فعلی: <span className="font-mono text-rose-400">{formatMoney(currentDebt)}</span>
                   </div>
                 )}
                 {student.status !== 'active' && (
@@ -121,7 +129,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
             </div>
 
             <div className="flex gap-2">
-              {student.remainingDebt > 0 && (
+              {currentDebt > 0 && (
                 <GlassButton
                   variant="secondary"
                   size="sm"

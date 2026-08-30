@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, DollarSign, CheckCircle2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { useMembers, useFinance, useSettings } from '../../stores';
 import { PaymentMethod, TransactionType } from '../../types';
 import { MoneyInput } from '../common/MoneyInput';
 
@@ -12,7 +13,10 @@ interface NewPaymentModalProps {
 }
 
 export const NewPaymentModal: React.FC<NewPaymentModalProps> = ({ onClose }) => {
-  const { students, coaches, addPayment, recordStudentPayment, formatMoney, t } = useApp();
+  const { formatMoney, t } = useApp();
+  const { students, recordStudentPayment } = useMembers();
+  const { addPayment } = useFinance();
+  const { coaches, currentUser } = useSettings();
   
   const [payTarget, setPayTarget] = useState<'student_tuition' | 'supplement_buffet'>('student_tuition');
   const [selectedStudentId, setSelectedStudentId] = useState(students[0]?.id || '');
@@ -20,32 +24,40 @@ export const NewPaymentModal: React.FC<NewPaymentModalProps> = ({ onClose }) => 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pos');
   const [description, setDescription] = useState('');
   const [success, setSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const currentSelectedStudent = students.find(s => s.id === selectedStudentId);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (amount <= 0) return;
+    if (amount <= 0 || isSubmitting) return;
 
-    if (payTarget === 'student_tuition') {
-      recordStudentPayment(selectedStudentId, amount, paymentMethod, description || 'دریافت شهریه / قسط');
-    } else {
-      addPayment({
-        amount,
-        date: DateService.getTodayJalali(),
-        timestamp: new Date().toISOString(),
-        paymentMethod,
-        type: 'supplement_sale',
-        description: description || 'فروش بوفه / مکمل',
-        receiptNumber: generateReceiptNumber('BUF'),
-        status: 'completed',
-      });
+    setIsSubmitting(true);
+    try {
+      if (payTarget === 'student_tuition') {
+        recordStudentPayment(selectedStudentId, amount, paymentMethod, description || 'دریافت شهریه / قسط');
+      } else {
+        addPayment({
+          amount,
+          date: DateService.getTodayJalali(),
+          timestamp: new Date().toISOString(),
+          paymentMethod,
+          type: 'supplement_sale',
+          description: description || 'فروش بوفه / مکمل',
+          receiptNumber: generateReceiptNumber('BUF'),
+          recordedBy: currentUser?.fullName || 'مدیر سیستم',
+          status: 'completed',
+        });
+      }
+
+      setSuccess(true);
+      setTimeout(() => {
+        onClose();
+      }, 1000);
+    } catch (err) {
+      console.error(err);
+      setIsSubmitting(false);
     }
-
-    setSuccess(true);
-    setTimeout(() => {
-      onClose();
-    }, 1200);
   };
 
   return (
@@ -174,10 +186,10 @@ export const NewPaymentModal: React.FC<NewPaymentModalProps> = ({ onClose }) => 
             </button>
             <button
               type="submit"
-              disabled={amount <= 0}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-xs"
+              disabled={amount <= 0 || isSubmitting}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-xs cursor-pointer"
             >
-              ثبت و ذخیره دریافتی
+              {isSubmitting ? 'در حال ثبت...' : 'ثبت و ذخیره دریافتی'}
             </button>
           </div>
         </form>

@@ -13,7 +13,7 @@ import {
   X,
   Sparkles
 } from 'lucide-react';
-import { useApp } from '../../context/AppContext';
+import { useSettings } from '../../stores';
 
 interface OnboardingWizardModalProps {
   isOpen: boolean;
@@ -21,7 +21,7 @@ interface OnboardingWizardModalProps {
 }
 
 export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ isOpen, onClose }) => {
-  const { setIntegrationMode } = useApp();
+  const { setIntegrationMode } = useSettings();
   const [currentStep, setCurrentStep] = useState(1);
   const [clubName, setClubName] = useState('باشگاه ورزشی رویال اکسیژن');
   const [phone, setPhone] = useState('021-22800112');
