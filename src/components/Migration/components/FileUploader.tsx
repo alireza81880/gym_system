@@ -216,9 +216,9 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
   return (
     <div className="space-y-6 animate-fadeIn" id="migration-file-uploader">
       {/* Source header summary */}
-      <div className="flex items-center justify-between p-4 bg-slate-900/60 rounded-xl border border-slate-800">
+      <div className="flex items-center justify-between p-4 glass-subtle rounded-xl border border-[var(--gym-border)]">
         <div className="flex items-center gap-3">
-          <span className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <span className="p-2 rounded-lg bg-[var(--gym-brand-soft)] text-[var(--gym-brand)] border border-[var(--gym-border-strong)]">
             {sourceType === 'xlsx' && <FileSpreadsheet className="w-5 h-5" />}
             {sourceType === 'csv' && <FileText className="w-5 h-5" />}
             {sourceType === 'json' && <Code2 className="w-5 h-5" />}
@@ -227,7 +227,7 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
             {sourceType === 'vendor' && <Building2 className="w-5 h-5" />}
           </span>
           <div>
-            <h3 className="text-sm font-bold text-white">
+            <h3 className="text-sm font-bold text-[var(--gym-text)]">
               {sourceType === 'xlsx' && 'بارگذاری فایل اکسل (.xlsx, .xls)'}
               {sourceType === 'csv' && 'بارگذاری فایل CSV متنی (.csv, .txt)'}
               {sourceType === 'json' && 'بارگذاری فایل JSON داده‌های ساختاریافته'}
@@ -235,7 +235,7 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
               {sourceType === 'api' && 'پیکربندی اتصال به API وب‌سرویس'}
               {sourceType === 'vendor' && 'انتخاب کانکتور اختصاصی نرم‌افزار باشگاه'}
             </h3>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-[var(--gym-text-muted)]">
               داده‌های خام با بالاترین استانداردهای امنیتی بررسی و فقط در حافظه محلی مرورگر پردازش می‌شوند.
             </p>
           </div>
@@ -244,7 +244,7 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
         <button
           type="button"
           onClick={onBack}
-          className="text-xs text-slate-400 hover:text-white px-3 py-1.5 rounded-lg border border-slate-700 hover:border-slate-600 transition-colors"
+          className="text-xs text-[var(--gym-text-muted)] hover:text-[var(--gym-text)] px-3 py-1.5 rounded-lg border border-[var(--gym-border)] hover:border-[var(--gym-border-strong)] transition-colors glass-subtle"
         >
           تغییر منبع
         </button>
@@ -263,26 +263,26 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
 
       {/* API Form */}
       {sourceType === 'api' ? (
-        <div className="p-6 bg-slate-900/60 rounded-2xl border border-slate-800 space-y-5">
+        <div className="p-6 glass-regular rounded-2xl border border-[var(--gym-border)] space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="md:col-span-2 space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300">آدرس وب‌سرویس (API Endpoint URL)</label>
+              <label className="text-xs font-semibold text-[var(--gym-text-secondary)]">آدرس وب‌سرویس (API Endpoint URL)</label>
               <input
                 type="text"
                 dir="ltr"
                 value={apiConfig.endpoint}
                 onChange={(e) => setApiConfig({ ...apiConfig, endpoint: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-emerald-500 focus:outline-none"
+                className="w-full px-3.5 py-2.5 rounded-xl glass-subtle border border-[var(--gym-border)] text-[var(--gym-text)] text-xs focus:border-[var(--gym-brand)] focus:outline-none"
                 placeholder="https://api.yourgym.com/api/v1/members"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300">متد درخواست (HTTP Method)</label>
+              <label className="text-xs font-semibold text-[var(--gym-text-secondary)]">متد درخواست (HTTP Method)</label>
               <select
                 value={apiConfig.method}
                 onChange={(e) => setApiConfig({ ...apiConfig, method: e.target.value as any })}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-emerald-500 focus:outline-none"
+                className="w-full px-3.5 py-2.5 rounded-xl glass-subtle border border-[var(--gym-border)] text-[var(--gym-text)] text-xs focus:border-[var(--gym-brand)] focus:outline-none"
               >
                 <option value="GET">GET</option>
                 <option value="POST">POST</option>
@@ -292,11 +292,11 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300">نوع احراز هویت (Authentication)</label>
+              <label className="text-xs font-semibold text-[var(--gym-text-secondary)]">نوع احراز هویت (Authentication)</label>
               <select
                 value={apiConfig.authType}
                 onChange={(e) => setApiConfig({ ...apiConfig, authType: e.target.value as any })}
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-emerald-500 focus:outline-none"
+                className="w-full px-3.5 py-2.5 rounded-xl glass-subtle border border-[var(--gym-border)] text-[var(--gym-text)] text-xs focus:border-[var(--gym-brand)] focus:outline-none"
               >
                 <option value="bearer">Bearer Token (توکن استاندارد)</option>
                 <option value="api_key">API Key (کلید اختصاصی هدر)</option>
@@ -346,16 +346,16 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-300">مسیر کلید آرایه داده‌ها (JSON Path اختیاری)</label>
+            <label className="text-xs font-semibold text-[var(--gym-text-secondary)]">مسیر کلید آرایه داده‌ها (JSON Path اختیاری)</label>
             <input
               type="text"
               dir="ltr"
               value={apiConfig.jsonPath || ''}
               onChange={(e) => setApiConfig({ ...apiConfig, jsonPath: e.target.value })}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-emerald-500 focus:outline-none"
+              className="w-full px-3.5 py-2.5 rounded-xl glass-subtle border border-[var(--gym-border)] text-[var(--gym-text)] text-xs focus:border-[var(--gym-brand)] focus:outline-none"
               placeholder="data.members یا items"
             />
-            <p className="text-[11px] text-slate-500">اگر پاسخ API در فیلد خاصی مانند `data` یا `results` قرار دارد آن را وارد کنید.</p>
+            <p className="text-[11px] text-[var(--gym-text-muted)]">اگر پاسخ API در فیلد خاصی مانند `data` یا `results` قرار دارد آن را وارد کنید.</p>
           </div>
 
           <div className="pt-2 flex justify-end">
@@ -364,7 +364,7 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
               id="btn-test-api-fetch"
               onClick={handleTestApi}
               disabled={isLoading || !apiConfig.endpoint}
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-md transition-all cursor-pointer disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[var(--gym-brand)] hover:brightness-110 text-[var(--gym-bg)] font-bold text-xs shadow-md transition-all cursor-pointer disabled:opacity-50"
             >
               {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Globe className="w-4 h-4" />}
               <span>تست اتصال و دریافت رکوردها</span>
@@ -383,30 +383,30 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
                   onClick={() => setSelectedVendor(v.id)}
                   className={`p-4 rounded-xl border transition-all cursor-pointer ${
                     isSelected
-                      ? 'bg-slate-850 border-emerald-500 ring-2 ring-emerald-500/20'
-                      : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                      ? 'glass-neon border-[var(--gym-brand)] ring-2 ring-[var(--gym-brand-soft)]'
+                      : 'glass-subtle border-[var(--gym-border)] hover:border-[var(--gym-border-strong)]'
                   }`}
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <h4 className="text-sm font-bold text-white mb-1">{v.vendorTitleFa}</h4>
-                      <p className="text-xs text-slate-400 leading-relaxed mb-3">{v.descriptionFa}</p>
+                      <h4 className="text-sm font-bold text-[var(--gym-text)] mb-1">{v.vendorTitleFa}</h4>
+                      <p className="text-xs text-[var(--gym-text-muted)] leading-relaxed mb-3">{v.descriptionFa}</p>
                     </div>
                     <span
                       className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
                         v.status === 'supported'
-                          ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                          ? 'bg-[var(--gym-brand-soft)] text-[var(--gym-brand)] border border-[var(--gym-border-strong)]'
                           : v.status === 'requires_gateway'
-                          ? 'bg-amber-950 text-amber-400 border border-amber-800'
-                          : 'bg-slate-800 text-slate-400 border border-slate-700'
+                          ? 'bg-amber-950/60 text-amber-400 border border-amber-800'
+                          : 'glass-subtle text-[var(--gym-text-muted)] border border-[var(--gym-border)]'
                       }`}
                     >
                       {v.status === 'supported' ? 'پشتیبانی کامل' : v.status === 'requires_gateway' ? 'نیازمند گیت' : 'به‌زودی'}
                     </span>
                   </div>
 
-                  <div className="text-[11px] text-slate-400 flex items-center gap-2 pt-2 border-t border-slate-800">
-                    <span className="font-semibold text-slate-300">نسخه‌های تست شده:</span>
+                  <div className="text-[11px] text-[var(--gym-text-muted)] flex items-center gap-2 pt-2 border-t border-[var(--gym-border)]">
+                    <span className="font-semibold text-[var(--gym-text-secondary)]">نسخه‌های تست شده:</span>
                     <span>{v.supportedVersions.join(' ، ')}</span>
                   </div>
                 </div>
@@ -414,14 +414,14 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
             })}
           </div>
 
-          <div className="p-4 bg-slate-900/60 rounded-xl border border-slate-800 flex items-center justify-between">
-            <span className="text-xs text-slate-400">
+          <div className="p-4 glass-subtle rounded-xl border border-[var(--gym-border)] flex items-center justify-between">
+            <span className="text-xs text-[var(--gym-text-muted)]">
               برای واردسازی فایل خروجی این نرم‌افزار، لطفاً فایل اکسل یا CSV را در بخش زیر بارگذاری فرمایید.
             </span>
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-lg transition-colors cursor-pointer"
+              className="px-4 py-2 bg-[var(--gym-brand)] hover:brightness-110 text-[var(--gym-bg)] font-bold text-xs rounded-lg transition-colors cursor-pointer"
             >
               انتخاب فایل خروجی
             </button>
@@ -431,14 +431,14 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
         /* File Upload Box */
         <div className="space-y-4">
           {sourceType === 'xlsx' && (
-            <div className="p-4 bg-emerald-950/40 border border-emerald-500/30 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
+            <div className="p-4 glass-regular border border-[var(--gym-border-strong)] rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
               <div className="flex items-center gap-3">
-                <span className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                <span className="p-2 rounded-xl bg-[var(--gym-brand-soft)] text-[var(--gym-brand)] border border-[var(--gym-border-strong)]">
                   <FileSpreadsheet className="w-5 h-5" />
                 </span>
                 <div>
-                  <h4 className="text-xs font-bold text-emerald-200">فایل نمونه استاندارد اکسل (۳۲ عضو با تمام حالات تستی)</h4>
-                  <p className="text-[11px] text-slate-400">شامل اعضای فعال، دارای بدهی، کدهای ملی، اعداد فارسی و موارد تکراری</p>
+                  <h4 className="text-xs font-bold text-[var(--gym-text)]">فایل نمونه استاندارد اکسل (۳۲ عضو با تمام حالات تستی)</h4>
+                  <p className="text-[11px] text-[var(--gym-text-muted)]">شامل اعضای فعال، دارای بدهی، کدهای ملی، اعداد فارسی و موارد تکراری</p>
                 </div>
               </div>
 
@@ -450,9 +450,9 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
                     e.stopPropagation();
                     SampleExcelGenerator.downloadSampleExcel();
                   }}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-850 border border-slate-700 text-slate-200 text-xs font-semibold transition-all cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl glass-subtle hover:bg-[var(--gym-brand-soft)] border border-[var(--gym-border)] text-[var(--gym-text)] text-xs font-semibold transition-all cursor-pointer"
                 >
-                  <Download className="w-3.5 h-3.5 text-emerald-400" />
+                  <Download className="w-3.5 h-3.5 text-[var(--gym-brand)]" />
                   <span>دانلود فایل (.xlsx)</span>
                 </button>
 
@@ -463,7 +463,7 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
                     e.stopPropagation();
                     handleLoadSampleExcelDirectly();
                   }}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold transition-all shadow-md cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[var(--gym-brand)] hover:brightness-110 text-[var(--gym-bg)] text-xs font-bold transition-all shadow-md cursor-pointer"
                 >
                   <PlayCircle className="w-3.5 h-3.5" />
                   <span>تست سریع با فایل نمونه</span>
@@ -496,14 +496,14 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
             onClick={() => fileInputRef.current?.click()}
             className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-200 ${
               isDragging
-                ? 'border-emerald-500 bg-emerald-500/10'
+                ? 'border-[var(--gym-brand)] bg-[var(--gym-brand-soft)]'
                 : selectedFile
-                ? 'border-emerald-500/60 bg-slate-900/80'
-                : 'border-slate-700/80 hover:border-slate-600 bg-slate-900/40 hover:bg-slate-900/60'
+                ? 'border-[var(--gym-border-strong)] glass-regular'
+                : 'border-[var(--gym-border)] hover:border-[var(--gym-border-strong)] glass-subtle hover:glass-regular'
             }`}
           >
             <div className="flex flex-col items-center justify-center space-y-3">
-              <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-2xl bg-[var(--gym-brand-soft)] border border-[var(--gym-border-strong)] text-[var(--gym-brand)] flex items-center justify-center">
                 {isLoading ? (
                   <RefreshCw className="w-8 h-8 animate-spin" />
                 ) : (
@@ -513,20 +513,20 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
 
               {selectedFile ? (
                 <div className="space-y-1">
-                  <div className="flex items-center justify-center gap-2 text-white font-bold text-sm">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <div className="flex items-center justify-center gap-2 text-[var(--gym-text)] font-bold text-sm">
+                    <CheckCircle2 className="w-4 h-4 text-[var(--gym-brand)]" />
                     <span>{selectedFile.name}</span>
                   </div>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-[var(--gym-text-muted)]">
                     حجم فایل: {(selectedFile.size / 1024).toFixed(1)} کیلوبایت • برای تغییر فایل دوباره کلیک کنید
                   </p>
                 </div>
               ) : (
                 <div className="space-y-1">
-                  <h4 className="text-sm font-bold text-slate-200">
+                  <h4 className="text-sm font-bold text-[var(--gym-text)]">
                     فایل را بکشید و در اینجا رها کنید، یا برای انتخاب کلیک کنید
                   </h4>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-[var(--gym-text-muted)]">
                     {sourceType === 'xlsx' && 'پشتیبانی از فایل‌های اکسل مایکروسافت (.xlsx و .xls)'}
                     {sourceType === 'csv' && 'پشتیبانی از فایل‌های متنی با کدگذاری UTF-8 و جداکننده‌های استاندارد'}
                     {sourceType === 'json' && 'پشتیبانی از ساختار JSON آرایه‌ای اعضا یا پشتیبان Gym OS'}
@@ -539,9 +539,9 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
 
           {/* Multi-Sheet Selector for Excel */}
           {sourceType === 'xlsx' && excelSheets.length > 1 && (
-            <div className="p-4 bg-slate-900/80 rounded-xl border border-slate-800 space-y-2">
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
-                <Layers className="w-4 h-4 text-emerald-400" />
+            <div className="p-4 glass-subtle rounded-xl border border-[var(--gym-border)] space-y-2">
+              <div className="flex items-center gap-2 text-xs font-semibold text-[var(--gym-text-secondary)]">
+                <Layers className="w-4 h-4 text-[var(--gym-brand)]" />
                 <span>این فایل اکسل دارای {excelSheets.length} شیت مختلف است. شیت مورد نظر برای واردسازی را انتخاب کنید:</span>
               </div>
               <div className="flex flex-wrap gap-2 pt-1">
@@ -552,8 +552,8 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
                     onClick={() => handleSheetChange(sh.name)}
                     className={`px-3.5 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
                       selectedSheet === sh.name
-                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 font-bold'
-                        : 'bg-slate-800/80 text-slate-400 border-slate-700 hover:text-slate-200'
+                        ? 'bg-[var(--gym-brand-soft)] text-[var(--gym-brand)] border-[var(--gym-border-strong)] font-bold'
+                        : 'glass-subtle text-[var(--gym-text-muted)] border-[var(--gym-border)] hover:text-[var(--gym-text)]'
                     }`}
                   >
                     {sh.name} ({sh.rowCount} ردیف)
@@ -565,9 +565,9 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
 
           {/* Delimiter Selector for CSV */}
           {sourceType === 'csv' && (
-            <div className="p-4 bg-slate-900/80 rounded-xl border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-xs text-slate-300 font-semibold">
-                <Sliders className="w-4 h-4 text-cyan-400" />
+            <div className="p-4 glass-subtle rounded-xl border border-[var(--gym-border)] flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-xs text-[var(--gym-text-secondary)] font-semibold">
+                <Sliders className="w-4 h-4 text-[var(--gym-brand)]" />
                 <span>جداکننده ستون‌ها (Delimiter):</span>
               </div>
               <div className="flex gap-2">
@@ -583,8 +583,8 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
                     onClick={() => handleDelimiterChange(d.value)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
                       csvDelimiter === d.value
-                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 font-bold'
-                        : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+                        ? 'bg-[var(--gym-brand-soft)] text-[var(--gym-brand)] border-[var(--gym-border-strong)] font-bold'
+                        : 'glass-subtle text-[var(--gym-text-muted)] border-[var(--gym-border)] hover:text-[var(--gym-text)]'
                     }`}
                   >
                     {d.label}
