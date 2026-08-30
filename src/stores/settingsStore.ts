@@ -354,11 +354,11 @@ export const settingsActions = {
   },
 
   enterDemoMode(): void {
-    this.setIsDemoMode(true);
+    settingsActions.setIsDemoMode(true);
   },
 
   exitDemoMode(): void {
-    this.setIsDemoMode(false);
+    settingsActions.setIsDemoMode(false);
   },
 
   settleCoachPayment(

@@ -1,6 +1,6 @@
 import { AttendanceRecord } from '../../types';
 import { initialAttendance } from '../../data/initialData';
-import { PersistenceManager } from './persistenceManager';
+import { LocalDbRepository } from '../localDb';
 import { PaginatedResult } from './memberRepository';
 
 export interface LiveVisitor {
@@ -18,7 +18,19 @@ export class AttendanceRepository {
 
   static initialize(): void {
     if (this.isInitialized) return;
-    const stored = PersistenceManager.get<AttendanceRecord[]>('attendance', initialAttendance);
+    
+    const hasPersisted = LocalDbRepository.hasKey('attendance');
+    let stored: AttendanceRecord[];
+
+    if (hasPersisted) {
+      stored = LocalDbRepository.get<AttendanceRecord[]>('attendance', []);
+    } else if (!LocalDbRepository.isDatabaseInitialized()) {
+      stored = initialAttendance;
+      LocalDbRepository.setImmediate('attendance', stored);
+    } else {
+      stored = [];
+    }
+
     this.rebuildIndex(stored);
     this.isInitialized = true;
   }
@@ -45,7 +57,7 @@ export class AttendanceRepository {
 
   static getAll(): AttendanceRecord[] {
     this.initialize();
-    return this.attendanceList;
+    return [...this.attendanceList];
   }
 
   static recordEntry(record: AttendanceRecord): void {
@@ -111,7 +123,7 @@ export class AttendanceRepository {
       method: record.method,
     });
 
-    PersistenceManager.setBatched('attendance', this.attendanceList);
+    LocalDbRepository.setImmediate('attendance', this.attendanceList);
   }
 
   static recordCheckOut(studentId: string): void {
@@ -161,6 +173,6 @@ export class AttendanceRepository {
 
   static batchSet(records: AttendanceRecord[]): void {
     this.rebuildIndex(records);
-    PersistenceManager.setBatched('attendance', this.attendanceList);
+    LocalDbRepository.setImmediate('attendance', this.attendanceList);
   }
 }

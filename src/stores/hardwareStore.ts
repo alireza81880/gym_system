@@ -87,7 +87,7 @@ export const hardwareActions = {
   },
 
   addHardwareDevice(device: HardwareDevice): void {
-    this.addDevice(device);
+    hardwareActions.addDevice(device);
   },
 
   updateDevice(deviceId: string, updates: Partial<HardwareDevice>): void {

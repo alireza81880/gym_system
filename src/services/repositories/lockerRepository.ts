@@ -1,6 +1,6 @@
 import { SmartLocker, LockerZone, LockerAssignment } from '../../types';
 import { initialSmartLockers } from '../../data/initialData';
-import { PersistenceManager } from './persistenceManager';
+import { LocalDbRepository } from '../localDb';
 import { LockerEngine } from '../lockerService';
 
 export class LockerRepository {
@@ -14,8 +14,20 @@ export class LockerRepository {
 
   static initialize(): void {
     if (this.isInitialized) return;
-    const stored = PersistenceManager.get<SmartLocker[]>('smart_lockers', initialSmartLockers);
-    this.assignmentHistory = PersistenceManager.get<LockerAssignment[]>('locker_assignments_history', [
+
+    const hasPersisted = LocalDbRepository.hasKey('smart_lockers');
+    let stored: SmartLocker[];
+
+    if (hasPersisted) {
+      stored = LocalDbRepository.get<SmartLocker[]>('smart_lockers', []);
+    } else if (!LocalDbRepository.isDatabaseInitialized()) {
+      stored = initialSmartLockers;
+      LocalDbRepository.setImmediate('smart_lockers', stored);
+    } else {
+      stored = [];
+    }
+
+    this.assignmentHistory = LocalDbRepository.get<LockerAssignment[]>('locker_assignments_history', [
       {
         id: 'lck-hist-init-1',
         lockerNumber: 12,
@@ -57,7 +69,7 @@ export class LockerRepository {
 
   static getAll(): SmartLocker[] {
     this.initialize();
-    return this.lockersList;
+    return [...this.lockersList];
   }
 
   static getAvailable(): SmartLocker[] {
@@ -99,7 +111,7 @@ export class LockerRepository {
   static recordAssignment(assignment: LockerAssignment): void {
     this.initialize();
     this.assignmentHistory = [assignment, ...this.assignmentHistory].slice(0, 100);
-    PersistenceManager.setBatched('locker_assignments_history', this.assignmentHistory);
+    LocalDbRepository.setImmediate('locker_assignments_history', this.assignmentHistory);
   }
 
   static assignLocker(num: number, studentId: string, studentName?: string, zone?: LockerZone): boolean {
@@ -118,6 +130,7 @@ export class LockerRepository {
       assignedAt: timeStr,
       isLocked: false,
       lastUnlockedAt: new Date().toISOString(),
+      ...(zone ? { zone } : {}),
     };
 
     this.updateLockerInList(updated);
@@ -152,7 +165,7 @@ export class LockerRepository {
       }
       return item;
     });
-    PersistenceManager.setBatched('locker_assignments_history', this.assignmentHistory);
+    LocalDbRepository.setImmediate('locker_assignments_history', this.assignmentHistory);
 
     const updated: SmartLocker = {
       ...locker,
@@ -190,7 +203,7 @@ export class LockerRepository {
     if (idx !== -1) {
       this.lockersList[idx] = updated;
       this.rebuildIndex(this.lockersList);
-      PersistenceManager.setBatched('smart_lockers', this.lockersList);
+      LocalDbRepository.setImmediate('smart_lockers', this.lockersList);
     }
   }
 
@@ -198,12 +211,12 @@ export class LockerRepository {
     this.initialize();
     const result = LockerEngine.resizeLockers(this.lockersList, newCount, defaultZone);
     this.rebuildIndex(result.updatedLockers);
-    PersistenceManager.setBatched('smart_lockers', this.lockersList);
+    LocalDbRepository.setImmediate('smart_lockers', this.lockersList);
     return { success: true, warning: result.warning };
   }
 
   static batchSet(lockers: SmartLocker[]): void {
     this.rebuildIndex(lockers);
-    PersistenceManager.setBatched('smart_lockers', this.lockersList);
+    LocalDbRepository.setImmediate('smart_lockers', this.lockersList);
   }
 }

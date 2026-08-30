@@ -1,6 +1,6 @@
 import { PaymentRecord, ExpenseRecord } from '../../types';
 import { initialPayments, initialExpenses } from '../../data/initialData';
-import { PersistenceManager } from './persistenceManager';
+import { LocalDbRepository } from '../localDb';
 import { ChargeRepository } from './chargeRepository';
 import { PaginatedResult } from './memberRepository';
 import { generateFinancialId, generateReceiptNumber } from '../../utils/idGenerator';
@@ -30,8 +30,31 @@ export class PaymentRepository {
 
   static initialize(): void {
     if (this.isInitialized) return;
-    const storedPayments = PersistenceManager.get<PaymentRecord[]>('payments', initialPayments);
-    const storedExpenses = PersistenceManager.get<ExpenseRecord[]>('expenses', initialExpenses);
+
+    const hasPersistedPayments = LocalDbRepository.hasKey('payments');
+    const hasPersistedExpenses = LocalDbRepository.hasKey('expenses');
+
+    let storedPayments: PaymentRecord[];
+    let storedExpenses: ExpenseRecord[];
+
+    if (hasPersistedPayments) {
+      storedPayments = LocalDbRepository.get<PaymentRecord[]>('payments', []);
+    } else if (!LocalDbRepository.isDatabaseInitialized()) {
+      storedPayments = initialPayments;
+      LocalDbRepository.setImmediate('payments', storedPayments);
+    } else {
+      storedPayments = [];
+    }
+
+    if (hasPersistedExpenses) {
+      storedExpenses = LocalDbRepository.get<ExpenseRecord[]>('expenses', []);
+    } else if (!LocalDbRepository.isDatabaseInitialized()) {
+      storedExpenses = initialExpenses;
+      LocalDbRepository.setImmediate('expenses', storedExpenses);
+    } else {
+      storedExpenses = [];
+    }
+
     this.rebuildIndex(storedPayments, storedExpenses);
     this.isInitialized = true;
   }
@@ -77,12 +100,12 @@ export class PaymentRepository {
 
   static getAllPayments(): PaymentRecord[] {
     this.initialize();
-    return this.paymentsList;
+    return [...this.paymentsList];
   }
 
   static getAllExpenses(): ExpenseRecord[] {
     this.initialize();
-    return this.expensesList;
+    return [...this.expensesList];
   }
 
   static getSummary(): FinanceSummaryMetrics {
@@ -185,7 +208,7 @@ export class PaymentRepository {
     this.initialize();
     this.paymentsList = [payment, ...this.paymentsList];
     this.recalculateSummary();
-    PersistenceManager.setBatched('payments', this.paymentsList);
+    LocalDbRepository.setImmediate('payments', this.paymentsList);
   }
 
   static updatePayment(id: string, partial: Partial<PaymentRecord>): PaymentRecord | undefined {
@@ -194,7 +217,7 @@ export class PaymentRepository {
     if (idx !== -1) {
       this.paymentsList[idx] = { ...this.paymentsList[idx], ...partial };
       this.recalculateSummary();
-      PersistenceManager.setBatched('payments', this.paymentsList);
+      LocalDbRepository.setImmediate('payments', this.paymentsList);
       return this.paymentsList[idx];
     }
     return undefined;
@@ -204,14 +227,14 @@ export class PaymentRepository {
     this.initialize();
     this.paymentsList = this.paymentsList.filter(p => p.id !== id);
     this.recalculateSummary();
-    PersistenceManager.setBatched('payments', this.paymentsList);
+    LocalDbRepository.setImmediate('payments', this.paymentsList);
   }
 
   static addExpense(expense: ExpenseRecord): void {
     this.initialize();
     this.expensesList = [expense, ...this.expensesList];
     this.recalculateSummary();
-    PersistenceManager.setBatched('expenses', this.expensesList);
+    LocalDbRepository.setImmediate('expenses', this.expensesList);
   }
 
   static updateExpense(id: string, partial: Partial<ExpenseRecord>): void {
@@ -220,7 +243,7 @@ export class PaymentRepository {
     if (idx !== -1) {
       this.expensesList[idx] = { ...this.expensesList[idx], ...partial };
       this.recalculateSummary();
-      PersistenceManager.setBatched('expenses', this.expensesList);
+      LocalDbRepository.setImmediate('expenses', this.expensesList);
     }
   }
 
@@ -228,7 +251,7 @@ export class PaymentRepository {
     this.initialize();
     this.expensesList = this.expensesList.filter(e => e.id !== id);
     this.recalculateSummary();
-    PersistenceManager.setBatched('expenses', this.expensesList);
+    LocalDbRepository.setImmediate('expenses', this.expensesList);
   }
 
   static queryPaymentsPaginated(params: {
@@ -274,7 +297,7 @@ export class PaymentRepository {
 
   static batchSet(payments: PaymentRecord[], expenses: ExpenseRecord[]): void {
     this.rebuildIndex(payments, expenses);
-    PersistenceManager.setBatched('payments', this.paymentsList);
-    PersistenceManager.setBatched('expenses', this.expensesList);
+    LocalDbRepository.setImmediate('payments', this.paymentsList);
+    LocalDbRepository.setImmediate('expenses', this.expensesList);
   }
 }

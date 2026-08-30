@@ -1,5 +1,5 @@
 import { FinancialCharge } from '../../types';
-import { PersistenceManager } from './persistenceManager';
+import { LocalDbRepository } from '../localDb';
 import { initialStudents } from '../../data/initialData';
 import { generateFinancialId } from '../../utils/idGenerator';
 
@@ -13,20 +13,26 @@ export class ChargeRepository {
   static initialize(): void {
     if (this.isInitialized) return;
     
-    // Check persistence or hydrate from initial members
-    const stored = PersistenceManager.get<FinancialCharge[]>('charges', []);
-    if (stored && stored.length > 0) {
+    // Check persistence deterministically
+    const hasPersistedCharges = LocalDbRepository.hasKey('charges');
+    
+    if (hasPersistedCharges) {
+      const stored = LocalDbRepository.get<FinancialCharge[]>('charges', []);
       this.rebuildIndex(stored);
     } else {
-      // Hydrate initial charges from initial students
-      const hydrated = this.hydrateInitialCharges();
-      this.rebuildIndex(hydrated);
-      PersistenceManager.setBatched('charges', hydrated);
+      // Only hydrate initial demo charges if database is completely new and uninitialized
+      if (!LocalDbRepository.isDatabaseInitialized()) {
+        const hydrated = this.hydrateInitialCharges();
+        this.rebuildIndex(hydrated);
+        LocalDbRepository.setImmediate('charges', hydrated);
+      } else {
+        this.rebuildIndex([]);
+      }
     }
     this.isInitialized = true;
   }
 
-  private static hydrateInitialCharges(): FinancialCharge[] {
+  public static hydrateInitialCharges(): FinancialCharge[] {
     const charges: FinancialCharge[] = [];
     for (const student of initialStudents) {
       const basePrice = student.totalFee || 0;
@@ -101,7 +107,7 @@ export class ChargeRepository {
     this.initialize();
     this.chargesList = [charge, ...this.chargesList];
     this.rebuildIndex(this.chargesList);
-    PersistenceManager.setBatched('charges', this.chargesList);
+    LocalDbRepository.setImmediate('charges', this.chargesList);
     return charge;
   }
 
@@ -118,7 +124,7 @@ export class ChargeRepository {
 
     this.chargesList[idx] = updated;
     this.rebuildIndex(this.chargesList);
-    PersistenceManager.setBatched('charges', this.chargesList);
+    LocalDbRepository.setImmediate('charges', this.chargesList);
     return updated;
   }
 
@@ -126,7 +132,7 @@ export class ChargeRepository {
     this.initialize();
     this.chargesList = this.chargesList.filter(c => c.id !== id);
     this.rebuildIndex(this.chargesList);
-    PersistenceManager.setBatched('charges', this.chargesList);
+    LocalDbRepository.setImmediate('charges', this.chargesList);
   }
 
   static getChargesByDate(dateStr: string, branchId?: string, tenantId?: string): FinancialCharge[] {
@@ -140,6 +146,6 @@ export class ChargeRepository {
 
   static batchSet(charges: FinancialCharge[]): void {
     this.rebuildIndex(charges);
-    PersistenceManager.setBatched('charges', this.chargesList);
+    LocalDbRepository.setImmediate('charges', this.chargesList);
   }
 }

@@ -146,11 +146,11 @@ export const attendanceActions = {
       };
     }
 
-    const decision = this.evaluateMemberAccess(matchedStudent.id);
+    const decision = attendanceActions.evaluateMemberAccess(matchedStudent.id);
 
     let assignedLockerNum: number | undefined;
     if (decision.result === 'ALLOW' || decision.result === 'ALLOW_WITH_WARNING') {
-      const checkInRes = this.checkInStudent(matchedStudent.id, undefined, 'rfid_wristband');
+      const checkInRes = attendanceActions.checkInStudent(matchedStudent.id, undefined, 'rfid_wristband');
       assignedLockerNum = checkInRes.lockerNumber;
     }
 

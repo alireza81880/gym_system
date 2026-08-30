@@ -1,6 +1,6 @@
 import { Student } from '../../types';
 import { initialStudents } from '../../data/initialData';
-import { PersistenceManager } from './persistenceManager';
+import { LocalDbRepository } from '../localDb';
 import { ValidationService } from '../validationService';
 
 export interface MemberQueryParams {
@@ -35,7 +35,19 @@ export class MemberRepository {
 
   static initialize(): void {
     if (this.isInitialized) return;
-    const stored = PersistenceManager.get<Student[]>('students', initialStudents);
+
+    const hasPersistedStudents = LocalDbRepository.hasKey('students');
+    let stored: Student[];
+
+    if (hasPersistedStudents) {
+      stored = LocalDbRepository.get<Student[]>('students', []);
+    } else if (!LocalDbRepository.isDatabaseInitialized()) {
+      stored = initialStudents;
+      LocalDbRepository.setImmediate('students', stored);
+    } else {
+      stored = [];
+    }
+
     this.rebuildIndex(stored);
     this.isInitialized = true;
   }
@@ -319,7 +331,7 @@ export class MemberRepository {
     if (student.status === 'pending_renewal' || student.status === 'expired') this.cachedExpiringCount++;
     if (student.remainingDebt > 0) this.cachedTotalDebt += student.remainingDebt;
 
-    PersistenceManager.setBatched('students', this.studentsList);
+    LocalDbRepository.setImmediate('students', this.studentsList);
   }
 
   static updateMember(id: string, partial: Partial<Student>): Student | undefined {
@@ -380,7 +392,7 @@ export class MemberRepository {
       this.cachedTotalDebt += (newDebt - oldDebt);
     }
 
-    PersistenceManager.setBatched('students', this.studentsList);
+    LocalDbRepository.setImmediate('students', this.studentsList);
     return updated;
   }
 
@@ -405,13 +417,13 @@ export class MemberRepository {
     if (existing.remainingDebt > 0) this.cachedTotalDebt -= existing.remainingDebt;
 
     this.studentsList = this.studentsList.filter(s => s.id !== id);
-    PersistenceManager.setBatched('students', this.studentsList);
+    LocalDbRepository.setImmediate('students', this.studentsList);
     return true;
   }
 
   static batchSet(newStudents: Student[]): void {
     this.rebuildIndex(newStudents);
-    PersistenceManager.setBatched('students', this.studentsList);
+    LocalDbRepository.setImmediate('students', this.studentsList);
   }
 
   /**
@@ -473,7 +485,7 @@ export class MemberRepository {
     }
 
     this.rebuildIndex(generated);
-    PersistenceManager.setBatched('students', generated);
+    LocalDbRepository.setImmediate('students', generated);
     const durationMs = Math.round(performance.now() - startTime);
 
     return { durationMs, count };
@@ -511,7 +523,7 @@ export class MemberRepository {
 
   static restoreSampleData(): void {
     this.rebuildIndex(initialStudents);
-    PersistenceManager.setBatched('students', initialStudents);
+    LocalDbRepository.setImmediate('students', initialStudents);
   }
 }
 

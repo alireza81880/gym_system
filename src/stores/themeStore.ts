@@ -11,6 +11,11 @@ const initialThemeKey = ThemeEngineService.getInitialTheme();
 const initialConfig = ThemeEngineService.getTheme(initialThemeKey);
 const initialThemeMode: Theme = initialConfig.category === 'dark' || initialConfig.category === 'special' ? 'dark' : 'light';
 
+// Ensure the active theme is applied to DOM root immediately upon evaluation
+if (typeof document !== 'undefined') {
+  ThemeEngineService.applyTheme(initialThemeKey);
+}
+
 export const themeStore = createStore<ThemeState>({
   activeThemeKey: initialThemeKey,
   theme: initialThemeMode,
@@ -25,18 +30,18 @@ export const themeActions = {
   },
 
   setActiveThemeKey(key: ThemeKey): void {
-    this.setThemeKey(key);
+    themeActions.setThemeKey(key);
   },
 
   setTheme(theme: Theme): void {
     const fallbackKey: ThemeKey = theme === 'dark' ? 'obsidian' : 'pearl';
-    this.setThemeKey(fallbackKey);
+    themeActions.setThemeKey(fallbackKey);
   },
 
   toggleTheme(): void {
     const current = themeStore.getState().theme;
     const next: Theme = current === 'dark' ? 'light' : 'dark';
-    this.setTheme(next);
+    themeActions.setTheme(next);
   },
 };
 

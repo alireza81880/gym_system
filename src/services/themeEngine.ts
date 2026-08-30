@@ -471,16 +471,18 @@ export class ThemeEngineService {
     root.style.setProperty('--theme-sidebar-bg', config.colors.sidebarBg);
     root.style.setProperty('--theme-card-bg', config.colors.cardBg);
 
+    localStorage.setItem('gym_os_theme_key', key);
     localStorage.setItem('gym_theme_key', key);
+    localStorage.setItem('gym_os_theme', isDark ? 'dark' : 'light');
     localStorage.setItem('gym_theme', isDark ? 'dark' : 'light');
   }
 
   static getInitialTheme(): ThemeKey {
-    const saved = localStorage.getItem('gym_theme_key') as ThemeKey;
+    const saved = (localStorage.getItem('gym_os_theme_key') || localStorage.getItem('gym_theme_key')) as ThemeKey;
     if (saved && THEMES_REGISTRY[saved]) {
       return saved;
     }
-    const legacyTheme = localStorage.getItem('gym_theme');
+    const legacyTheme = localStorage.getItem('gym_os_theme') || localStorage.getItem('gym_theme');
     if (legacyTheme === 'light') return 'pearl';
     return 'obsidian';
   }

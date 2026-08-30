@@ -144,13 +144,13 @@ export const migrationActions = {
           actor: currentUser,
           result: 'denied',
         });
-        this.addReport(result.report);
+        migrationActions.addReport(result.report);
         return result.report;
       }
 
       memberActions.batchSet(result.updatedStudents);
-      this.addReport(result.report);
-      this.addSnapshot(result.snapshot);
+      migrationActions.addReport(result.report);
+      migrationActions.addSnapshot(result.snapshot);
 
       const auditAction = result.report.status === 'PARTIAL' ? 'MIGRATION_PARTIAL' : 'MIGRATION_COMPLETED';
       AuditService.logSensitiveMutation({
@@ -198,7 +198,7 @@ export const migrationActions = {
       const beforeCount = MemberRepository.getAll().length;
       const restored = MigrationService.rollback(snapshot);
       memberActions.batchSet(restored);
-      this.removeSnapshot(snapshotId);
+      migrationActions.removeSnapshot(snapshotId);
 
       AuditService.logSensitiveMutation({
         actor: currentUser,

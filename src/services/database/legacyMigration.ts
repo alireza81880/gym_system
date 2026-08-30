@@ -6,6 +6,7 @@
 
 import { DatabaseAdapter, DatabaseMigrationReport } from './types';
 import { initialStudents, initialPayments, initialAttendance, initialSmartLockers, initialCoaches, initialPackages } from '../../data/initialData';
+import { LocalDbRepository } from '../localDb';
 
 export class LegacyStorageMigration {
   private static readonly MIGRATED_FLAG_KEY = 'gym_os_v3_core_migrated';
@@ -31,6 +32,8 @@ export class LegacyStorageMigration {
     }
 
     try {
+      const isDbInitialized = LocalDbRepository.isDatabaseInitialized();
+
       // 1. Detect Legacy Keys
       const rawStudents = localStorage.getItem('gym_os_students') || localStorage.getItem('gym_students');
       const rawPayments = localStorage.getItem('gym_os_payments') || localStorage.getItem('gym_payments');
@@ -49,57 +52,68 @@ export class LegacyStorageMigration {
       let parsedPackages: any[] = [];
       let parsedExpenses: any[] = [];
 
+      let hasExplicitKey = false;
+
       // Validate & Parse
-      if (rawStudents) {
+      if (rawStudents !== null) {
+        hasExplicitKey = true;
         try {
           const arr = JSON.parse(rawStudents);
-          if (Array.isArray(arr) && arr.length > 0) parsedStudents = arr;
+          if (Array.isArray(arr)) parsedStudents = arr;
         } catch { /* ignore corrupted */ }
       }
-      if (rawPayments) {
+      if (rawPayments !== null) {
+        hasExplicitKey = true;
         try {
           const arr = JSON.parse(rawPayments);
-          if (Array.isArray(arr) && arr.length > 0) parsedPayments = arr;
+          if (Array.isArray(arr)) parsedPayments = arr;
         } catch { /* ignore corrupted */ }
       }
-      if (rawAttendance) {
+      if (rawAttendance !== null) {
+        hasExplicitKey = true;
         try {
           const arr = JSON.parse(rawAttendance);
-          if (Array.isArray(arr) && arr.length > 0) parsedAttendance = arr;
+          if (Array.isArray(arr)) parsedAttendance = arr;
         } catch { /* ignore corrupted */ }
       }
-      if (rawLockers) {
+      if (rawLockers !== null) {
+        hasExplicitKey = true;
         try {
           const arr = JSON.parse(rawLockers);
-          if (Array.isArray(arr) && arr.length > 0) parsedLockers = arr;
+          if (Array.isArray(arr)) parsedLockers = arr;
         } catch { /* ignore corrupted */ }
       }
-      if (rawCoaches) {
+      if (rawCoaches !== null) {
+        hasExplicitKey = true;
         try {
           const arr = JSON.parse(rawCoaches);
-          if (Array.isArray(arr) && arr.length > 0) parsedCoaches = arr;
+          if (Array.isArray(arr)) parsedCoaches = arr;
         } catch { /* ignore corrupted */ }
       }
-      if (rawPackages) {
+      if (rawPackages !== null) {
+        hasExplicitKey = true;
         try {
           const arr = JSON.parse(rawPackages);
-          if (Array.isArray(arr) && arr.length > 0) parsedPackages = arr;
+          if (Array.isArray(arr)) parsedPackages = arr;
         } catch { /* ignore corrupted */ }
       }
-      if (rawExpenses) {
+      if (rawExpenses !== null) {
+        hasExplicitKey = true;
         try {
           const arr = JSON.parse(rawExpenses);
-          if (Array.isArray(arr) && arr.length > 0) parsedExpenses = arr;
+          if (Array.isArray(arr)) parsedExpenses = arr;
         } catch { /* ignore corrupted */ }
       }
 
-      // If no custom local data, populate initial baseline
-      const finalStudents = parsedStudents.length > 0 ? parsedStudents : initialStudents;
-      const finalPayments = parsedPayments.length > 0 ? parsedPayments : initialPayments;
-      const finalAttendance = parsedAttendance.length > 0 ? parsedAttendance : initialAttendance;
-      const finalLockers = parsedLockers.length > 0 ? parsedLockers : initialSmartLockers;
-      const finalCoaches = parsedCoaches.length > 0 ? parsedCoaches : initialCoaches;
-      const finalPackages = parsedPackages.length > 0 ? parsedPackages : initialPackages;
+      // If this is an uninitialized, fresh install with no data, populate baseline demo
+      const shouldUseBaseline = !isDbInitialized && !hasExplicitKey;
+
+      const finalStudents = hasExplicitKey || isDbInitialized ? parsedStudents : (shouldUseBaseline ? initialStudents : []);
+      const finalPayments = hasExplicitKey || isDbInitialized ? parsedPayments : (shouldUseBaseline ? initialPayments : []);
+      const finalAttendance = hasExplicitKey || isDbInitialized ? parsedAttendance : (shouldUseBaseline ? initialAttendance : []);
+      const finalLockers = hasExplicitKey || isDbInitialized ? parsedLockers : (shouldUseBaseline ? initialSmartLockers : []);
+      const finalCoaches = hasExplicitKey || isDbInitialized ? parsedCoaches : (shouldUseBaseline ? initialCoaches : []);
+      const finalPackages = hasExplicitKey || isDbInitialized ? parsedPackages : (shouldUseBaseline ? initialPackages : []);
 
       // 2. Safe Bulk Insert into Local Production Core
       await adapter.bulkSet('members', finalStudents);
@@ -124,7 +138,7 @@ export class LegacyStorageMigration {
 
       return {
         schemaVersion: 3,
-        detectedLegacy: parsedStudents.length > 0 || parsedPayments.length > 0,
+        detectedLegacy: hasExplicitKey,
         migratedMembersCount: finalStudents.length,
         migratedPaymentsCount: finalPayments.length,
         migratedAttendanceCount: finalAttendance.length,

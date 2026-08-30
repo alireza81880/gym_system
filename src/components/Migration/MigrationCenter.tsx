@@ -241,32 +241,32 @@ export const MigrationCenter: React.FC<MigrationCenterProps> = ({
   return (
     <div className="p-6 md:p-8 space-y-8 max-w-7xl mx-auto" id="gym-migration-center-page">
       {/* Top Main Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-800">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-[var(--gym-border)]">
         <div className="space-y-1">
           <div className="flex items-center gap-3">
             {onBack && (
               <button
                 type="button"
                 onClick={onBack}
-                className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer"
+                className="p-2 rounded-xl glass-subtle border border-[var(--gym-border)] text-[var(--gym-text-muted)] hover:text-[var(--gym-text)] transition-all cursor-pointer"
                 title="بازگشت"
               >
                 <ArrowRight className="w-5 h-5" />
               </button>
             )}
-            <span className="p-2.5 rounded-2xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 text-emerald-400 border border-emerald-500/30 shadow-lg shadow-emerald-950/40">
+            <span className="p-2.5 rounded-2xl bg-[var(--gym-brand-soft)] text-[var(--gym-brand)] border border-[var(--gym-border-strong)] shadow-lg">
               <Database className="w-7 h-7" />
             </span>
             <div>
-              <h1 className="text-xl font-black text-white flex items-center gap-2">
+              <h1 className="text-xl font-black text-[var(--gym-text,#fff)] flex items-center gap-2">
                 مرکز انتقال اطلاعات (Migration Center)
               </h1>
-              <p className="text-xs text-emerald-400 font-bold">
+              <p className="text-xs text-[var(--gym-brand)] font-bold">
                 انتقال اطلاعات از سیستم قبلی
               </p>
             </div>
           </div>
-          <p className="text-xs text-slate-400 pt-1 leading-relaxed max-w-2xl">
+          <p className="text-xs text-[var(--gym-text-muted)] pt-1 leading-relaxed max-w-2xl">
             میتوانید اطلاعات اعضا و سوابق باشگاه را از فایل یا سیستم قبلی وارد کنید. فرآیند به صورت کاملاً ایزوله با پشتیبان‌گیری خودکار و بدون تداخل با پذیرش سریع انجام می‌گیرد.
           </p>
         </div>
@@ -275,7 +275,7 @@ export const MigrationCenter: React.FC<MigrationCenterProps> = ({
           <button
             type="button"
             onClick={() => SampleExcelGenerator.downloadSampleExcel()}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-850 text-emerald-400 border border-slate-800 hover:border-emerald-500/40 text-xs font-bold transition-all cursor-pointer shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl glass-subtle text-[var(--gym-brand)] border border-[var(--gym-border)] hover:border-[var(--gym-border-strong)] text-xs font-bold transition-all cursor-pointer shadow-xs"
           >
             <Download className="w-3.5 h-3.5" />
             <span>دانلود فایل نمونه اکسل</span>
@@ -285,7 +285,7 @@ export const MigrationCenter: React.FC<MigrationCenterProps> = ({
             <button
               type="button"
               onClick={handleResetToStart}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-850 text-slate-300 border border-slate-800 text-xs font-medium transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl glass-subtle text-[var(--gym-text-muted)] hover:text-[var(--gym-text)] border border-[var(--gym-border)] text-xs font-medium transition-all cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>شروع انتقال جدید</span>
@@ -293,14 +293,14 @@ export const MigrationCenter: React.FC<MigrationCenterProps> = ({
           )}
 
           {/* Top-level Navigation Tabs */}
-          <div className="flex items-center gap-1 bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800 shadow-lg">
+          <div className="flex items-center gap-1 glass-subtle p-1.5 rounded-2xl border border-[var(--gym-border)] shadow-lg">
             <button
               type="button"
               onClick={() => setActiveMainTab('wizard')}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeMainTab === 'wizard'
-                  ? 'bg-emerald-500 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-[var(--gym-brand)] text-white shadow-md'
+                  : 'text-[var(--gym-text-muted)] hover:text-[var(--gym-text)]'
               }`}
             >
               <Sparkles className="w-3.5 h-3.5" />
@@ -312,8 +312,8 @@ export const MigrationCenter: React.FC<MigrationCenterProps> = ({
               onClick={() => setActiveMainTab('history')}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeMainTab === 'history'
-                  ? 'bg-emerald-500 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-[var(--gym-brand)] text-white shadow-md'
+                  : 'text-[var(--gym-text-muted)] hover:text-[var(--gym-text)]'
               }`}
             >
               <History className="w-3.5 h-3.5" />
@@ -325,8 +325,8 @@ export const MigrationCenter: React.FC<MigrationCenterProps> = ({
               onClick={() => setActiveMainTab('profiles')}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeMainTab === 'profiles'
-                  ? 'bg-emerald-500 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-[var(--gym-brand)] text-white shadow-md'
+                  : 'text-[var(--gym-text-muted)] hover:text-[var(--gym-text)]'
               }`}
             >
               <Bookmark className="w-3.5 h-3.5" />
@@ -362,7 +362,7 @@ export const MigrationCenter: React.FC<MigrationCenterProps> = ({
         <div className="space-y-6">
           {/* Step Breadcrumb indicator (only shown if not on report screen) */}
           {currentStep !== 'report' && (
-            <div className="flex items-center justify-between overflow-x-auto pb-2 border-b border-slate-800/80 text-xs">
+            <div className="flex items-center justify-between overflow-x-auto pb-2 border-b border-[var(--gym-border)] text-xs">
               {[
                 { id: 'source', label: '۱. منبع داده' },
                 { id: 'upload', label: '۲. بارگذاری منبع' },
@@ -377,13 +377,13 @@ export const MigrationCenter: React.FC<MigrationCenterProps> = ({
                     <span
                       className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
                         isCurrent
-                          ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                          : 'bg-slate-900 text-slate-500 border border-slate-800'
+                          ? 'bg-[var(--gym-brand)] text-white shadow-md'
+                          : 'glass-subtle text-[var(--gym-text-muted)] border border-[var(--gym-border)]'
                       }`}
                     >
                       {st.label}
                     </span>
-                    {idx < 5 && <span className="text-slate-700">←</span>}
+                    {idx < 5 && <span className="text-[var(--gym-text-muted)]">←</span>}
                   </div>
                 );
               })}

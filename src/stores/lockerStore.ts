@@ -112,7 +112,7 @@ export const lockerActions = {
   },
 
   toggleLockerMaintenance(lockerNumber: number): void {
-    this.toggleMaintenance(lockerNumber);
+    lockerActions.toggleMaintenance(lockerNumber);
   },
 
   triggerMasterUnlock(reason = 'بازگشایی اضطراری کلیه کمدها', recordedBy?: string): void {
