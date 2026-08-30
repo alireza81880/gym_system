@@ -32,6 +32,8 @@ import { DeviceDiscoveryModal } from './DeviceDiscoveryModal';
 import { DeviceDetailModal } from './DeviceDetailModal';
 import { PilotComparisonView } from './PilotComparisonView';
 import { PilotComparisonService } from '../../services/hardware/pilotComparisonService';
+import { HardwareGateway } from '../../services/hardware/hardwareGateway';
+import { generateEventId, generateCorrelationId } from '../../services/hardware/eventIdentity';
 import { useHardware, useSettings, useMembers, useAttendance, hardwareActions } from '../../stores';
 
 export const HardwareHubView: React.FC = () => {
@@ -100,8 +102,68 @@ export const HardwareHubView: React.FC = () => {
     setSelectedDevice(updated);
   };
 
-  // Run custom simulation scenarios
-  const triggerSimulationScenario = (scenario: 'allowed_face' | 'debt_mismatch' | 'expired_mismatch' | 'unknown_person') => {
+  // Run custom simulation scenarios (A-F Hardware Gateway Testing Suite)
+  const triggerSimulationScenario = async (
+    scenario: 'allowed_face' | 'expired_mismatch' | 'debt_mismatch' | 'unknown_person' | 'offline_safety' | 'rapid_duplicate_swipe'
+  ) => {
+    const gateway = HardwareGateway.getInstance();
+
+    if (scenario === 'offline_safety') {
+      const dev = hardwareDevices[0];
+      if (dev) {
+        // Toggle device offline safely and attempt command
+        toggleDeviceOnline(dev.id);
+        setSimFeedback({
+          message: `سناریو E: وضعیت اتصال دستگاه «${dev.name}» معکوس شد. ارسال فرمان در حالت آفلاین مسدود و از قطع سرور جلوگیری می‌شود.`,
+          type: 'warn',
+        });
+      }
+      return;
+    }
+
+    if (scenario === 'rapid_duplicate_swipe') {
+      const member = students.find(s => s.id === 'std-1') || students[0];
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('fa-IR');
+
+      const baseEvent: HardwareEvent = {
+        id: generateEventId('dev-rfid-turnstile', 'swipe-dup-1', 'hwevt'),
+        deviceId: 'dev-rfid-turnstile',
+        deviceName: 'کارتخوان و مچ‌بندخوان RFID/NFC گیت تردد',
+        vendor: 'zkteco',
+        eventType: 'RFID_MATCH',
+        timestamp: timeStr,
+        deviceTimestamp: timeStr,
+        receivedAt: now.toISOString(),
+        externalUserId: '1001',
+        memberId: member.id,
+        memberName: member.fullName,
+        credentialType: 'rfid',
+        accessResult: 'granted',
+        source: 'hardware_gateway',
+        processingStatus: 'processed',
+        correlationId: generateCorrelationId('corr-dup-1'),
+      };
+
+      // Ingest event 1
+      const res1 = await gateway.ingestNormalizedEvent(baseEvent);
+
+      // Ingest event 2 immediately within deduplication window
+      const dupEvent: HardwareEvent = {
+        ...baseEvent,
+        id: generateEventId('dev-rfid-turnstile', 'swipe-dup-2', 'hwevt'),
+        correlationId: generateCorrelationId('corr-dup-2'),
+      };
+      const res2 = await gateway.ingestNormalizedEvent(dupEvent);
+
+      setSimFeedback({
+        message: `سناریو F (آنتی‌داپلیکیت): رویداد اول پذیرفته شد (${res1.accepted ? 'OK' : 'FAIL'}) • رویداد دوم به عنوان تکراری فیلتر شد (${res2.duplicate ? 'شناسایی و مسدود شد' : 'FAIL'}).`,
+        type: 'success',
+      });
+      setTimeout(() => setSimFeedback(null), 5000);
+      return;
+    }
+
     let member = students[0];
     let method: 'face' | 'rfid' | 'fingerprint' | 'qr' = 'face';
     let externalUserId = '1001';
@@ -142,7 +204,7 @@ export const HardwareHubView: React.FC = () => {
     const timeStr = now.toLocaleTimeString('fa-IR');
 
     const syntheticEvent: HardwareEvent = {
-      id: `evt-sim-${Date.now()}`,
+      id: generateEventId('dev-face-gate', undefined, 'evt-sim'),
       deviceId: 'dev-face-gate',
       deviceName: 'ترمینال هوشمند تشخیص چهره گیت ورود (AI Face Gate 4K)',
       vendor: 'zkteco',
@@ -155,17 +217,16 @@ export const HardwareHubView: React.FC = () => {
       memberName,
       credentialType: method,
       accessResult,
-      source: 'shadow_listener',
+      source: 'hardware_gateway',
       processingStatus: 'processed',
-      correlationId: `corr-sim-${Date.now()}`,
+      correlationId: generateCorrelationId('corr-sim'),
     };
 
-    // Feed into hardware store and pilot comparison
-    hardwareActions.addEvent(syntheticEvent);
-    PilotComparisonService.processHardwareEvent(syntheticEvent);
+    // Feed into HardwareGateway full pipeline
+    const gatewayResult = await gateway.ingestNormalizedEvent(syntheticEvent);
 
     setSimFeedback({
-      message: `سیگنال شبیه‌سازی (${memberName}) پردازش و در پایلوت ثبت شد.`,
+      message: `سیگنال شبیه‌سازی (${memberName}) پردازش شد • تصمیم Gym OS: ${gatewayResult.accessDecision?.result || 'UNKNOWN'} • پایلوت: ثبت شد.`,
       type: scenario === 'unknown_person' ? 'warn' : 'success',
     });
     setTimeout(() => setSimFeedback(null), 4000);
@@ -473,7 +534,7 @@ export const HardwareHubView: React.FC = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
             <button
               onClick={() => triggerSimulationScenario('allowed_face')}
               className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/60 hover:bg-emerald-100 dark:hover:bg-emerald-950/50 text-right space-y-2 transition-all shadow-xs"
@@ -481,28 +542,12 @@ export const HardwareHubView: React.FC = () => {
               <div className="flex items-center justify-between text-emerald-800 dark:text-emerald-300 font-bold text-xs">
                 <div className="flex items-center gap-1.5">
                   <ScanFace className="h-4 w-4" />
-                  <span>۱. تردد عضو مجاز (MATCH)</span>
+                  <span>سناریو A: تردد عضو مجاز (MATCH)</span>
                 </div>
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />
               </div>
               <p className="text-[11px] text-emerald-700 dark:text-emerald-400 leading-relaxed">
-                شناسایی چهره آرش علوی با پکیج معتبر؛ سیستم خارجی و Gym OS هر دو دسترسی را تایید می‌کنند.
-              </p>
-            </button>
-
-            <button
-              onClick={() => triggerSimulationScenario('debt_mismatch')}
-              className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 hover:bg-amber-100 dark:hover:bg-amber-950/50 text-right space-y-2 transition-all shadow-xs"
-            >
-              <div className="flex items-center justify-between text-amber-800 dark:text-amber-300 font-bold text-xs">
-                <div className="flex items-center gap-1.5">
-                  <ScanFace className="h-4 w-4" />
-                  <span>۲. تردد عضو بدهکار (MISMATCH)</span>
-                </div>
-                <AlertTriangle className="h-4 w-4 text-amber-500" />
-              </div>
-              <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-relaxed">
-                نیما کمالی (بدهی ۲.۸ م تومان)؛ پایانه خارجی مجاز می‌داند اما موتور Gym OS اخطار بدهی صادر می‌کند.
+                شناسایی چهره آرش علوی با پکیج معتبر؛ تایید دسترسی + تخصیص کمد هوشمند + ثبت در پایلوت بدون مغایرت.
               </p>
             </button>
 
@@ -513,12 +558,28 @@ export const HardwareHubView: React.FC = () => {
               <div className="flex items-center justify-between text-rose-800 dark:text-rose-300 font-bold text-xs">
                 <div className="flex items-center gap-1.5">
                   <CreditCard className="h-4 w-4" />
-                  <span>۳. کارت عضو منقضی (MISMATCH)</span>
+                  <span>سناریو B: کارت عضو منقضی (MISMATCH)</span>
                 </div>
                 <XCircle className="h-4 w-4 text-rose-500" />
               </div>
               <p className="text-[11px] text-rose-700 dark:text-rose-400 leading-relaxed">
-                عضو با شهریه منقضی؛ سیستم قدیمی باز می‌کند اما Gym OS مغایرت عدم اعتبار اشتراک ثبت می‌کند.
+                عضو با شهریه منقضی؛ سیستم قدیمی باز می‌کند اما Gym OS مسدود کرده و مغایرت عدم اعتبار ثبت می‌کند.
+              </p>
+            </button>
+
+            <button
+              onClick={() => triggerSimulationScenario('debt_mismatch')}
+              className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 hover:bg-amber-100 dark:hover:bg-amber-950/50 text-right space-y-2 transition-all shadow-xs"
+            >
+              <div className="flex items-center justify-between text-amber-800 dark:text-amber-300 font-bold text-xs">
+                <div className="flex items-center gap-1.5">
+                  <ScanFace className="h-4 w-4" />
+                  <span>سناریو C: تردد عضو بدهکار (WARNING)</span>
+                </div>
+                <AlertTriangle className="h-4 w-4 text-amber-500" />
+              </div>
+              <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-relaxed">
+                نیما کمالی (بدهی ۲.۸ م تومان)؛ اجازه تردد مشروط همراه با هشدار مالی بدون مسدودسازی ناگهانی.
               </p>
             </button>
 
@@ -529,12 +590,44 @@ export const HardwareHubView: React.FC = () => {
               <div className="flex items-center justify-between text-stone-800 dark:text-stone-200 font-bold text-xs">
                 <div className="flex items-center gap-1.5">
                   <Fingerprint className="h-4 w-4" />
-                  <span>۴. شناسه ثبت‌نشده (UNKNOWN)</span>
+                  <span>سناریو D: شناسه ثبت‌نشده (UNKNOWN)</span>
                 </div>
                 <Clock className="h-4 w-4 text-stone-400" />
               </div>
               <p className="text-[11px] text-stone-600 dark:text-stone-400 leading-relaxed">
                 شناسه ۹۹۹۹؛ اعلام «شناسه دستگاه به عضو متصل نیست» بدون ایجاد عضو فیک در پایگاه داده.
+              </p>
+            </button>
+
+            <button
+              onClick={() => triggerSimulationScenario('offline_safety')}
+              className="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900/60 hover:bg-indigo-100 dark:hover:bg-indigo-950/50 text-right space-y-2 transition-all shadow-xs"
+            >
+              <div className="flex items-center justify-between text-indigo-800 dark:text-indigo-300 font-bold text-xs">
+                <div className="flex items-center gap-1.5">
+                  <WifiOff className="h-4 w-4" />
+                  <span>سناریو E: ایمنی قطعی دستگاه (OFFLINE)</span>
+                </div>
+                <ShieldCheck className="h-4 w-4 text-indigo-500" />
+              </div>
+              <p className="text-[11px] text-indigo-700 dark:text-indigo-400 leading-relaxed">
+                آزمون رفتار Gateway در قطعی سوکت؛ مسدودسازی امن فرمان‌های کنترلی بدون ایجاد کرش یا بن‌بست.
+              </p>
+            </button>
+
+            <button
+              onClick={() => triggerSimulationScenario('rapid_duplicate_swipe')}
+              className="p-4 rounded-2xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900/60 hover:bg-purple-100 dark:hover:bg-purple-950/50 text-right space-y-2 transition-all shadow-xs"
+            >
+              <div className="flex items-center justify-between text-purple-800 dark:text-purple-300 font-bold text-xs">
+                <div className="flex items-center gap-1.5">
+                  <Radio className="h-4 w-4" />
+                  <span>سناریو F: فیلتر رویداد تکراری (DEDUP)</span>
+                </div>
+                <CheckCircle2 className="h-4 w-4 text-purple-500" />
+              </div>
+              <p className="text-[11px] text-purple-700 dark:text-purple-400 leading-relaxed">
+                ارسال ۲ کارت متوالی در کمتر از ۲ ثانیه؛ پذیرش کارت اول و مسدودسازی هوشمند تکرار بدون رکورد مضاعف.
               </p>
             </button>
           </div>

@@ -2,6 +2,7 @@ import { HardwareDevice, HardwareEvent, IntegrationMode } from '../../types';
 import { initialHardwareDevices } from '../../data/initialData';
 import { PersistenceManager } from './persistenceManager';
 import { createNormalizedHardwareEvent } from '../hardwareAdapters';
+import { PilotComparisonService } from '../hardware/pilotComparisonService';
 
 type EventListener = (event: HardwareEvent) => void;
 
@@ -37,9 +38,18 @@ export class HardwareRepository {
     this.isInitialized = true;
   }
 
-  static getDevices(): HardwareDevice[] {
+  static getAll(): HardwareDevice[] {
     this.initialize();
-    return this.devicesList;
+    return [...this.devicesList];
+  }
+
+  static getDevices(): HardwareDevice[] {
+    return this.getAll();
+  }
+
+  static getById(id: string): HardwareDevice | undefined {
+    this.initialize();
+    return this.devicesList.find(d => d.id === id);
   }
 
   static getRecentEvents(limit = 50): HardwareEvent[] {
@@ -87,9 +97,7 @@ export class HardwareRepository {
 
     // Process in Shadow Mode Pilot Comparison
     try {
-      import('../hardware/pilotComparisonService').then(({ PilotComparisonService }) => {
-        PilotComparisonService.processHardwareEvent(event);
-      });
+      PilotComparisonService.processHardwareEvent(event);
     } catch {
       // safe fallback
     }
@@ -104,22 +112,50 @@ export class HardwareRepository {
     });
   }
 
-  static addDevice(device: HardwareDevice): void {
+  static add(device: HardwareDevice): HardwareDevice {
     this.initialize();
-    this.devicesList = [device, ...this.devicesList];
+    this.devicesList = [device, ...this.devicesList.filter(d => d.id !== device.id)];
     PersistenceManager.setBatched('hardware_devices', this.devicesList);
+    return device;
+  }
+
+  static addDevice(device: HardwareDevice): void {
+    this.add(device);
+  }
+
+  static update(deviceId: string, updates: Partial<HardwareDevice>): HardwareDevice | null {
+    this.initialize();
+    let updatedDevice: HardwareDevice | null = null;
+    this.devicesList = this.devicesList.map(d => {
+      if (d.id === deviceId) {
+        updatedDevice = { ...d, ...updates };
+        return updatedDevice;
+      }
+      return d;
+    });
+    if (updatedDevice) {
+      PersistenceManager.setBatched('hardware_devices', this.devicesList);
+    }
+    return updatedDevice;
   }
 
   static updateDevice(deviceId: string, updates: Partial<HardwareDevice>): void {
+    this.update(deviceId, updates);
+  }
+
+  static delete(deviceId: string): boolean {
     this.initialize();
-    this.devicesList = this.devicesList.map(d => d.id === deviceId ? { ...d, ...updates } : d);
-    PersistenceManager.setBatched('hardware_devices', this.devicesList);
+    const initialLen = this.devicesList.length;
+    this.devicesList = this.devicesList.filter(d => d.id !== deviceId);
+    if (this.devicesList.length !== initialLen) {
+      PersistenceManager.setBatched('hardware_devices', this.devicesList);
+      return true;
+    }
+    return false;
   }
 
   static removeDevice(deviceId: string): void {
-    this.initialize();
-    this.devicesList = this.devicesList.filter(d => d.id !== deviceId);
-    PersistenceManager.setBatched('hardware_devices', this.devicesList);
+    this.delete(deviceId);
   }
 
   static subscribeToEvents(callback: EventListener): () => void {
@@ -138,7 +174,7 @@ export class HardwareRepository {
         return {
           ...dev,
           status: nextStatus,
-          lastSeen: new Date().toISOString(),
+          lastPing: new Date().toLocaleTimeString('fa-IR'),
         };
       }
       return dev;
@@ -159,7 +195,7 @@ export class HardwareRepository {
           ...dev,
           status: 'online',
           latencyMs: latency,
-          lastSeen: new Date().toISOString(),
+          lastPing: new Date().toLocaleTimeString('fa-IR'),
         };
       }
       return dev;

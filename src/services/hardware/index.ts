@@ -1,5 +1,7 @@
 export * from './hardwareTypes';
 export * from './hardwareAdapter';
+export * from './eventIdentity';
+export * from './hardwareGateway';
 export * from './adapterRegistry';
 export * from './adapters/zktecoAdapter';
 export * from './adapters/hikvisionAdapter';

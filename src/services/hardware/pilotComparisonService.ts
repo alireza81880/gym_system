@@ -16,7 +16,7 @@ import { MemberRepository } from '../repositories/memberRepository';
 import { AccessPolicyEngine, AccessPolicyConfig, defaultAccessPolicyConfig } from '../accessPolicyService';
 import { initialPackages } from '../../data/initialData';
 import { PersistenceManager } from '../repositories/persistenceManager';
-import { HardwareRepository } from '../repositories/hardwareRepository';
+import { generateEventId, generateCorrelationId } from './eventIdentity';
 
 type PilotEventListener = (comparison: PilotAccessComparison) => void;
 
@@ -133,7 +133,6 @@ export class PilotComparisonService {
     const eventTime = event.deviceTimestamp || event.timestamp || '';
     const dedupHash = `${event.deviceId}_${event.externalUserId || ''}_${eventTime}_${event.eventType}`;
     if (this.processedEventHashes.has(dedupHash)) {
-      console.log(`[PilotComparison] Duplicate event detected and ignored: ${dedupHash}`);
       return null;
     }
     this.processedEventHashes.add(dedupHash);
@@ -220,7 +219,7 @@ export class PilotComparisonService {
       : event.timestamp || new Date().toLocaleTimeString('fa-IR');
 
     const pilotRecord: PilotAccessComparison = {
-      id: `pilot-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
+      id: generateEventId(event.deviceId, undefined, 'pilot-cmp'),
       timestamp: timeStr,
       deviceTimestamp: event.deviceTimestamp || timeStr,
       receivedAt: new Date().toISOString(),
@@ -235,7 +234,7 @@ export class PilotComparisonService {
       comparison: comparisonStatus,
       reason: reasonText,
       rawEvent: event.rawPayload || JSON.stringify(event),
-      correlationId: event.correlationId || `corr-${Date.now()}`,
+      correlationId: event.correlationId || generateCorrelationId('corr-pilot'),
     };
 
     // Store in ring buffer

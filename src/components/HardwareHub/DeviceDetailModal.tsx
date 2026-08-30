@@ -31,6 +31,7 @@ import { getAdapterForVendor } from '../../services/hardware/adapterRegistry';
 import { DeviceMappingRepository } from '../../services/repositories/deviceMappingRepository';
 import { MemberRepository } from '../../services/repositories/memberRepository';
 import { DiagnosticLogResult } from '../../services/hardware/hardwareTypes';
+import { HardwareGateway } from '../../services/hardware/hardwareGateway';
 
 interface DeviceDetailModalProps {
   device: HardwareDevice | null;
@@ -156,6 +157,14 @@ export const DeviceDetailModal: React.FC<DeviceDetailModalProps> = ({
 
     setActionFeedback(`مشخصات سخت‌افزار با موفقیت از پایانه بازخوانی شد.`);
     setTimeout(() => setActionFeedback(null), 3000);
+  };
+
+  const handleSyncLogs = async () => {
+    if (!device) return;
+    setActionFeedback('در حال بازخوانی و همگام‌سازی لاگ‌های تردد از حافظه دستگاه...');
+    const res = await HardwareGateway.getInstance().syncDeviceLogs(device.id, 20);
+    setActionFeedback(`همگام‌سازی لاگ‌ها با موفقیت انجام شد: ${res.count} رکورد بازخوانی شد (${res.newEvents} تردد جدید، ${res.duplicates} تکراری/فیلترشده).`);
+    setTimeout(() => setActionFeedback(null), 4000);
   };
 
   const handleSaveMapping = () => {
@@ -349,6 +358,13 @@ export const DeviceDetailModal: React.FC<DeviceDetailModalProps> = ({
                 >
                   <RefreshCw className="h-4 w-4 text-sky-500" />
                   <span>بروزرسانی مشخصات (Refresh Device Info)</span>
+                </button>
+                <button
+                  onClick={handleSyncLogs}
+                  className="py-2.5 px-4 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-300 font-bold flex items-center gap-2 transition-all"
+                >
+                  <Activity className="h-4 w-4 text-amber-500" />
+                  <span>همگام‌سازی لاگ‌های تردد (Sync Logs)</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('diagnostics')}

@@ -8,6 +8,7 @@ import {
 
 // Backward-compatible export of the legacy adapterRegistry dictionary
 import { adapterRegistryInstance } from './hardware';
+import { generateEventId, generateCorrelationId } from './hardware/eventIdentity';
 
 export const adapterRegistry = {
   zkteco: adapterRegistryInstance.getAdapter('zkteco'),
@@ -18,7 +19,7 @@ export const adapterRegistry = {
   simulator: adapterRegistryInstance.getAdapter('simulator'),
 };
 
-// Hardware Event Normalizer Helper
+// Hardware Event Normalizer Helper (Deterministic Identity, No Date.now() + Math.random())
 export function createNormalizedHardwareEvent(
   deviceId: string,
   eventType: HardwareEventType,
@@ -35,9 +36,11 @@ export function createNormalizedHardwareEvent(
     direction?: 'entry' | 'exit';
     rawPayload?: string;
     source?: 'hardware_gateway' | 'simulator' | 'webhook' | 'shadow_listener';
+    vendorEventId?: string;
   }
 ): HardwareEvent {
-  const eventId = `hwevt-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+  const eventId = generateEventId(deviceId, payload.vendorEventId, 'hwevt');
+  const correlationId = generateCorrelationId('corr-hw');
   const timestamp = new Date().toISOString();
 
   return {
@@ -47,6 +50,8 @@ export function createNormalizedHardwareEvent(
     vendor: payload.vendor || 'zkteco',
     eventType,
     timestamp,
+    deviceTimestamp: timestamp,
+    receivedAt: timestamp,
     externalUserId: payload.externalUserId,
     memberId: payload.memberId,
     memberName: payload.memberName || 'هویت نامشخص',
@@ -58,6 +63,6 @@ export function createNormalizedHardwareEvent(
     rawPayload: payload.rawPayload || JSON.stringify(payload),
     source: payload.source || 'hardware_gateway',
     processingStatus: 'processed',
-    correlationId: `corr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    correlationId,
   };
 }

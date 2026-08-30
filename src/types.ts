@@ -574,9 +574,10 @@ export interface HardwareEvent {
   direction?: 'entry' | 'exit';
   rawPayload?: string;
   normalizedPayload?: Record<string, unknown>;
-  source: 'hardware_gateway' | 'simulator' | 'webhook' | 'shadow_listener';
+  source: 'hardware_gateway' | 'simulator' | 'webhook' | 'shadow_listener' | 'device_pull_sync';
   processingStatus: 'processed' | 'pending' | 'ignored';
   correlationId?: string;
+  metadata?: Record<string, any>;
 }
 
 export interface AccessLog {

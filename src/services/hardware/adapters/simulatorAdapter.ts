@@ -13,6 +13,7 @@ import {
   DeviceInfoResult, 
   DiagnosticLogResult 
 } from '../hardwareTypes';
+import { generateEventId, generateCorrelationId } from '../eventIdentity';
 
 export class SimulatorAdapter extends BaseHardwareAdapter {
   adapterId = 'simulator_virtual_v1';
@@ -33,10 +34,12 @@ export class SimulatorAdapter extends BaseHardwareAdapter {
 
   async healthCheck(device: HardwareDevice): Promise<AdapterHealthResult> {
     return {
-      isOnline: true,
-      latencyMs: Math.floor(5 + Math.random() * 10),
+      isOnline: device.status !== 'offline',
+      latencyMs: device.status === 'offline' ? 0 : Math.floor(5 + Math.random() * 10),
       firmwareVersion: 'v2025.1-SIMULATOR',
-      activeConnectionsCount: 1,
+      activeConnectionsCount: device.status === 'offline' ? 0 : 1,
+      checkedAt: new Date().toISOString(),
+      lastError: device.status === 'offline' ? 'دستگاه شبیه‌ساز در وضعیت آفلاین قرار دارد.' : undefined,
     };
   }
 
@@ -96,14 +99,18 @@ export class SimulatorAdapter extends BaseHardwareAdapter {
   }
 
   async runDiagnostics(device: HardwareDevice): Promise<DiagnosticLogResult> {
+    const isOnline = device.status !== 'offline';
     return {
-      passed: true,
-      latencyMs: 8,
+      passed: isOnline,
+      latencyMs: isOnline ? 8 : 0,
       timestamp: new Date().toISOString(),
-      logs: [
+      logs: isOnline ? [
         `[Simulator] Virtual Loopback verified for ${device.name}`,
         `[Capabilities] All biometric and relay vectors available`,
         `[Status] Ready for sandbox and test workflows.`,
+      ] : [
+        `[Simulator] Device ${device.name} is currently offline.`,
+        `[Status] OFFLINE`,
       ],
     };
   }
@@ -122,15 +129,23 @@ export class SimulatorAdapter extends BaseHardwareAdapter {
       accessResult?: 'granted' | 'denied' | 'ignored_shadow_mode';
       accessReason?: string;
       externalUserId?: string;
+      vendorEventId?: string;
+      cardUid?: string;
     }
   ): HardwareEvent {
-    return {
-      id: `sim-evt-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
+    const eventId = generateEventId(device.id, options.vendorEventId, 'evt-sim');
+    const correlationId = generateCorrelationId('corr-sim');
+    const nowIso = new Date().toISOString();
+
+    const evt: HardwareEvent = {
+      id: eventId,
       deviceId: device.id,
       deviceName: device.name,
       vendor: device.vendor,
       eventType,
-      timestamp: new Date().toISOString(),
+      timestamp: nowIso,
+      deviceTimestamp: nowIso,
+      receivedAt: nowIso,
       externalUserId: options.externalUserId,
       memberId: options.memberId,
       memberName: options.memberName || 'کاربر شبیه‌سازی شده',
@@ -142,7 +157,12 @@ export class SimulatorAdapter extends BaseHardwareAdapter {
       rawPayload: JSON.stringify(options),
       source: 'simulator',
       processingStatus: 'processed',
-      correlationId: `sim-corr-${Date.now()}`,
+      correlationId,
     };
+
+    // Emit event to subscribers
+    this.emitDeviceEvent(device.id, evt);
+
+    return evt;
   }
 }
