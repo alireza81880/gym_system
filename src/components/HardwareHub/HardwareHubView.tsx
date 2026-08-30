@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Cpu, 
   Wifi, 
@@ -72,8 +72,13 @@ export const HardwareHubView: React.FC = () => {
   const [simMethod, setSimMethod] = useState<'face_recognition' | 'rfid_card' | 'fingerprint' | 'qr_code'>('face_recognition');
   const [simFeedback, setSimFeedback] = useState<{ message: string; type: 'success' | 'warn' | 'error' } | null>(null);
 
-  const onlineDevicesCount = hardwareDevices.filter(d => d.status === 'online').length;
-  const avgLatency = Math.round(hardwareDevices.reduce((sum, d) => sum + (d.latencyMs || 14), 0) / (hardwareDevices.length || 1));
+  const onlineDevicesCount = useMemo(() => {
+    return hardwareDevices.filter(d => d.status === 'online').length;
+  }, [hardwareDevices]);
+
+  const avgLatency = useMemo(() => {
+    return Math.round(hardwareDevices.reduce((sum, d) => sum + (d.latencyMs || 14), 0) / (hardwareDevices.length || 1));
+  }, [hardwareDevices]);
 
   // Handler for adding discovered device
   const handleDeviceAdded = (newDevice: HardwareDevice) => {

@@ -76,13 +76,13 @@ export const MoneyInput: React.FC<MoneyInputProps> = ({
           onChange={handleChange}
           className={`w-full py-2.5 px-3.5 pl-14 text-left font-mono font-bold text-sm sm:text-base rounded-xl transition-all duration-200 border outline-none disabled:opacity-50 ${
             disabled
-              ? 'bg-stone-100 dark:bg-stone-800/40 border-stone-200 dark:border-stone-700/50 text-stone-400'
-              : 'bg-white dark:bg-stone-900 hover:bg-stone-50 dark:hover:bg-stone-850 text-stone-900 dark:text-white border-stone-300 dark:border-stone-700 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 shadow-xs'
+              ? 'bg-[var(--gym-surface-glass)] border-[var(--gym-border)] text-[var(--gym-text-muted)] cursor-not-allowed'
+              : 'bg-[var(--gym-surface-glass-strong)] hover:bg-[var(--gym-surface-soft)] text-[var(--gym-text)] border-[var(--gym-border)] hover:border-[var(--gym-brand)] focus:border-[var(--gym-brand)] focus:ring-2 focus:ring-[var(--gym-brand-soft)] shadow-xs placeholder:text-[var(--gym-text-muted)]'
           } ${className}`}
           dir="ltr"
         />
         {unit && (
-          <span className="absolute left-3 text-xs font-sans font-medium text-stone-400 dark:text-stone-500 pointer-events-none select-none">
+          <span className="absolute left-3 text-xs font-sans font-medium text-[var(--gym-text-muted)] pointer-events-none select-none">
             {unit}
           </span>
         )}
@@ -93,7 +93,7 @@ export const MoneyInput: React.FC<MoneyInputProps> = ({
           <button
             type="button"
             onClick={onFullAmount}
-            className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:underline flex items-center gap-1 transition-colors"
+            className="text-[11px] font-bold text-[var(--gym-brand)] hover:brightness-125 hover:underline flex items-center gap-1 transition-colors cursor-pointer"
           >
             <span>[ {fullAmountLabel} ]</span>
           </button>

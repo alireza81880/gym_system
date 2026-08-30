@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   BrainCircuit, 
   Users, 
@@ -33,13 +33,29 @@ export const SmartInsightsView: React.FC = () => {
 
   const [activeFilter, setActiveFilter] = useState<'all' | 'churn' | 'crowding' | 'expiring' | 'debt'>('all');
 
-  const churnRiskMembers = SmartInsightsEngine.detectChurnRisk(students, attendance, 12);
-  const loyalMembers = SmartInsightsEngine.detectLoyalMembers(students, attendance, 8);
-  const expiringSoonMembers = SmartInsightsEngine.getExpiringSoonMembers(students, 7);
-  const highDebtMembers = SmartInsightsEngine.getHighDebtMembers(students, 1000000);
-  const crowding = SmartInsightsEngine.analyzeCrowding(attendance, 60);
+  const churnRiskMembers = useMemo(() => {
+    return SmartInsightsEngine.detectChurnRisk(students, attendance, 12);
+  }, [students, attendance]);
 
-  const totalInsightsCount = churnRiskMembers.length + expiringSoonMembers.length + highDebtMembers.length;
+  const loyalMembers = useMemo(() => {
+    return SmartInsightsEngine.detectLoyalMembers(students, attendance, 8);
+  }, [students, attendance]);
+
+  const expiringSoonMembers = useMemo(() => {
+    return SmartInsightsEngine.getExpiringSoonMembers(students, 7);
+  }, [students]);
+
+  const highDebtMembers = useMemo(() => {
+    return SmartInsightsEngine.getHighDebtMembers(students, 1000000);
+  }, [students]);
+
+  const crowding = useMemo(() => {
+    return SmartInsightsEngine.analyzeCrowding(attendance, 60);
+  }, [attendance]);
+
+  const totalInsightsCount = useMemo(() => {
+    return churnRiskMembers.length + expiringSoonMembers.length + highDebtMembers.length;
+  }, [churnRiskMembers.length, expiringSoonMembers.length, highDebtMembers.length]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">

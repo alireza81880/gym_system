@@ -47,7 +47,7 @@ import { useFinanceStore } from '../../stores/financeStore';
 import { useMemberStore } from '../../stores/memberStore';
 import { useAttendanceStore } from '../../stores/attendanceStore';
 import { useLockerStore } from '../../stores/lockerStore';
-import { useSettingsStore } from '../../stores/settingsStore';
+import { useSettingsStore, settingsActions } from '../../stores/settingsStore';
 import { GlassCard } from '../common/GlassCard';
 import { GlassStatCard } from '../common/GlassStatCard';
 import { GlassBadge } from '../common/GlassBadge';
@@ -92,15 +92,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const { 
     t, 
     lang, 
-    coaches, 
     formatMoney, 
     formatNum,
-    getCoachStats 
   } = appContext;
 
-  // Active branch from settings store
+  // Granular settings store subscriptions
   const activeBranchId = useSettingsStore(s => s.activeBranchId);
   const branches = useSettingsStore(s => s.branches);
+  const coaches = useSettingsStore(s => s.coaches);
   const currentBranch = branches.find(b => b.id === activeBranchId);
 
   // Granular store versions for high-efficiency memoized recomputations
@@ -167,7 +166,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Coach Revenue Distribution
   const coachChartData = useMemo(() => {
     return coaches.map((coach) => {
-      const stats = getCoachStats(coach.id);
+      const stats = settingsActions.getCoachStats(coach.id);
       return {
         name: coach.fullName.split(' ')[0],
         fullName: coach.fullName,
@@ -178,7 +177,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         id: coach.id,
       };
     });
-  }, [coaches, getCoachStats, memberVersion, financeVersion]);
+  }, [coaches, memberVersion, financeVersion]);
 
   return (
     <div id="dashboard-container" className="space-y-6">

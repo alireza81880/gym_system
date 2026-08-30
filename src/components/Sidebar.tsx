@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { 
   LayoutDashboard, 
   Users, 
@@ -23,6 +23,11 @@ import {
   Zap
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useSettingsStore, useMemberStore, useLockerStore, useHardwareStore, useAttendanceStore } from '../stores';
+import { MemberRepository } from '../services/repositories/memberRepository';
+import { LockerRepository } from '../services/repositories/lockerRepository';
+import { HardwareRepository } from '../services/repositories/hardwareRepository';
+import { AttendanceRepository } from '../services/repositories/attendanceRepository';
 import { NavTab } from '../types';
 import { SmartInsightsEngine } from '../services/insightsService';
 import { ThemeSelectorPopover } from './common/ThemeSelectorPopover';
@@ -69,27 +74,49 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const appContext = useApp();
   const activeTab = propActiveTab ?? appContext.activeTab;
   const setActiveTab = propSetActiveTab ?? appContext.setActiveTab;
-  const { 
-    t, 
-    coaches, 
-    students, 
-    smartLockers, 
-    hardwareDevices,
-    attendance,
-    moduleFeatures,
-    lang, 
-    formatNum 
-  } = appContext;
+  const { t, formatNum, lang } = appContext;
 
-  const activeCoachesCount = coaches.filter(c => c.status === 'active').length;
-  const activeStudentsCount = students.filter(s => s.status === 'active').length;
-  const debtorsCount = students.filter(s => s.remainingDebt > 0).length;
-  const availableLockersCount = smartLockers.filter(l => l.status === 'available').length;
-  const onlineDevicesCount = hardwareDevices.filter(d => d.status === 'online').length;
-  const churnRiskCount = SmartInsightsEngine.detectChurnRisk(students, attendance, 12).length;
+  // Granular store subscriptions
+  const moduleFeatures = useSettingsStore(s => s.moduleFeatures);
+  const coaches = useSettingsStore(s => s.coaches);
+  const memberVersion = useMemberStore(s => s.version);
+  const lockerVersion = useLockerStore(s => s.version);
+  const hardwareVersion = useHardwareStore(s => s.version);
+  const attendanceVersion = useAttendanceStore(s => s.version);
+
+  const activeCoachesCount = useMemo(() => {
+    return coaches.filter(c => c.status === 'active').length;
+  }, [coaches]);
+
+  const { activeStudentsCount, debtorsCount } = useMemo(() => {
+    const all = MemberRepository.getAll();
+    let active = 0;
+    let debtors = 0;
+    for (let i = 0; i < all.length; i++) {
+      if (all[i].status === 'active') active++;
+      if (all[i].remainingDebt > 0) debtors++;
+    }
+    return { activeStudentsCount: active, debtorsCount: debtors };
+  }, [memberVersion]);
+
+  const availableLockersCount = useMemo(() => {
+    return LockerRepository.getMetrics().available;
+  }, [lockerVersion]);
+
+  const onlineDevicesCount = useMemo(() => {
+    return HardwareRepository.getDevices().filter(d => d.status === 'online').length;
+  }, [hardwareVersion]);
+
+  const churnRiskCount = useMemo(() => {
+    const students = MemberRepository.getAll();
+    const attendance = AttendanceRepository.getAll();
+    return SmartInsightsEngine.detectChurnRisk(students, attendance, 12).length;
+  }, [memberVersion, attendanceVersion]);
 
   // Filter only enabled features
-  const enabledFeatures = moduleFeatures.filter(f => f.isEnabled);
+  const enabledFeatures = useMemo(() => {
+    return moduleFeatures.filter(f => f.isEnabled);
+  }, [moduleFeatures]);
 
   const getBadgeForFeature = (featureId: NavTab) => {
     switch (featureId) {

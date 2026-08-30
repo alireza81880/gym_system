@@ -133,32 +133,53 @@ export const SmartLockerHub: React.FC = () => {
     setAssignmentHistory(LockerRepository.getAssignmentHistory(50));
   }, [smartLockers]);
 
-  const maxLockerNum = smartLockers.length > 0 ? Math.max(...smartLockers.map(l => l.number)) : 0;
+  const maxLockerNum = useMemo(() => {
+    return smartLockers.length > 0 ? Math.max(...smartLockers.map(l => l.number)) : 0;
+  }, [smartLockers]);
+
   const [newLockerNumber, setNewLockerNumber] = useState<number>(maxLockerNum + 1);
   const [newLockerZone, setNewLockerZone] = useState<LockerZone>('general');
   const [newLockerRelay, setNewLockerRelay] = useState<number>((maxLockerNum % 32) + 1);
   const [newLockerLockType, setNewLockerLockType] = useState<SmartLocker['lockType']>('solenoid_12v');
   const [newLockerStatus, setNewLockerStatus] = useState<'available' | 'maintenance'>('available');
 
-  // KPIs
-  const totalCount = smartLockers.length;
-  const availableCount = smartLockers.filter(l => l.status === 'available').length;
-  const occupiedCount = smartLockers.filter(l => l.status === 'occupied').length;
-  const maintenanceCount = smartLockers.filter(l => l.status === 'maintenance').length;
-  const onlineDevicesCount = hardwareDevices.filter(d => d.status === 'online').length;
-
-  // Filtered Lockers
-  const filteredLockers = smartLockers.filter(locker => {
-    if (selectedZone !== 'all' && locker.zone !== selectedZone) return false;
-    if (statusFilter !== 'all' && locker.status !== statusFilter) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const numMatch = locker.number.toString().includes(q);
-      const studentMatch = locker.currentStudentName?.toLowerCase().includes(q);
-      return numMatch || studentMatch;
+  // Fast single-pass memoized KPIs
+  const { totalCount, availableCount, occupiedCount, maintenanceCount } = useMemo(() => {
+    let avail = 0;
+    let occ = 0;
+    let maint = 0;
+    for (let i = 0; i < smartLockers.length; i++) {
+      const s = smartLockers[i].status;
+      if (s === 'available') avail++;
+      else if (s === 'occupied') occ++;
+      else if (s === 'maintenance') maint++;
     }
-    return true;
-  });
+    return {
+      totalCount: smartLockers.length,
+      availableCount: avail,
+      occupiedCount: occ,
+      maintenanceCount: maint,
+    };
+  }, [smartLockers]);
+
+  const onlineDevicesCount = useMemo(() => {
+    return hardwareDevices.filter(d => d.status === 'online').length;
+  }, [hardwareDevices]);
+
+  // Filtered Lockers memoized
+  const filteredLockers = useMemo(() => {
+    return smartLockers.filter(locker => {
+      if (selectedZone !== 'all' && locker.zone !== selectedZone) return false;
+      if (statusFilter !== 'all' && locker.status !== statusFilter) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const numMatch = locker.number.toString().includes(q);
+        const studentMatch = locker.currentStudentName?.toLowerCase().includes(q);
+        return numMatch || studentMatch;
+      }
+      return true;
+    });
+  }, [smartLockers, selectedZone, statusFilter, searchQuery]);
 
   // Handle hardware scan trigger
   const handleTriggerScan = () => {

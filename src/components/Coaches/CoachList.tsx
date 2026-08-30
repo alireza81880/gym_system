@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Users, 
   Plus, 
@@ -61,16 +61,28 @@ export const CoachList: React.FC = () => {
   const [monthlyTargetStudents, setMonthlyTargetStudents] = useState<number>(15);
   const [notes, setNotes] = useState('');
 
-  const specialties = Array.from(new Set(coaches.map(c => c.specialty)));
+  const specialties = useMemo(() => {
+    return Array.from(new Set(coaches.map(c => c.specialty)));
+  }, [coaches]);
 
-  const filteredCoaches = coaches.filter(coach => {
-    const matchesSearch = 
-      coach.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      coach.phone.includes(searchTerm) ||
-      coach.specialty.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesSpecialty = selectedSpecialty === 'all' || coach.specialty === selectedSpecialty;
-    return matchesSearch && matchesSpecialty;
-  });
+  const coachStatsMap = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof getCoachStats>>();
+    coaches.forEach(c => {
+      map.set(c.id, getCoachStats(c.id));
+    });
+    return map;
+  }, [coaches, getCoachStats]);
+
+  const filteredCoaches = useMemo(() => {
+    return coaches.filter(coach => {
+      const matchesSearch = 
+        coach.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        coach.phone.includes(searchTerm) ||
+        coach.specialty.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSpecialty = selectedSpecialty === 'all' || coach.specialty === selectedSpecialty;
+      return matchesSearch && matchesSpecialty;
+    });
+  }, [coaches, searchTerm, selectedSpecialty]);
 
   const openAddModal = () => {
     setEditingCoachId(null);
@@ -200,7 +212,7 @@ export const CoachList: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {filteredCoaches.map((coach) => {
-            const stats = getCoachStats(coach.id);
+            const stats = coachStatsMap.get(coach.id) || getCoachStats(coach.id);
             return (
               <GlassCard
                 key={coach.id}

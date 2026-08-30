@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   BarChart3, 
   Download, 
@@ -39,33 +39,61 @@ export const ManagerReports: React.FC = () => {
 
   const [selectedCoach, setSelectedCoach] = useState('all');
 
-  // Authoritative Calculations derived from Finance domain
-  const totalPaidRevenue = summary.totalRevenue;
-  const totalDebts = kpis.totalOutstanding;
-  const totalRevenue = totalPaidRevenue + totalDebts;
-  
-  const totalCoachCommissions = coaches.reduce((sum, c) => {
-    const stats = getCoachStats(c.id);
-    return sum + stats.totalCoachShare;
-  }, 0);
+  // Authoritative Calculations derived from Finance domain (Memoized in a single pass)
+  const reportCalculations = useMemo(() => {
+    const totalPaidRevenue = summary.totalRevenue;
+    const totalDebts = kpis.totalOutstanding;
+    const totalRevenue = totalPaidRevenue + totalDebts;
 
-  const totalClubShare = coaches.reduce((sum, c) => {
-    const stats = getCoachStats(c.id);
-    return sum + stats.totalClubShare;
-  }, 0);
+    let coachCommissions = 0;
+    let clubShare = 0;
+    let coachPaidOut = 0;
+    let coachOwedBalance = 0;
 
-  const totalCoachPaidOut = coaches.reduce((sum, c) => {
-    const stats = getCoachStats(c.id);
-    return sum + stats.totalPaidOut;
-  }, 0);
+    const coachBreakdownList = coaches.map(c => {
+      const stats = getCoachStats(c.id);
+      coachCommissions += stats.totalCoachShare;
+      clubShare += stats.totalClubShare;
+      coachPaidOut += stats.totalPaidOut;
+      coachOwedBalance += stats.remainingBalance;
 
-  const totalCoachOwedBalance = coaches.reduce((sum, c) => {
-    const stats = getCoachStats(c.id);
-    return sum + stats.remainingBalance;
-  }, 0);
+      return {
+        coachName: c.fullName,
+        specialty: c.specialty,
+        commissionRate: c.commissionRate,
+        ...stats,
+      };
+    });
 
-  const totalOperatingCosts = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const clubNetOperatingProfit = totalClubShare - totalOperatingCosts;
+    const totalOperatingCosts = expenses.reduce((sum, e) => sum + e.amount, 0);
+    const clubNetOperatingProfit = clubShare - totalOperatingCosts;
+
+    return {
+      totalPaidRevenue,
+      totalDebts,
+      totalRevenue,
+      totalCoachCommissions: coachCommissions,
+      totalClubShare: clubShare,
+      totalCoachPaidOut: coachPaidOut,
+      totalCoachOwedBalance: coachOwedBalance,
+      totalOperatingCosts,
+      clubNetOperatingProfit,
+      coachBreakdownList,
+    };
+  }, [summary, kpis, expenses, coaches, getCoachStats]);
+
+  const {
+    totalPaidRevenue,
+    totalDebts,
+    totalRevenue,
+    totalCoachCommissions,
+    totalClubShare,
+    totalCoachPaidOut,
+    totalCoachOwedBalance,
+    totalOperatingCosts,
+    clubNetOperatingProfit,
+    coachBreakdownList,
+  } = reportCalculations;
 
   const handlePrint = () => {
     window.print();
@@ -88,12 +116,7 @@ export const ManagerReports: React.FC = () => {
         totalCoaches: coaches.length,
         totalAttendances: attendance.length,
       },
-      coachesBreakdown: coaches.map(c => ({
-        coachName: c.fullName,
-        specialty: c.specialty,
-        commissionRate: c.commissionRate,
-        ...getCoachStats(c.id),
-      })),
+      coachesBreakdown: coachBreakdownList,
     };
 
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(fullReport, null, 2));
