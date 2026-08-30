@@ -110,12 +110,12 @@ export const MigrationPreview: React.FC<MigrationPreviewProps> = ({
           onClick={() => setActiveTab('all')}
           className={`p-4 rounded-2xl border text-right transition-all cursor-pointer ${
             activeTab === 'all'
-              ? 'bg-slate-800 border-slate-600 ring-2 ring-slate-500/20'
-              : 'bg-slate-900/60 border-slate-800/80 hover:bg-slate-850'
+              ? 'glass-neon border-[var(--gym-brand)] ring-2 ring-[var(--gym-brand-soft)]'
+              : 'glass-subtle border-[var(--gym-border)] hover:border-[var(--gym-border-strong)]'
           }`}
         >
-          <span className="text-xs text-slate-400">کل رکوردها</span>
-          <p className="text-xl font-black text-white mt-1">{totalCount.toLocaleString('fa-IR')}</p>
+          <span className="text-xs text-[var(--gym-text-muted)]">کل رکوردها</span>
+          <p className="text-xl font-black text-[var(--gym-text)] mt-1">{totalCount.toLocaleString('fa-IR')}</p>
         </button>
 
         <button
@@ -123,12 +123,12 @@ export const MigrationPreview: React.FC<MigrationPreviewProps> = ({
           onClick={() => setActiveTab('valid')}
           className={`p-4 rounded-2xl border text-right transition-all cursor-pointer ${
             activeTab === 'valid'
-              ? 'bg-emerald-950/80 border-emerald-500 ring-2 ring-emerald-500/20'
-              : 'bg-slate-900/60 border-slate-800/80 hover:bg-slate-850'
+              ? 'bg-[var(--gym-brand-soft)] border-[var(--gym-border-strong)] ring-2 ring-[var(--gym-brand-soft)]'
+              : 'glass-subtle border-[var(--gym-border)] hover:border-[var(--gym-border-strong)]'
           }`}
         >
-          <span className="text-xs text-emerald-400">اعضای جدید (ایجاد)</span>
-          <p className="text-xl font-black text-emerald-300 mt-1">{validNewCount.toLocaleString('fa-IR')}</p>
+          <span className="text-xs text-[var(--gym-brand)]">اعضای جدید (ایجاد)</span>
+          <p className="text-xl font-black text-[var(--gym-brand)] mt-1">{validNewCount.toLocaleString('fa-IR')}</p>
         </button>
 
         <button
@@ -136,8 +136,8 @@ export const MigrationPreview: React.FC<MigrationPreviewProps> = ({
           onClick={() => setActiveTab('duplicates')}
           className={`p-4 rounded-2xl border text-right transition-all cursor-pointer ${
             activeTab === 'duplicates'
-              ? 'bg-amber-950/80 border-amber-500 ring-2 ring-amber-500/20'
-              : 'bg-slate-900/60 border-slate-800/80 hover:bg-slate-850'
+              ? 'bg-amber-950/40 border-amber-500 ring-2 ring-amber-500/20'
+              : 'glass-subtle border-[var(--gym-border)] hover:border-[var(--gym-border-strong)]'
           }`}
         >
           <span className="text-xs text-amber-400">تکراری / به‌روزرسانی</span>
@@ -149,8 +149,8 @@ export const MigrationPreview: React.FC<MigrationPreviewProps> = ({
           onClick={() => setActiveTab('warnings')}
           className={`p-4 rounded-2xl border text-right transition-all cursor-pointer ${
             activeTab === 'warnings'
-              ? 'bg-blue-950/80 border-blue-500 ring-2 ring-blue-500/20'
-              : 'bg-slate-900/60 border-slate-800/80 hover:bg-slate-850'
+              ? 'bg-blue-950/40 border-blue-500 ring-2 ring-blue-500/20'
+              : 'glass-subtle border-[var(--gym-border)] hover:border-[var(--gym-border-strong)]'
           }`}
         >
           <span className="text-xs text-blue-400">هشدارهای اصلاح‌شده</span>
@@ -162,8 +162,8 @@ export const MigrationPreview: React.FC<MigrationPreviewProps> = ({
           onClick={() => setActiveTab('errors')}
           className={`p-4 rounded-2xl border text-right transition-all cursor-pointer ${
             activeTab === 'errors'
-              ? 'bg-rose-950/80 border-rose-500 ring-2 ring-rose-500/20'
-              : 'bg-slate-900/60 border-slate-800/80 hover:bg-slate-850'
+              ? 'bg-rose-950/40 border-rose-500 ring-2 ring-rose-500/20'
+              : 'glass-subtle border-[var(--gym-border)] hover:border-[var(--gym-border-strong)]'
           }`}
         >
           <span className="text-xs text-rose-400">خطاهای رد شده</span>
@@ -172,17 +172,17 @@ export const MigrationPreview: React.FC<MigrationPreviewProps> = ({
       </div>
 
       {/* Migration scope & mode settings bar */}
-      <div className="p-5 bg-slate-900/80 rounded-2xl border border-slate-800 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="p-5 glass-regular rounded-2xl border border-[var(--gym-border)] grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Import Mode */}
         <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-            <Layers className="w-3.5 h-3.5 text-emerald-400" />
+          <label className="text-xs font-semibold text-[var(--gym-text-secondary)] flex items-center gap-1.5">
+            <Layers className="w-3.5 h-3.5 text-[var(--gym-brand)]" />
             <span>حالت عملیات انتقال (Import Mode)</span>
           </label>
           <select
             value={importMode}
             onChange={(e) => onUpdateImportMode(e.target.value as any)}
-            className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-emerald-500 focus:outline-none"
+            className="w-full px-3.5 py-2.5 rounded-xl glass-subtle border border-[var(--gym-border)] text-[var(--gym-text)] text-xs focus:border-[var(--gym-brand)] focus:outline-none"
           >
             <option value="create_and_update">ایجاد اعضای جدید + به‌روزرسانی افراد تکراری (توصیه شده)</option>
             <option value="create_only">فقط ایجاد افراد جدید (عدم تغییر افراد تکراری)</option>
@@ -192,14 +192,14 @@ export const MigrationPreview: React.FC<MigrationPreviewProps> = ({
 
         {/* Scope */}
         <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+          <label className="text-xs font-semibold text-[var(--gym-text-secondary)] flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
             <span>دامنه اطلاعات انتقالی (Migration Scope)</span>
           </label>
           <select
             value={scope}
             onChange={(e) => onUpdateScope(e.target.value as any)}
-            className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-emerald-500 focus:outline-none"
+            className="w-full px-3.5 py-2.5 rounded-xl glass-subtle border border-[var(--gym-border)] text-[var(--gym-text)] text-xs focus:border-[var(--gym-brand)] focus:outline-none"
           >
             <option value="members_only">فقط اطلاعات پرونده اعضا و اشتراک فعلی</option>
             <option value="current_membership">پرونده اعضا + مانده بدهی و شهریه فعال</option>
@@ -209,17 +209,17 @@ export const MigrationPreview: React.FC<MigrationPreviewProps> = ({
       </div>
 
       {/* Preview Table with Search & Actions */}
-      <div className="p-6 bg-slate-900/60 rounded-2xl border border-slate-800 space-y-4">
+      <div className="p-6 glass-regular rounded-2xl border border-[var(--gym-border)] space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           {/* Search Box */}
           <div className="relative w-full md:w-80">
-            <Search className="w-4 h-4 text-slate-500 absolute right-3.5 top-3" />
+            <Search className="w-4 h-4 text-[var(--gym-text-muted)] absolute right-3.5 top-3" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="جستجو در نام، شماره تماس، کد ملی یا عضویت..."
-              className="w-full pl-3.5 pr-10 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-emerald-500 focus:outline-none"
+              className="w-full pl-3.5 pr-10 py-2 rounded-xl glass-subtle border border-[var(--gym-border)] text-[var(--gym-text)] text-xs focus:border-[var(--gym-brand)] focus:outline-none"
             />
           </div>
 
@@ -235,17 +235,17 @@ export const MigrationPreview: React.FC<MigrationPreviewProps> = ({
               </button>
             )}
 
-            <span className="text-xs text-slate-400 font-medium">
+            <span className="text-xs text-[var(--gym-text-muted)] font-medium">
               نمایش {Math.min(100, filteredItems.length)} از {filteredItems.length.toLocaleString('fa-IR')} ردیف
             </span>
           </div>
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950 max-h-[480px]">
+        <div className="overflow-x-auto rounded-xl border border-[var(--gym-border)] glass-subtle max-h-[480px]">
           <table className="w-full text-right text-xs">
-            <thead className="sticky top-0 z-10 bg-slate-900 shadow-md">
-              <tr className="border-b border-slate-800 text-slate-400 font-semibold">
+            <thead className="sticky top-0 z-10 glass-regular shadow-md">
+              <tr className="border-b border-[var(--gym-border)] text-[var(--gym-text-muted)] font-semibold">
                 <th className="p-3 w-12 text-center">ردیف</th>
                 <th className="p-3">نام و نام خانوادگی</th>
                 <th className="p-3">شماره تماس</th>
@@ -256,34 +256,34 @@ export const MigrationPreview: React.FC<MigrationPreviewProps> = ({
                 <th className="p-3 text-center">وضعیت اعتبارسنجی</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60">
+            <tbody className="divide-y divide-[var(--gym-border)]">
               {filteredItems.slice(0, 100).map((item) => {
                 const member = item.mappedMember;
                 return (
-                  <tr key={item.rowIndex} className="hover:bg-slate-900/40 transition-colors">
-                    <td className="p-3 text-center font-mono text-slate-500">{item.rowIndex}</td>
+                  <tr key={item.rowIndex} className="hover:bg-[var(--gym-brand-soft)] transition-colors">
+                    <td className="p-3 text-center font-mono text-[var(--gym-text-muted)]">{item.rowIndex}</td>
                     
-                    <td className="p-3 font-semibold text-white">
+                    <td className="p-3 font-semibold text-[var(--gym-text)]">
                       {member.fullName || <span className="text-rose-400">بدون نام</span>}
                     </td>
 
-                    <td className="p-3 font-mono text-slate-300" dir="ltr">
-                      {member.phone || <span className="text-slate-600">-</span>}
+                    <td className="p-3 font-mono text-[var(--gym-text-secondary)]" dir="ltr">
+                      {member.phone || <span className="text-[var(--gym-text-muted)] opacity-50">-</span>}
                     </td>
 
-                    <td className="p-3 font-mono text-slate-300">
-                      {member.nationalId || <span className="text-slate-600">-</span>}
+                    <td className="p-3 font-mono text-[var(--gym-text-secondary)]">
+                      {member.nationalId || <span className="text-[var(--gym-text-muted)] opacity-50">-</span>}
                     </td>
 
-                    <td className="p-3 font-mono font-bold text-emerald-400">
+                    <td className="p-3 font-mono font-bold text-[var(--gym-brand)]">
                       #{member.memberNumber || 'خودکار'}
                     </td>
 
-                    <td className="p-3 font-mono text-slate-300">
-                      {member.expireDate || <span className="text-slate-600">-</span>}
+                    <td className="p-3 font-mono text-[var(--gym-text-secondary)]">
+                      {member.expireDate || <span className="text-[var(--gym-text-muted)] opacity-50">-</span>}
                     </td>
 
-                    <td className="p-3 font-mono font-semibold text-slate-200">
+                    <td className="p-3 font-mono font-semibold text-[var(--gym-text)]">
                       {(member.remainingDebt || 0).toLocaleString('fa-IR')} ت
                     </td>
 
@@ -304,7 +304,7 @@ export const MigrationPreview: React.FC<MigrationPreviewProps> = ({
                           معتبر با هشدار
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-800 px-2.5 py-0.5 rounded-full">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[var(--gym-brand)] bg-[var(--gym-brand-soft)] border border-[var(--gym-border-strong)] px-2.5 py-0.5 rounded-full">
                           <CheckCircle2 className="w-3 h-3" />
                           عضو جدید
                         </span>
@@ -320,41 +320,41 @@ export const MigrationPreview: React.FC<MigrationPreviewProps> = ({
 
       {/* Confirmation Modal before starting migration */}
       {showConfirmModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
-          <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-7 space-y-5 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-lg glass-regular border border-[var(--gym-border)] rounded-3xl p-7 space-y-5 shadow-2xl">
             <div className="flex items-center gap-3">
-              <span className="p-3 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <span className="p-3 rounded-2xl bg-[var(--gym-brand-soft)] text-[var(--gym-brand)] border border-[var(--gym-border-strong)]">
                 <ShieldAlert className="w-6 h-6" />
               </span>
               <div>
-                <h3 className="text-base font-bold text-white">تأیید نهایی انتقال و ایجاد نسخه پشتیبان</h3>
-                <p className="text-xs text-slate-400">عملیات انتقال داده‌ها با امنیت کامل آغاز خواهد شد.</p>
+                <h3 className="text-base font-bold text-[var(--gym-text)]">تأیید نهایی انتقال و ایجاد نسخه پشتیبان</h3>
+                <p className="text-xs text-[var(--gym-text-muted)]">عملیات انتقال داده‌ها با امنیت کامل آغاز خواهد شد.</p>
               </div>
             </div>
 
-            <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-2 text-xs text-slate-300">
-              <div className="flex justify-between py-1 border-b border-slate-800/80">
-                <span className="text-slate-500">تعداد اعضای جدید برای ایجاد:</span>
-                <span className="font-bold text-emerald-400 font-mono">{validNewCount.toLocaleString('fa-IR')} نفر</span>
+            <div className="p-4 glass-subtle rounded-2xl border border-[var(--gym-border)] space-y-2 text-xs text-[var(--gym-text-secondary)]">
+              <div className="flex justify-between py-1 border-b border-[var(--gym-border)]">
+                <span className="text-[var(--gym-text-muted)]">تعداد اعضای جدید برای ایجاد:</span>
+                <span className="font-bold text-[var(--gym-brand)] font-mono">{validNewCount.toLocaleString('fa-IR')} نفر</span>
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-800/80">
-                <span className="text-slate-500">تعداد اعضای موجود برای به‌روزرسانی:</span>
+              <div className="flex justify-between py-1 border-b border-[var(--gym-border)]">
+                <span className="text-[var(--gym-text-muted)]">تعداد اعضای موجود برای به‌روزرسانی:</span>
                 <span className="font-bold text-amber-400 font-mono">{duplicateCount.toLocaleString('fa-IR')} پرونده</span>
               </div>
               <div className="flex justify-between py-1">
-                <span className="text-slate-500">نسخه پشتیبان خودکار (Rollback):</span>
-                <span className="font-bold text-emerald-400 font-mono">فعال (ذخیره قبل از شروع)</span>
+                <span className="text-[var(--gym-text-muted)]">نسخه پشتیبان خودکار (Rollback):</span>
+                <span className="font-bold text-[var(--gym-brand)] font-mono">فعال (ذخیره قبل از شروع)</span>
               </div>
             </div>
 
-            <label className="flex items-start gap-3 p-3.5 bg-emerald-950/30 border border-emerald-800/60 rounded-xl cursor-pointer">
+            <label className="flex items-start gap-3 p-3.5 bg-[var(--gym-brand-soft)] border border-[var(--gym-border-strong)] rounded-xl cursor-pointer">
               <input
                 type="checkbox"
                 checked={confirmChecked}
                 onChange={(e) => setConfirmChecked(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded text-emerald-500 focus:ring-emerald-500"
+                className="mt-0.5 w-4 h-4 rounded text-[var(--gym-brand)] focus:ring-[var(--gym-brand)]"
               />
-              <span className="text-xs text-emerald-200 font-semibold leading-relaxed">
+              <span className="text-xs text-[var(--gym-text)] font-semibold leading-relaxed">
                 متوجه هستم که اطلاعات وارد پایگاه داده باشگاه خواهد شد و در صورت نیاز می‌توانم با ۱ کلیک آن را بازگردانی (Rollback) کنم.
               </span>
             </label>
@@ -363,7 +363,7 @@ export const MigrationPreview: React.FC<MigrationPreviewProps> = ({
               <button
                 type="button"
                 onClick={() => setShowConfirmModal(false)}
-                className="px-5 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold"
+                className="px-5 py-2.5 rounded-xl border border-[var(--gym-border)] text-[var(--gym-text-muted)] hover:text-[var(--gym-text)] text-xs font-semibold glass-subtle"
               >
                 انصراف و بازبینی
               </button>
@@ -375,7 +375,7 @@ export const MigrationPreview: React.FC<MigrationPreviewProps> = ({
                   setShowConfirmModal(false);
                   onExecute();
                 }}
-                className="px-7 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-xs shadow-lg transition-all disabled:opacity-50 cursor-pointer"
+                className="px-7 py-2.5 rounded-xl bg-[var(--gym-brand)] hover:brightness-110 text-[var(--gym-bg)] font-black text-xs shadow-lg transition-all disabled:opacity-50 cursor-pointer"
               >
                 {isImporting ? 'در حال انتقال...' : 'شروع عملیات انتقال داده‌ها'}
               </button>
@@ -389,7 +389,7 @@ export const MigrationPreview: React.FC<MigrationPreviewProps> = ({
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-700 hover:border-slate-600 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-[var(--gym-border)] hover:border-[var(--gym-border-strong)] text-[var(--gym-text)] text-xs font-semibold transition-colors cursor-pointer glass-subtle"
         >
           <ArrowRight className="w-4 h-4" />
           <span>مرحله قبل</span>
@@ -399,7 +399,7 @@ export const MigrationPreview: React.FC<MigrationPreviewProps> = ({
           type="button"
           id="btn-preview-start-migration"
           onClick={() => setShowConfirmModal(true)}
-          className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-sm shadow-lg shadow-emerald-950/40 transition-all cursor-pointer"
+          className="inline-flex items-center gap-2 px-8 py-3 rounded-xl bg-[var(--gym-brand)] hover:brightness-110 text-[var(--gym-bg)] font-black text-sm shadow-lg shadow-[var(--gym-brand-soft)] transition-all cursor-pointer"
         >
           <span>تأیید و اجرای نهایی انتقال</span>
           <ArrowLeft className="w-4 h-4" />

@@ -299,7 +299,7 @@ export const MigrationCenter: React.FC<MigrationCenterProps> = ({
               onClick={() => setActiveMainTab('wizard')}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeMainTab === 'wizard'
-                  ? 'bg-[var(--gym-brand)] text-white shadow-md'
+                  ? 'bg-[var(--gym-brand)] text-[var(--gym-bg)] shadow-md'
                   : 'text-[var(--gym-text-muted)] hover:text-[var(--gym-text)]'
               }`}
             >
@@ -312,7 +312,7 @@ export const MigrationCenter: React.FC<MigrationCenterProps> = ({
               onClick={() => setActiveMainTab('history')}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeMainTab === 'history'
-                  ? 'bg-[var(--gym-brand)] text-white shadow-md'
+                  ? 'bg-[var(--gym-brand)] text-[var(--gym-bg)] shadow-md'
                   : 'text-[var(--gym-text-muted)] hover:text-[var(--gym-text)]'
               }`}
             >
@@ -325,7 +325,7 @@ export const MigrationCenter: React.FC<MigrationCenterProps> = ({
               onClick={() => setActiveMainTab('profiles')}
               className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 activeMainTab === 'profiles'
-                  ? 'bg-[var(--gym-brand)] text-white shadow-md'
+                  ? 'bg-[var(--gym-brand)] text-[var(--gym-bg)] shadow-md'
                   : 'text-[var(--gym-text-muted)] hover:text-[var(--gym-text)]'
               }`}
             >
@@ -377,7 +377,7 @@ export const MigrationCenter: React.FC<MigrationCenterProps> = ({
                     <span
                       className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
                         isCurrent
-                          ? 'bg-[var(--gym-brand)] text-white shadow-md'
+                          ? 'bg-[var(--gym-brand)] text-[var(--gym-bg)] shadow-md'
                           : 'glass-subtle text-[var(--gym-text-muted)] border border-[var(--gym-border)]'
                       }`}
                     >

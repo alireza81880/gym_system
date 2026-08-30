@@ -44,14 +44,14 @@ export const MigrationHistory: React.FC<MigrationHistoryProps> = ({
   return (
     <div className="space-y-6 animate-fadeIn" id="migration-history-tab">
       {/* Header banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 bg-slate-900/60 rounded-2xl border border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 glass-regular rounded-2xl border border-[var(--gym-border)]">
         <div className="flex items-center gap-3">
           <span className="p-2.5 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
             <History className="w-6 h-6" />
           </span>
           <div>
-            <h2 className="text-base font-bold text-white">تاریخچه و سوابق انتقال داده‌ها</h2>
-            <p className="text-xs text-slate-400">
+            <h2 className="text-base font-bold text-[var(--gym-text)]">تاریخچه و سوابق انتقال داده‌ها</h2>
+            <p className="text-xs text-[var(--gym-text-muted)]">
               مشاهده گزارش‌های جامع و قابلیت بازگردانی (Rollback) نسخه‌های پشتیبان با یک کلیک.
             </p>
           </div>
@@ -60,7 +60,7 @@ export const MigrationHistory: React.FC<MigrationHistoryProps> = ({
         <button
           type="button"
           onClick={onStartNewMigration}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold text-xs shadow-md transition-all cursor-pointer self-start sm:self-center"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[var(--gym-brand)] hover:brightness-110 text-[var(--gym-bg)] font-bold text-xs shadow-md transition-all cursor-pointer self-start sm:self-center"
         >
           <Zap className="w-4 h-4" />
           <span>شروع انتقال اطلاعات جدید</span>
@@ -69,49 +69,49 @@ export const MigrationHistory: React.FC<MigrationHistoryProps> = ({
 
       {/* Empty State */}
       {reports.length === 0 ? (
-        <div className="p-12 bg-slate-900/40 rounded-3xl border border-dashed border-slate-800 text-center space-y-4">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-slate-800/80 text-slate-400 flex items-center justify-center">
+        <div className="p-12 glass-subtle rounded-3xl border border-dashed border-[var(--gym-border)] text-center space-y-4">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-[var(--gym-brand-soft)] text-[var(--gym-brand)] flex items-center justify-center">
             <History className="w-8 h-8" />
           </div>
           <div className="space-y-1">
-            <h3 className="text-base font-bold text-slate-200">هنوز انتقال اطلاعاتی انجام نشده است.</h3>
-            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+            <h3 className="text-base font-bold text-[var(--gym-text)]">هنوز انتقال اطلاعاتی انجام نشده است.</h3>
+            <p className="text-xs text-[var(--gym-text-muted)] max-w-sm mx-auto">
               شما می‌توانید فایل‌های اکسل، CSV یا پایگاه داده سیستم قبلی باشگاه خود را به سادگی و با ایمنی کامل به Gym OS منتقل کنید.
             </p>
           </div>
           <button
             type="button"
             onClick={onStartNewMigration}
-            className="px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg transition-all cursor-pointer"
+            className="px-6 py-2.5 rounded-xl bg-[var(--gym-brand)] hover:brightness-110 text-[var(--gym-bg)] font-bold text-xs shadow-lg transition-all cursor-pointer"
           >
             شروع اولین انتقال داده
           </button>
         </div>
       ) : (
         /* History Table */
-        <div className="p-6 bg-slate-900/60 rounded-2xl border border-slate-800 space-y-4">
+        <div className="p-6 glass-regular rounded-2xl border border-[var(--gym-border)] space-y-4">
           {/* Search bar */}
           <div className="flex items-center justify-between">
             <div className="relative w-full sm:w-72">
-              <Search className="w-4 h-4 text-slate-500 absolute right-3.5 top-2.5" />
+              <Search className="w-4 h-4 text-[var(--gym-text-muted)] absolute right-3.5 top-2.5" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="جستجو با شناسه یا نام فایل..."
-                className="w-full pl-3.5 pr-10 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-emerald-500 focus:outline-none"
+                className="w-full pl-3.5 pr-10 py-2 rounded-xl glass-subtle border border-[var(--gym-border)] text-[var(--gym-text)] text-xs focus:border-[var(--gym-brand)] focus:outline-none"
               />
             </div>
 
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-[var(--gym-text-muted)]">
               {filteredReports.length} عملیات ثبت شده
             </span>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950">
+          <div className="overflow-x-auto rounded-xl border border-[var(--gym-border)] glass-subtle">
             <table className="w-full text-right text-xs">
               <thead>
-                <tr className="bg-slate-900 border-b border-slate-800 text-slate-400 font-semibold">
+                <tr className="glass-regular border-b border-[var(--gym-border)] text-[var(--gym-text-muted)] font-semibold">
                   <th className="p-3.5">شناسه انتقال</th>
                   <th className="p-3.5">منبع / فایل</th>
                   <th className="p-3.5">تاریخ و زمان</th>
@@ -121,25 +121,25 @@ export const MigrationHistory: React.FC<MigrationHistoryProps> = ({
                   <th className="p-3.5 text-center">عملیات</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
+              <tbody className="divide-y divide-[var(--gym-border)]">
                 {filteredReports.map((report) => (
-                  <tr key={report.id} className="hover:bg-slate-900/40 transition-colors">
-                    <td className="p-3.5 font-mono font-bold text-emerald-400">
+                  <tr key={report.id} className="hover:bg-[var(--gym-brand-soft)] transition-colors">
+                    <td className="p-3.5 font-mono font-bold text-[var(--gym-brand)]">
                       {report.migrationId}
                     </td>
 
-                    <td className="p-3.5 text-slate-200">
+                    <td className="p-3.5 text-[var(--gym-text)]">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-white uppercase">{report.sourceType}</span>
-                        {report.fileName && <span className="text-slate-500 truncate max-w-xs">({report.fileName})</span>}
+                        <span className="font-semibold text-[var(--gym-text)] uppercase">{report.sourceType}</span>
+                        {report.fileName && <span className="text-[var(--gym-text-muted)] truncate max-w-xs">({report.fileName})</span>}
                       </div>
                     </td>
 
-                    <td className="p-3.5 text-slate-400 font-mono">
+                    <td className="p-3.5 text-[var(--gym-text-secondary)] font-mono">
                       {new Date(report.timestamp).toLocaleString('fa-IR')}
                     </td>
 
-                    <td className="p-3.5 text-center font-mono font-bold text-emerald-400">
+                    <td className="p-3.5 text-center font-mono font-bold text-[var(--gym-brand)]">
                       {report.importedCount.toLocaleString('fa-IR')}
                     </td>
 
@@ -148,7 +148,7 @@ export const MigrationHistory: React.FC<MigrationHistoryProps> = ({
                     </td>
 
                     <td className="p-3.5 text-center">
-                      <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800">
+                      <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[var(--gym-brand-soft)] text-[var(--gym-brand)] border border-[var(--gym-border-strong)]">
                         {report.status}
                       </span>
                     </td>
@@ -158,7 +158,7 @@ export const MigrationHistory: React.FC<MigrationHistoryProps> = ({
                         <button
                           type="button"
                           onClick={() => onViewReport(report)}
-                          className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors cursor-pointer"
+                          className="px-2.5 py-1 rounded-lg glass-subtle hover:bg-[var(--gym-brand-soft)] text-[var(--gym-text)] text-xs font-semibold transition-colors cursor-pointer border border-[var(--gym-border)]"
                         >
                           مشاهده جزئیات
                         </button>

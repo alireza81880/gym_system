@@ -43,15 +43,15 @@ export const DuplicateReviewModal: React.FC<DuplicateReviewModalProps> = ({
   return (
     <div className="space-y-6 animate-fadeIn" id="migration-duplicate-review">
       {/* Top Banner */}
-      <div className="p-6 bg-slate-900/80 rounded-2xl border border-slate-800 space-y-4">
+      <div className="p-6 glass-regular rounded-2xl border border-[var(--gym-border)] space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <span className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
               <Users className="w-6 h-6" />
             </span>
             <div>
-              <h2 className="text-base font-bold text-white">بررسی و حل تعارض رکوردهای تکراری ({duplicateItems.length.toLocaleString('fa-IR')} مورد)</h2>
-              <p className="text-xs text-slate-400">
+              <h2 className="text-base font-bold text-[var(--gym-text)]">بررسی و حل تعارض رکوردهای تکراری ({duplicateItems.length.toLocaleString('fa-IR')} مورد)</h2>
+              <p className="text-xs text-[var(--gym-text-muted)]">
                 این افراد پیش‌تر در سامانه ثبت‌نام داشته‌اند. نحوه برخورد با سوابق هر عضو را انتخاب فرمایید.
               </p>
             </div>
@@ -62,7 +62,7 @@ export const DuplicateReviewModal: React.FC<DuplicateReviewModalProps> = ({
             <button
               type="button"
               onClick={() => onApplyBatchResolution('merge', 'ALL')}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-bold border border-emerald-500/30 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[var(--gym-brand-soft)] hover:brightness-110 text-[var(--gym-brand)] text-xs font-bold border border-[var(--gym-border-strong)] transition-colors cursor-pointer"
             >
               <GitMerge className="w-3.5 h-3.5" />
               <span>ادغام هوشمند همه ({duplicateItems.length})</span>
@@ -80,8 +80,8 @@ export const DuplicateReviewModal: React.FC<DuplicateReviewModalProps> = ({
         </div>
 
         {/* Confidence filter tabs */}
-        <div className="flex items-center gap-2 pt-2 border-t border-slate-800 text-xs">
-          <span className="text-slate-400 flex items-center gap-1">
+        <div className="flex items-center gap-2 pt-2 border-t border-[var(--gym-border)] text-xs">
+          <span className="text-[var(--gym-text-muted)] flex items-center gap-1">
             <Filter className="w-3.5 h-3.5" />
             فیلتر بر اساس درجه اطمینان:
           </span>
@@ -98,8 +98,8 @@ export const DuplicateReviewModal: React.FC<DuplicateReviewModalProps> = ({
               onClick={() => setActiveFilter(tab.id as any)}
               className={`px-3 py-1 rounded-lg font-medium transition-all cursor-pointer ${
                 activeFilter === tab.id
-                  ? 'bg-slate-800 text-white font-bold border border-slate-700'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-[var(--gym-brand)] text-[var(--gym-bg)] font-bold shadow-xs'
+                  : 'glass-subtle text-[var(--gym-text-muted)] hover:text-[var(--gym-text)] border border-[var(--gym-border)]'
               }`}
             >
               {tab.label}
@@ -130,7 +130,7 @@ export const DuplicateReviewModal: React.FC<DuplicateReviewModalProps> = ({
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-700 hover:border-slate-600 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-[var(--gym-border)] hover:border-[var(--gym-border-strong)] text-[var(--gym-text)] text-xs font-semibold transition-colors cursor-pointer glass-subtle"
         >
           <ArrowRight className="w-4 h-4" />
           <span>مرحله قبل</span>
@@ -140,7 +140,7 @@ export const DuplicateReviewModal: React.FC<DuplicateReviewModalProps> = ({
           type="button"
           id="btn-duplicate-review-next"
           onClick={onNext}
-          className="inline-flex items-center gap-2 px-7 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-950/40 transition-all cursor-pointer"
+          className="inline-flex items-center gap-2 px-7 py-3 rounded-xl bg-[var(--gym-brand)] hover:brightness-110 text-[var(--gym-bg)] font-bold text-xs shadow-lg shadow-[var(--gym-brand-soft)] transition-all cursor-pointer"
         >
           <span>تأیید و مشاهده پیش‌نمایش نهایی واردسازی</span>
           <ArrowLeft className="w-4 h-4" />

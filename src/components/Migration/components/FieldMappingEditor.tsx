@@ -109,24 +109,24 @@ export const FieldMappingEditor: React.FC<FieldMappingEditorProps> = ({
     <div className="space-y-6 animate-fadeIn" id="migration-mapping-editor">
       {/* Top Banner: Auto matched profile notification */}
       {matchedProfile && (
-        <div className="p-4 bg-emerald-950/40 border border-emerald-800/80 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-lg">
+        <div className="p-4 glass-regular border border-[var(--gym-border-strong)] rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-lg">
           <div className="flex items-center gap-3">
-            <span className="p-2 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+            <span className="p-2 rounded-xl bg-[var(--gym-brand-soft)] text-[var(--gym-brand)] border border-[var(--gym-border-strong)]">
               <Sparkles className="w-5 h-5" />
             </span>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-emerald-300">پروفایل نگاشت هوشمند پیدا شد:</span>
-                <span className="text-xs font-black text-white">{matchedProfile.name}</span>
+                <span className="text-xs font-bold text-[var(--gym-brand)]">پروفایل نگاشت هوشمند پیدا شد:</span>
+                <span className="text-xs font-black text-[var(--gym-text)]">{matchedProfile.name}</span>
               </div>
-              <p className="text-[11px] text-slate-400 mt-0.5">{matchedProfile.description}</p>
+              <p className="text-[11px] text-[var(--gym-text-muted)] mt-0.5">{matchedProfile.description}</p>
             </div>
           </div>
 
           <button
             type="button"
             onClick={handleApplyMatchedProfile}
-            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl transition-colors cursor-pointer shrink-0"
+            className="px-4 py-2 bg-[var(--gym-brand)] hover:brightness-110 text-[var(--gym-bg)] font-bold text-xs rounded-xl transition-colors cursor-pointer shrink-0"
           >
             اعمال خودکار این نگاشت
           </button>
@@ -134,33 +134,33 @@ export const FieldMappingEditor: React.FC<FieldMappingEditorProps> = ({
       )}
 
       {/* Migration global options bar */}
-      <div className="p-5 bg-slate-900/80 rounded-2xl border border-slate-800 space-y-4">
+      <div className="p-5 glass-regular rounded-2xl border border-[var(--gym-border)] space-y-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs font-bold text-white">
-            <SlidersHorizontal className="w-4 h-4 text-emerald-400" />
+          <div className="flex items-center gap-2 text-xs font-bold text-[var(--gym-text)]">
+            <SlidersHorizontal className="w-4 h-4 text-[var(--gym-brand)]" />
             <span>تنظیمات عمومی تبدیل و نرمال‌سازی داده‌ها</span>
           </div>
           <button
             type="button"
             onClick={handleAutoSuggestAll}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 text-xs font-semibold border border-slate-700 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg glass-subtle hover:bg-[var(--gym-brand-soft)] text-[var(--gym-brand)] text-xs font-semibold border border-[var(--gym-border)] transition-colors cursor-pointer"
           >
             <Sparkles className="w-3.5 h-3.5" />
             <span>تطبیق خودکار هوشمند همه ستون‌ها</span>
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-slate-800">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-[var(--gym-border)]">
           {/* Full Name Mode */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+            <label className="text-xs font-medium text-[var(--gym-text-secondary)] flex items-center gap-1.5">
               <Split className="w-3.5 h-3.5 text-cyan-400" />
               <span>نحوه پردازش «نام و نام خانوادگی»</span>
             </label>
             <select
               value={fullNameMode}
               onChange={(e) => onUpdateFullNameMode(e.target.value as any)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-emerald-500 focus:outline-none"
+              className="w-full px-3 py-2 rounded-xl glass-subtle border border-[var(--gym-border)] text-[var(--gym-text)] text-xs focus:border-[var(--gym-brand)] focus:outline-none"
             >
               <option value="split">تفکیک هوشمند به نام + نام خانوادگی (توصیه شده)</option>
               <option value="preserve">ذخیره یکپارچه در نام کامل</option>
@@ -169,14 +169,14 @@ export const FieldMappingEditor: React.FC<FieldMappingEditorProps> = ({
 
           {/* Currency Unit */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
-              <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+            <label className="text-xs font-medium text-[var(--gym-text-secondary)] flex items-center gap-1.5">
+              <DollarSign className="w-3.5 h-3.5 text-[var(--gym-brand)]" />
               <span>واحد مبالغ مالی در فایل ورودی</span>
             </label>
             <select
               value={currencyUnit}
               onChange={(e) => onUpdateCurrencyUnit(e.target.value as any)}
-              className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-emerald-500 focus:outline-none"
+              className="w-full px-3 py-2 rounded-xl glass-subtle border border-[var(--gym-border)] text-[var(--gym-text)] text-xs focus:border-[var(--gym-brand)] focus:outline-none"
             >
               <option value="toman">تومان (بدون تغییر در ارقام)</option>
               <option value="rial">ریال (تبدیل خودکار با تقسیم بر ۱۰ به تومان)</option>
@@ -185,14 +185,14 @@ export const FieldMappingEditor: React.FC<FieldMappingEditorProps> = ({
 
           {/* Preserve Member Numbers */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+            <label className="text-xs font-medium text-[var(--gym-text-secondary)] flex items-center gap-1.5">
               <UserCheck className="w-3.5 h-3.5 text-purple-400" />
               <span>شماره پرونده / عضویت اعضا</span>
             </label>
             <select
               value={preserveMemberNumbers ? 'preserve' : 'renumber'}
               onChange={(e) => onUpdatePreserveMemberNumbers(e.target.value === 'preserve')}
-              className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-emerald-500 focus:outline-none"
+              className="w-full px-3 py-2 rounded-xl glass-subtle border border-[var(--gym-border)] text-[var(--gym-text)] text-xs focus:border-[var(--gym-brand)] focus:outline-none"
             >
               <option value="preserve">حفظ دقیق شماره‌های قبلی (مثلاً ۹۲۹)</option>
               <option value="renumber">شماره‌گذاری مجدد ترتیبی از ابتدا</option>
@@ -202,24 +202,24 @@ export const FieldMappingEditor: React.FC<FieldMappingEditorProps> = ({
       </div>
 
       {/* Mapping Table */}
-      <div className="p-6 bg-slate-900/60 rounded-2xl border border-slate-800 space-y-4">
+      <div className="p-6 glass-regular rounded-2xl border border-[var(--gym-border)] space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
           <div className="space-y-0.5">
-            <h3 className="text-sm font-bold text-white">تطبیق فیلدهای منبع با Gym OS</h3>
-            <p className="text-xs text-slate-400">
+            <h3 className="text-sm font-bold text-[var(--gym-text)]">تطبیق فیلدهای منبع با Gym OS</h3>
+            <p className="text-xs text-[var(--gym-text-muted)]">
               مشخص کنید داده‌های هر ستون در کدام بخش از پرونده ورزشکار در Gym OS ذخیره شود.
             </p>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold px-3 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700">
+            <span className="text-xs font-semibold px-3 py-1 rounded-lg glass-subtle text-[var(--gym-text-muted)] border border-[var(--gym-border)]">
               {mappedCount} از {columns.length} ستون نگاشت شده
             </span>
 
             <button
               type="button"
               onClick={() => setShowSaveProfileModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-semibold border border-emerald-500/30 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--gym-brand-soft)] hover:brightness-110 text-[var(--gym-brand)] text-xs font-semibold border border-[var(--gym-border-strong)] transition-colors cursor-pointer"
             >
               <BookmarkPlus className="w-3.5 h-3.5" />
               <span>ذخیره این نگاشت به عنوان الگو</span>
@@ -227,37 +227,37 @@ export const FieldMappingEditor: React.FC<FieldMappingEditorProps> = ({
           </div>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950">
+        <div className="overflow-x-auto rounded-xl border border-[var(--gym-border)] glass-subtle">
           <table className="w-full text-right text-xs">
             <thead>
-              <tr className="bg-slate-900/80 border-b border-slate-800 text-slate-400 font-semibold">
+              <tr className="border-b border-[var(--gym-border)] text-[var(--gym-text-muted)] font-semibold glass-subtle">
                 <th className="p-3.5 w-1/4">ستون در فایل شما (Source)</th>
                 <th className="p-3.5 w-1/4">نمونه مقادیر (Sample Data)</th>
                 <th className="p-3.5 w-1/3">فیلد مقصد در Gym OS (Target Field)</th>
                 <th className="p-3.5 text-center">وضعیت</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60">
+            <tbody className="divide-y divide-[var(--gym-border)]">
               {columns.map((col, idx) => {
                 const currentTarget = mappings[col] || '';
                 const samples = rows.slice(0, 2).map(r => String(r[col] ?? '')).filter(Boolean);
 
                 return (
-                  <tr key={idx} className="hover:bg-slate-900/40 transition-colors">
+                  <tr key={idx} className="hover:bg-[var(--gym-brand-soft)] transition-colors">
                     {/* Source Column Name */}
-                    <td className="p-3.5 font-semibold text-slate-200">
+                    <td className="p-3.5 font-semibold text-[var(--gym-text)]">
                       <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                        <span className="w-2 h-2 rounded-full bg-[var(--gym-brand)] shrink-0" />
                         <span>{col}</span>
                       </div>
                     </td>
 
                     {/* Sample Values */}
-                    <td className="p-3.5 text-slate-400 font-mono text-[11px]">
+                    <td className="p-3.5 text-[var(--gym-text-muted)] font-mono text-[11px]">
                       {samples.length > 0 ? (
                         <div className="truncate max-w-xs">{samples.join(' ، ')}</div>
                       ) : (
-                        <span className="text-slate-600">بدون مقدار</span>
+                        <span className="text-[var(--gym-text-muted)] opacity-60">بدون مقدار</span>
                       )}
                     </td>
 
@@ -268,8 +268,8 @@ export const FieldMappingEditor: React.FC<FieldMappingEditorProps> = ({
                         onChange={(e) => handleFieldChange(col, e.target.value)}
                         className={`w-full px-3 py-2 rounded-xl text-xs border focus:outline-none transition-all ${
                           currentTarget
-                            ? 'bg-slate-900 border-emerald-500/60 text-emerald-300 font-semibold ring-1 ring-emerald-500/20'
-                            : 'bg-slate-950 border-slate-800 text-slate-400'
+                            ? 'glass-subtle border-[var(--gym-border-strong)] text-[var(--gym-brand)] font-semibold ring-1 ring-[var(--gym-brand-soft)]'
+                            : 'glass-subtle border-[var(--gym-border)] text-[var(--gym-text-muted)]'
                         }`}
                       >
                         <option value="">-- نادیده‌گرفتن این ستون (عدم واردسازی) --</option>
@@ -337,12 +337,12 @@ export const FieldMappingEditor: React.FC<FieldMappingEditorProps> = ({
                     {/* Status Badge */}
                     <td className="p-3.5 text-center">
                       {currentTarget ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-950/60 border border-emerald-800/80 px-2 py-0.5 rounded-md">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--gym-brand)] bg-[var(--gym-brand-soft)] border border-[var(--gym-border-strong)] px-2 py-0.5 rounded-md">
                           <CheckCircle2 className="w-3 h-3" />
                           نگاشت شد
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded-md">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--gym-text-muted)] glass-subtle border border-[var(--gym-border)] px-2 py-0.5 rounded-md">
                           <EyeOff className="w-3 h-3" />
                           نادیده
                         </span>
@@ -358,29 +358,29 @@ export const FieldMappingEditor: React.FC<FieldMappingEditorProps> = ({
 
       {/* Save Profile Modal */}
       {showSaveProfileModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-md glass-regular border border-[var(--gym-border)] rounded-2xl p-6 space-y-4 shadow-2xl">
             <div className="flex items-center gap-2">
-              <span className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <span className="p-2 rounded-xl bg-[var(--gym-brand-soft)] text-[var(--gym-brand)] border border-[var(--gym-border-strong)]">
                 <BookmarkPlus className="w-5 h-5" />
               </span>
-              <h3 className="text-base font-bold text-white">ذخیره الگوی نگاشت ستون‌ها</h3>
+              <h3 className="text-base font-bold text-[var(--gym-text)]">ذخیره الگوی نگاشت ستون‌ها</h3>
             </div>
             
-            <p className="text-xs text-slate-400 leading-relaxed">
+            <p className="text-xs text-[var(--gym-text-muted)] leading-relaxed">
               با ذخیره این الگو، در دفعات بعد با بارگذاری فایلی با همین ساختار، ستون‌ها به صورت کاملاً خودکار و بدون نیاز به تنظیم دستی منطبق خواهند شد.
             </p>
 
             <form onSubmit={handleSaveProfileSubmit} className="space-y-4 pt-2">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">نام الگو (مثلاً خروجی هفتگی اکسل)</label>
+                <label className="text-xs font-semibold text-[var(--gym-text-secondary)]">نام الگو (مثلاً خروجی هفتگی اکسل)</label>
                 <input
                   type="text"
                   required
                   value={profileNameInput}
                   onChange={(e) => setProfileNameInput(e.target.value)}
                   placeholder="مثال: نگاشت استاندارد نرم‌افزار قدیمی"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:border-emerald-500 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 rounded-xl glass-subtle border border-[var(--gym-border)] text-[var(--gym-text)] text-xs focus:border-[var(--gym-brand)] focus:outline-none"
                 />
               </div>
 
@@ -388,13 +388,13 @@ export const FieldMappingEditor: React.FC<FieldMappingEditorProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowSaveProfileModal(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-700 text-slate-300 hover:text-white text-xs font-semibold"
+                  className="px-4 py-2 rounded-xl border border-[var(--gym-border)] text-[var(--gym-text-muted)] hover:text-[var(--gym-text)] text-xs font-semibold glass-subtle"
                 >
                   انصراف
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-md"
+                  className="px-5 py-2 rounded-xl bg-[var(--gym-brand)] hover:brightness-110 text-[var(--gym-bg)] font-bold text-xs shadow-md"
                 >
                   ذخیره الگو
                 </button>
@@ -409,7 +409,7 @@ export const FieldMappingEditor: React.FC<FieldMappingEditorProps> = ({
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-700 hover:border-slate-600 text-slate-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-[var(--gym-border)] hover:border-[var(--gym-border-strong)] text-[var(--gym-text)] text-xs font-semibold transition-colors cursor-pointer glass-subtle"
         >
           <ArrowRight className="w-4 h-4" />
           <span>مرحله قبل</span>
@@ -420,7 +420,7 @@ export const FieldMappingEditor: React.FC<FieldMappingEditorProps> = ({
           id="btn-mapping-next"
           onClick={onNext}
           disabled={mappedCount === 0}
-          className="inline-flex items-center gap-2 px-7 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-950/40 transition-all cursor-pointer disabled:opacity-50"
+          className="inline-flex items-center gap-2 px-7 py-3 rounded-xl bg-[var(--gym-brand)] hover:brightness-110 text-[var(--gym-bg)] font-bold text-xs shadow-lg shadow-[var(--gym-brand-soft)] transition-all cursor-pointer disabled:opacity-50"
         >
           <span>مرحله بعد: اعتبارسنجی و بررسی تکراری‌ها</span>
           <ArrowLeft className="w-4 h-4" />
