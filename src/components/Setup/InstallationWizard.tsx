@@ -36,7 +36,7 @@ export const InstallationWizard: React.FC<InstallationWizardProps> = ({ isInitia
   const [city, setCity] = useState('تهران');
   const [address, setAddress] = useState('تهران، خیابان شریعتی، بالاتر از پل رومی');
   const [phone, setPhone] = useState('021-22001122');
-  const [currency, setCurrency] = useState('تومان');
+  const [currency, setCurrency] = useState<'تومان' | 'IRR' | 'ریال'>('تومان');
   const [memberNumberLabel, setMemberNumberLabel] = useState('شماره عضویت');
 
   // Lockers
@@ -115,7 +115,7 @@ export const InstallationWizard: React.FC<InstallationWizardProps> = ({ isInitia
         durationDays: packageDuration,
       },
       accessPolicy: {
-        maxAllowedDebt,
+        maxDebtTolerance: maxAllowedDebt,
         gracePeriodDays,
         allowLockerOnExpired,
       },

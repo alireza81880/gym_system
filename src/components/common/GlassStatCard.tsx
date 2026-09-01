@@ -2,11 +2,14 @@ import React from 'react';
 import { GlassBadge, GlassBadgeProps } from './GlassBadge';
 
 export interface GlassStatCardProps {
+  id?: string;
   label?: string;
   title?: string;
   value: string | number;
   subValue?: string;
   subtitle?: string;
+  description?: string;
+  changeType?: string;
   badge?: {
     text: string;
     variant?: GlassBadgeProps['variant'];

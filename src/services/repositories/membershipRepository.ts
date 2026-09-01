@@ -4,7 +4,7 @@
  * Backed by the unified LocalDbRepository persistence engine with instant synchronous durability.
  */
 
-import { PackageType, MemberStatus } from '../../types';
+import { PackageType, MemberStatus, MembershipPackage } from '../../types';
 import { LocalDbRepository } from '../localDb';
 import { LocalDatabase } from '../database/localDatabase';
 
@@ -14,6 +14,14 @@ export interface Membership {
   branchId: string;
   studentId: string;
   packageType: PackageType | string;
+  packageId?: string;
+  packageNameSnapshot?: string;
+  basePrice?: number;
+  discountAmount?: number;
+  finalPrice?: number;
+  durationDays?: number;
+  chargeId?: string;
+  packageSnapshot?: Partial<MembershipPackage>;
   startDate: string;
   expireDate: string;
   status: MemberStatus | 'cancelled';
@@ -139,6 +147,14 @@ export class MembershipRepository {
     studentId: string,
     params: {
       packageType: string;
+      packageId?: string;
+      packageNameSnapshot?: string;
+      basePrice?: number;
+      discountAmount?: number;
+      finalPrice?: number;
+      durationDays?: number;
+      chargeId?: string;
+      packageSnapshot?: Partial<MembershipPackage>;
       startDate: string;
       expireDate: string;
       totalFee: number;
@@ -155,13 +171,21 @@ export class MembershipRepository {
       this.expire(existingActive.id);
     }
 
-    // 2. Create new active membership
+    // 2. Create new active membership with snapshot
     const newMembership: Membership = {
       id: `msh-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       tenantId: existingActive?.tenantId || 'gym-org-1',
       branchId: existingActive?.branchId || 'branch-tehran-central',
       studentId,
       packageType: params.packageType,
+      packageId: params.packageId,
+      packageNameSnapshot: params.packageNameSnapshot || params.packageType,
+      basePrice: params.basePrice ?? params.totalFee,
+      discountAmount: params.discountAmount ?? 0,
+      finalPrice: params.finalPrice ?? params.totalFee,
+      durationDays: params.durationDays,
+      chargeId: params.chargeId,
+      packageSnapshot: params.packageSnapshot,
       startDate: params.startDate,
       expireDate: params.expireDate,
       status: 'active',

@@ -155,7 +155,7 @@ const MemberRow = memo<MemberRowProps>(({
       <td className="p-3.5">
         <GlassBadge
           variant={st.status === 'active' ? 'success' : 'danger'}
-          dot
+          pulse={st.status === 'active'}
         >
           {st.status === 'active' ? t.active : t.expired}
         </GlassBadge>
@@ -340,6 +340,9 @@ export const StudentList: React.FC<StudentListProps> = ({
     setIsAddModalOpen(true);
   };
 
+  const [isSubmittingDebt, setIsSubmittingDebt] = useState(false);
+  const [isSubmittingRenew, setIsSubmittingRenew] = useState(false);
+
   const handleEditStudentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStudent) return;
@@ -368,33 +371,53 @@ export const StudentList: React.FC<StudentListProps> = ({
 
   const handleSettleDebtSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!payDebtStudent || debtPayAmount <= 0) return;
+    if (!payDebtStudent || debtPayAmount <= 0 || isSubmittingDebt) return;
 
-    recordStudentPayment(
-      payDebtStudent.id,
-      debtPayAmount,
-      debtPayMethod,
-      debtPayNote || `تسویه مانده شهریه (${payDebtStudent.fullName})`
-    );
+    if (debtPayAmount > (payDebtStudent.remainingDebt || 0)) {
+      alert(`مبلغ وارد شده (${formatMoney(debtPayAmount)}) نمی‌تواند بیشتر از مانده بدهی (${formatMoney(payDebtStudent.remainingDebt)}) باشد.`);
+      return;
+    }
 
-    setPayDebtStudent(null);
-    setDebtPayAmount(0);
-    setDebtPayNote('');
+    setIsSubmittingDebt(true);
+    try {
+      recordStudentPayment(
+        payDebtStudent.id,
+        debtPayAmount,
+        debtPayMethod,
+        debtPayNote || `تسویه مانده شهریه (${payDebtStudent.fullName})`
+      );
+
+      setPayDebtStudent(null);
+      setDebtPayAmount(0);
+      setDebtPayNote('');
+    } finally {
+      setIsSubmittingDebt(false);
+    }
   };
 
   const handleRenewSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!renewStudent) return;
+    if (!renewStudent || isSubmittingRenew) return;
 
-    renewStudentMembership(
-      renewStudent.id,
-      renewPackage,
-      renewFee,
-      renewPaid,
-      renewPayMethod,
-      renewExpireDate
-    );
-    setRenewStudent(null);
+    if (renewPaid > renewFee) {
+      alert(`مبلغ پرداختی (${formatMoney(renewPaid)}) نمی‌تواند بیشتر از شهریه دوره (${formatMoney(renewFee)}) باشد.`);
+      return;
+    }
+
+    setIsSubmittingRenew(true);
+    try {
+      renewStudentMembership(
+        renewStudent.id,
+        renewPackage,
+        renewFee,
+        renewPaid,
+        renewPayMethod,
+        renewExpireDate
+      );
+      setRenewStudent(null);
+    } finally {
+      setIsSubmittingRenew(false);
+    }
   };
 
   const handleDeleteStudent = (id: string, name: string) => {
@@ -948,7 +971,7 @@ export const StudentList: React.FC<StudentListProps> = ({
                 }}
                 className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-xs font-semibold text-[var(--gym-text)] bg-[var(--gym-surface)]"
               >
-                {packages.map(p => (
+                {packages.filter(p => p.isActive !== false && !p.isArchived).map(p => (
                   <option key={p.id} value={p.type} className="bg-stone-900 text-white">
                     {p.name} ({p.durationDays} روزه / {p.sessionsCount} جلسه) - {formatMoney(p.price)}
                   </option>

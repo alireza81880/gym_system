@@ -35,7 +35,8 @@ import {
   Settings
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { SmartLocker, LockerZone, ScanResult, LockerAssignment } from '../../types';
+import { SmartLocker, LockerZone, LockerAssignment, LockerLockType } from '../../types';
+import { ScanResult } from '../../stores/attendanceStore';
 import { GlassPageHeader } from '../common/GlassPageHeader';
 import { GlassCard } from '../common/GlassCard';
 import { GlassStatCard } from '../common/GlassStatCard';
@@ -140,7 +141,7 @@ export const SmartLockerHub: React.FC = () => {
   const [newLockerNumber, setNewLockerNumber] = useState<number>(maxLockerNum + 1);
   const [newLockerZone, setNewLockerZone] = useState<LockerZone>('general');
   const [newLockerRelay, setNewLockerRelay] = useState<number>((maxLockerNum % 32) + 1);
-  const [newLockerLockType, setNewLockerLockType] = useState<SmartLocker['lockType']>('solenoid_12v');
+  const [newLockerLockType, setNewLockerLockType] = useState<LockerLockType>('solenoid');
   const [newLockerStatus, setNewLockerStatus] = useState<'available' | 'maintenance'>('available');
 
   // Fast single-pass memoized KPIs
@@ -243,7 +244,7 @@ export const SmartLockerHub: React.FC = () => {
     setNewLockerNumber(currentMax + 1);
     setNewLockerRelay((currentMax % 32) + 1);
     setNewLockerZone('general');
-    setNewLockerLockType('solenoid_12v');
+    setNewLockerLockType('solenoid');
     setNewLockerStatus('available');
     setIsAddModalOpen(true);
   };
@@ -562,11 +563,11 @@ export const SmartLockerHub: React.FC = () => {
             {/* Scan Feedback Message */}
             {lastScanResult && (
               <div className={`p-3 rounded-2xl border text-xs flex items-start gap-2.5 transition-all ${
-                lastScanResult.granted !== false && lastScanResult.alertType !== 'error'
+                lastScanResult.success && lastScanResult.alertType !== 'error'
                   ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300' 
                   : 'bg-rose-500/15 border-rose-500/40 text-rose-300'
               }`}>
-                {lastScanResult.granted !== false && lastScanResult.alertType !== 'error' ? (
+                {lastScanResult.success && lastScanResult.alertType !== 'error' ? (
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
                 ) : (
                   <XCircle className="w-4 h-4 text-rose-400 mt-0.5 shrink-0" />

@@ -73,12 +73,19 @@ export const memberActions = {
 
     MemberRepository.addMember(newStudent);
 
-    // Record Financial Charge & Payment with full price breakdown
+    // Find matching package snapshot if available
+    const packages = settingsStore.getState().packages;
+    const matchedPkg = packages.find(p => p.id === newStudent.packageType || p.type === newStudent.packageType || p.name === newStudent.packageType);
+
+    // Record Financial Charge & Payment with full price breakdown & snapshot
     FinanceService.recordMembershipSale({
       memberId: studentId,
       memberName: newStudent.fullName,
       packageType: newStudent.packageType,
-      packageName: newStudent.packageType,
+      packageId: matchedPkg?.id,
+      packageName: matchedPkg?.name || newStudent.packageType,
+      packageSnapshot: matchedPkg ? { ...matchedPkg } : undefined,
+      durationDays: matchedPkg?.durationDays || (matchedPkg?.durationMonths ? matchedPkg.durationMonths * 30 : 30),
       basePrice,
       discountAmount,
       discountReason: financialOptions?.discountReason,
@@ -86,7 +93,7 @@ export const memberActions = {
       paymentMethod,
       startDate: newStudent.registrationDate || DateService.getTodayJalali(),
       expireDate: newStudent.expireDate || DateService.addDaysToJalali(DateService.getTodayJalali(), 30),
-      sessionsTotal: newStudent.sessionsTotal || 12,
+      sessionsTotal: newStudent.sessionsTotal || matchedPkg?.sessionsCount || 12,
       coachId: newStudent.coachId,
       branchId: newStudent.branchId || 'branch-tehran-central',
       tenantId: newStudent.tenantId || 'gym-org-1',
@@ -208,18 +215,24 @@ export const memberActions = {
     const safePaid = Math.max(0, Math.round(Number(paidAmount) || 0));
     const todayJalali = DateService.getTodayJalali();
 
+    const packages = settingsStore.getState().packages;
+    const matchedPkg = packages.find(p => p.id === packageType || p.type === packageType || p.name === packageType);
+
     FinanceService.recordMembershipSale({
       memberId: studentId,
       memberName: student.fullName,
       packageType: String(packageType),
-      packageName: String(packageType),
+      packageId: matchedPkg?.id,
+      packageName: matchedPkg?.name || String(packageType),
+      packageSnapshot: matchedPkg ? { ...matchedPkg } : undefined,
+      durationDays: matchedPkg?.durationDays || (matchedPkg?.durationMonths ? matchedPkg.durationMonths * 30 : 30),
       basePrice: safeTotal,
       discountAmount: 0,
       initialPayment: safePaid,
       paymentMethod,
       startDate: todayJalali,
       expireDate: newExpireDate,
-      sessionsTotal: student.sessionsTotal || 12,
+      sessionsTotal: matchedPkg?.sessionsCount || student.sessionsTotal || 12,
       coachId: student.coachId,
       branchId: student.branchId,
       tenantId: student.tenantId,

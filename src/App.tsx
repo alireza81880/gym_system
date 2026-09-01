@@ -217,7 +217,7 @@ const MainLayout: React.FC = () => {
               />
             )}
 
-            {(activeTab === 'smartLockers' || activeTab === 'smart_lockers') && <SmartLockerHub />}
+            {activeTab === 'smart_lockers' && <SmartLockerHub />}
 
             {activeTab === 'hardware_hub' && <HardwareHubView />}
 

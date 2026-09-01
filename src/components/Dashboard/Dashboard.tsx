@@ -318,7 +318,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         <GlassCard 
           id="card-available-lockers"
           padding="compact"
-          onClick={() => setActiveTab('smartLockers')}
+          onClick={() => setActiveTab('smart_lockers')}
           interactive
           className="flex items-center gap-3 cursor-pointer"
         >
@@ -577,7 +577,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         onClick={onOpenNewPayment}
                         className="mt-1 text-xs text-[var(--gym-brand,#10b981)] hover:underline font-medium cursor-pointer"
                       >
-                        {t.payDebt}
+                        تسویه بدهی
                       </button>
                     </div>
                   </div>

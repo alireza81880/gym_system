@@ -91,7 +91,7 @@ export const MemberRegistrationDrawer: React.FC<MemberRegistrationDrawerProps> =
 
   // Section 2: Membership & Package
   const activePackages = useMemo(() => {
-    return (packages || []).filter(p => p.isActive !== false);
+    return (packages || []).filter(p => p.isActive !== false && !p.isArchived);
   }, [packages]);
 
   const [selectedPackageId, setSelectedPackageId] = useState<string>(() => {
@@ -560,7 +560,7 @@ export const MemberRegistrationDrawer: React.FC<MemberRegistrationDrawerProps> =
                   <span>هشدار: احتمال وجود عضو تکراری در سیستم</span>
                 </div>
                 <p className="text-[11px] text-[var(--gym-text-secondary)] leading-relaxed">
-                  عضوی با مشخصات مشابه (شماره: {duplicateWarning.existingStudent?.phone}، نام: {duplicateWarning.existingStudent?.fullName}، شماره عضویت: #{duplicateWarning.existingStudent?.memberNumber}) قبلاً ثبت شده است.
+                  عضوی با مشخصات مشابه (شماره: {duplicateWarning.matchedMember?.phone}، نام: {duplicateWarning.matchedMember?.fullName}، شماره عضویت: #{duplicateWarning.matchedMember?.memberNumber}) قبلاً ثبت شده است.
                 </p>
                 <label className="flex items-center gap-2 pt-1 text-[11px] font-medium text-[var(--gym-text)] cursor-pointer">
                   <input

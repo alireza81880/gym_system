@@ -20,7 +20,12 @@ import {
   Tag, 
   ArrowRightLeft,
   Shield,
-  Check
+  Check,
+  Archive,
+  ArchiveRestore,
+  AlertTriangle,
+  Info,
+  Database
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useTheme, useSettings, useLockers } from '../../stores';
@@ -28,6 +33,8 @@ import { MembershipPackage, CustomField, CustomFieldType } from '../../types';
 import { ThemeEngineService } from '../../services/themeEngine';
 import { InstallationWizard } from '../Setup/InstallationWizard';
 import { MigrationCenter } from '../Migration/MigrationCenter';
+import { LocalDatabase } from '../../services/database/localDatabase';
+import { StoragePathService } from '../../services/database/storagePathService';
 
 export const SettingsView: React.FC = () => {
   const { 
@@ -55,6 +62,9 @@ export const SettingsView: React.FC = () => {
     addPackage,
     updatePackage,
     deletePackage,
+    archivePackage,
+    reactivatePackage,
+    checkPackageUsage,
   } = useSettings();
 
   const {
@@ -64,6 +74,10 @@ export const SettingsView: React.FC = () => {
 
   // Active Sub-Tab
   const [activeTab, setActiveTab] = useState<'theme' | 'org' | 'packages' | 'lockers' | 'custom_fields' | 'migration' | 'backup'>('theme');
+
+  // Package Filter State
+  const [packageFilter, setPackageFilter] = useState<'all' | 'active' | 'archived'>('all');
+  const [blockedDeleteInfo, setBlockedDeleteInfo] = useState<{ pkg: MembershipPackage; reason: string } | null>(null);
 
   // Org State
   const [gymName, setGymName] = useState(organizationInfo.name);
@@ -100,6 +114,7 @@ export const SettingsView: React.FC = () => {
   const [pkgIncludesCoach, setPkgIncludesCoach] = useState(false);
   const [pkgIncludesWorkoutPlan, setPkgIncludesWorkoutPlan] = useState(false);
   const [pkgIsVip, setPkgIsVip] = useState(false);
+  const [pkgIsActive, setPkgIsActive] = useState(true);
 
   // Re-run setup wizard modal
   const [showWizardModal, setShowWizardModal] = useState(false);
@@ -169,6 +184,7 @@ export const SettingsView: React.FC = () => {
     setPkgIncludesCoach(false);
     setPkgIncludesWorkoutPlan(false);
     setPkgIsVip(false);
+    setPkgIsActive(true);
     setIsPackageModalOpen(true);
   };
 
@@ -184,6 +200,7 @@ export const SettingsView: React.FC = () => {
     setPkgIncludesCoach(Boolean(pkg.includesCoach));
     setPkgIncludesWorkoutPlan(Boolean(pkg.includesWorkoutPlan));
     setPkgIsVip(Boolean(pkg.isVip));
+    setPkgIsActive(pkg.isActive !== false && !pkg.isArchived);
     setIsPackageModalOpen(true);
   };
 
@@ -202,6 +219,8 @@ export const SettingsView: React.FC = () => {
       includesCoach: pkgIncludesCoach,
       includesWorkoutPlan: pkgIncludesWorkoutPlan,
       isVip: pkgIsVip,
+      isActive: pkgIsActive,
+      isArchived: !pkgIsActive,
     };
 
     if (editingPackage) {
@@ -586,9 +605,9 @@ export const SettingsView: React.FC = () => {
             <div>
               <h3 className="text-base font-bold text-[var(--gym-text,#fff)] flex items-center gap-2">
                 <Package className="w-5 h-5 text-[var(--gym-brand)]" />
-                تعریف و ویرایش دوره‌ها و پکیج‌های عضویت
+                تعریف، ویرایش و چرخه عمر پکیج‌ها (Lifecycle & Pricing)
               </h3>
-              <p className="text-xs text-[var(--gym-text-muted)] mt-1">تعیین شهریه، تعداد جلسات، مدت اعتبار و امکانات پکیج‌ها</p>
+              <p className="text-xs text-[var(--gym-text-muted)] mt-1">تعیین شهریه، تعداد جلسات، مدت اعتبار، بایگانی یا فعال‌سازی دوره‌های عضویت</p>
             </div>
 
             <button
@@ -600,73 +619,153 @@ export const SettingsView: React.FC = () => {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {packages.map((pkg) => (
-              <div
-                key={pkg.id}
-                className="p-5 rounded-2xl glass-regular border border-[var(--gym-border)] hover:border-[var(--gym-border-strong)] transition-all flex flex-col justify-between space-y-4"
+          {/* Filter Pills */}
+          <div className="flex items-center gap-2">
+            {[
+              { id: 'all', label: 'همه پکیج‌ها', count: packages.length },
+              { id: 'active', label: 'پکیج‌های فعال', count: packages.filter(p => p.isActive !== false && !p.isArchived).length },
+              { id: 'archived', label: 'بایگانی‌شده (تاریخچه)', count: packages.filter(p => p.isArchived || p.isActive === false).length },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setPackageFilter(tab.id as any)}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  packageFilter === tab.id
+                    ? 'bg-[var(--gym-brand)] text-white shadow-sm'
+                    : 'glass-subtle border border-[var(--gym-border)] text-[var(--gym-text-muted)] hover:text-[var(--gym-text)]'
+                }`}
               >
-                <div>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="text-sm font-bold text-[var(--gym-text,#fff)]">{pkg.name}</h4>
-                      {pkg.nameEn && <span className="text-[11px] text-[var(--gym-text-muted)] font-mono">{pkg.nameEn}</span>}
-                    </div>
-                    <span className="text-sm font-extrabold text-[var(--gym-brand,#10b981)] font-mono">
-                      {formatMoney(pkg.price)}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 mt-4 text-xs text-[var(--gym-text)]">
-                    <div className="p-2 rounded-lg glass-subtle border border-[var(--gym-border)]">
-                      <span className="text-[10px] text-[var(--gym-text-muted)] block">مدت روز</span>
-                      <span className="font-bold">{pkg.durationDays || 30} روز</span>
-                    </div>
-                    <div className="p-2 rounded-lg glass-subtle border border-[var(--gym-border)]">
-                      <span className="text-[10px] text-[var(--gym-text-muted)] block">تعداد جلسات</span>
-                      <span className="font-bold">{pkg.sessionsCount || 24} جلسه</span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-1.5 mt-3">
-                    {pkg.includesLocker && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
-                        کمد اختصاصی
-                      </span>
-                    )}
-                    {pkg.includesCoach && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
-                        مربی خصوصی
-                      </span>
-                    )}
-                    {pkg.isVip && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                        VIP
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--gym-border)]">
-                  <button
-                    onClick={() => openEditPackageModal(pkg)}
-                    className="p-1.5 rounded-lg glass-subtle hover:border-[var(--gym-border-strong)] text-[var(--gym-text)] transition-all cursor-pointer"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm(`آیا از حذف پکیج «${pkg.name}» اطمینان دارید؟`)) {
-                        deletePackage(pkg.id);
-                      }
-                    }}
-                    className="p-1.5 rounded-lg bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/20 transition-all cursor-pointer"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+                <span>{tab.label}</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${packageFilter === tab.id ? 'bg-white/20 text-white' : 'bg-[var(--gym-surface-glass-strong)] text-[var(--gym-text-muted)]'}`}>
+                  {tab.count}
+                </span>
+              </button>
             ))}
+          </div>
+
+          {/* Package Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {packages
+              .filter(pkg => {
+                const isArchived = pkg.isArchived || pkg.isActive === false;
+                if (packageFilter === 'active') return !isArchived;
+                if (packageFilter === 'archived') return isArchived;
+                return true;
+              })
+              .map((pkg) => {
+                const isArchived = pkg.isArchived || pkg.isActive === false;
+                return (
+                  <div
+                    key={pkg.id}
+                    className={`p-5 rounded-2xl glass-regular border transition-all flex flex-col justify-between space-y-4 ${
+                      isArchived 
+                        ? 'border-amber-500/30 opacity-80 bg-amber-500/5' 
+                        : 'border-[var(--gym-border)] hover:border-[var(--gym-border-strong)]'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-bold text-[var(--gym-text,#fff)]">{pkg.name}</h4>
+                            {isArchived ? (
+                              <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">
+                                بایگانی‌شده
+                              </span>
+                            ) : (
+                              <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-medium">
+                                فعال
+                              </span>
+                            )}
+                          </div>
+                          {pkg.nameEn && <span className="text-[11px] text-[var(--gym-text-muted)] font-mono">{pkg.nameEn}</span>}
+                        </div>
+                        <span className="text-sm font-extrabold text-[var(--gym-brand,#10b981)] font-mono shrink-0">
+                          {formatMoney(pkg.price)}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 mt-4 text-xs text-[var(--gym-text)]">
+                        <div className="p-2 rounded-lg glass-subtle border border-[var(--gym-border)]">
+                          <span className="text-[10px] text-[var(--gym-text-muted)] block">مدت روز</span>
+                          <span className="font-bold">{pkg.durationDays || (pkg.durationMonths ? pkg.durationMonths * 30 : 30)} روز</span>
+                        </div>
+                        <div className="p-2 rounded-lg glass-subtle border border-[var(--gym-border)]">
+                          <span className="text-[10px] text-[var(--gym-text-muted)] block">تعداد جلسات</span>
+                          <span className="font-bold">{pkg.sessionsCount || 24} جلسه</span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-1.5 mt-3">
+                        {pkg.includesLocker && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
+                            کمد اختصاصی
+                          </span>
+                        )}
+                        {pkg.includesCoach && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
+                            مربی خصوصی
+                          </span>
+                        )}
+                        {pkg.isVip && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                            VIP
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-3 border-t border-[var(--gym-border)]">
+                      <div>
+                        {isArchived ? (
+                          <button
+                            onClick={() => reactivatePackage(pkg.id)}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 text-xs font-semibold transition-all cursor-pointer"
+                            title="فعال‌سازی مجدد برای ثبت‌نام‌های جدید"
+                          >
+                            <ArchiveRestore className="w-3.5 h-3.5" />
+                            <span>فعال‌سازی</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => archivePackage(pkg.id)}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-400 border border-amber-500/30 text-xs font-semibold transition-all cursor-pointer"
+                            title="بایگانی کردن (عدم نمایش در ثبت‌نام جدید، حفظ سوابق قبلی)"
+                          >
+                            <Archive className="w-3.5 h-3.5" />
+                            <span>بایگانی</span>
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => openEditPackageModal(pkg)}
+                          className="p-1.5 rounded-lg glass-subtle hover:border-[var(--gym-border-strong)] text-[var(--gym-text)] transition-all cursor-pointer"
+                          title="ویرایش پکیج"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            const res = deletePackage(pkg.id);
+                            if (!res.success) {
+                              setBlockedDeleteInfo({
+                                pkg,
+                                reason: res.reason || 'این پکیج در عضویت‌ها یا تراکنش‌های مالی استفاده شده است.'
+                              });
+                            }
+                          }}
+                          className="p-1.5 rounded-lg bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/20 transition-all cursor-pointer"
+                          title="حذف پکیج"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}
@@ -824,25 +923,64 @@ export const SettingsView: React.FC = () => {
           <div>
             <h3 className="text-base font-bold text-[var(--gym-text,#fff)] flex items-center gap-2">
               <Shield className="w-5 h-5 text-emerald-400" />
-              پشتیبان‌گیری کامل و بازنشانی دیتابیس
+              پشتیبان‌گیری کامل و بازنشانی دیتابیس (SQLite Production)
             </h3>
-            <p className="text-xs text-[var(--gym-text-muted)] mt-1">پشتیبان‌گیری رمزنگاری شده و انتقال دیتابیس کامل به سیستم دیگر</p>
+            <p className="text-xs text-[var(--gym-text-muted)] mt-1">پشتیبان‌گیری مطمئن، دانلود دیتابیس باینری SQLite و بازیابی اطلاعات</p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+          {/* SQLite Runtime Diagnostic Box */}
+          <div className="p-4 rounded-2xl bg-stone-900/60 border border-[var(--gym-border)] space-y-2 text-xs">
+            <div className="flex items-center justify-between text-[var(--gym-text)]">
+              <div className="flex items-center gap-2 font-bold text-emerald-400">
+                <Database className="w-4 h-4" />
+                <span>موتور پایگاه‌داده فعال: Real SQLite 3 (ACID Relational)</span>
+              </div>
+              <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 font-mono text-[11px] border border-emerald-500/30">
+                Schema v3
+              </span>
+            </div>
+            <div className="text-[11px] text-[var(--gym-text-muted)] flex flex-col gap-1 font-mono">
+              <div>مسیر داده‌های محلی: {StoragePathService.getStorageSummary().dbPath}</div>
+              <div>حالت اجرا: {StoragePathService.getStorageSummary().runtime}</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+            <button
+              onClick={() => {
+                const binary = LocalDatabase.exportBinaryDatabase();
+                if (binary) {
+                  const blob = new Blob([binary], { type: 'application/x-sqlite3' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `gym_os_production_${new Date().toISOString().slice(0, 10)}.db`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                } else {
+                  exportAllDataAsJson();
+                }
+              }}
+              className="p-5 rounded-2xl glass-subtle border border-[var(--gym-border)] hover:border-[var(--gym-border-strong)] flex flex-col items-center text-center gap-2 transition-all group cursor-pointer"
+            >
+              <Database className="w-6 h-6 text-emerald-400 group-hover:scale-110 transition-all" />
+              <span className="text-xs font-bold text-[var(--gym-text,#fff)]">دانلود دیتابیس SQLite (.db)</span>
+              <span className="text-[11px] text-[var(--gym-text-muted)]">فایل استاندارد باینری SQLite</span>
+            </button>
+
             <button
               onClick={exportAllDataAsJson}
               className="p-5 rounded-2xl glass-subtle border border-[var(--gym-border)] hover:border-[var(--gym-border-strong)] flex flex-col items-center text-center gap-2 transition-all group cursor-pointer"
             >
               <Download className="w-6 h-6 text-amber-400 group-hover:scale-110 transition-all" />
-              <span className="text-xs font-bold text-[var(--gym-text,#fff)]">دانلود نسخه پشتیبان (JSON)</span>
-              <span className="text-[11px] text-[var(--gym-text-muted)]">شامل تمامی اعضا، مالی و کمدها</span>
+              <span className="text-xs font-bold text-[var(--gym-text,#fff)]">دانلود بک‌آپ (JSON)</span>
+              <span className="text-[11px] text-[var(--gym-text-muted)]">خروجی ساخت‌یافته JSON</span>
             </button>
 
             <label className="p-5 rounded-2xl glass-subtle border border-[var(--gym-border)] hover:border-[var(--gym-border-strong)] flex flex-col items-center text-center gap-2 transition-all cursor-pointer group">
-              <Upload className="w-6 h-6 text-emerald-400 group-hover:scale-110 transition-all" />
+              <Upload className="w-6 h-6 text-indigo-400 group-hover:scale-110 transition-all" />
               <span className="text-xs font-bold text-[var(--gym-text,#fff)]">بازیابی فایل پشتیبان</span>
-              <span className="text-[11px] text-[var(--gym-text-muted)]">بارگذاری فایل JSON بک‌آپ قبلی</span>
+              <span className="text-[11px] text-[var(--gym-text-muted)]">بارگذاری فایل JSON بک‌آپ</span>
               <input type="file" accept=".json" onChange={handleFileUpload} className="hidden" />
             </label>
 
@@ -1012,6 +1150,15 @@ export const SettingsView: React.FC = () => {
                   />
                   <span className="text-[var(--gym-text)]">پکیج VIP</span>
                 </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={pkgIsActive}
+                    onChange={(e) => setPkgIsActive(e.target.checked)}
+                    className="rounded border-[var(--gym-border)] text-[var(--gym-brand)]"
+                  />
+                  <span className="text-[var(--gym-text)]">وضعیت فعال (قابل انتخاب برای ثبت‌نام)</span>
+                </label>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
@@ -1030,6 +1177,55 @@ export const SettingsView: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Blocked Package Deletion Dialog (Immutability & Safety) */}
+      {blockedDeleteInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/75 backdrop-blur-sm">
+          <div className="w-full max-w-md glass-regular border border-amber-500/40 rounded-3xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-amber-400">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-[var(--gym-text,#fff)]">حفاظت از صحت تاریخچه مالی</h3>
+                <span className="text-xs text-amber-300/90 font-medium">عدم امکان حذف فیزیکی پکیج دارای سابقه</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-[var(--gym-text-muted)] leading-relaxed">
+              {blockedDeleteInfo.reason}
+            </p>
+
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-[var(--gym-text)] space-y-1">
+              <div className="font-semibold text-amber-300">راهکار استاندارد:</div>
+              <p className="text-[11px] text-[var(--gym-text-muted)]">
+                با «بایگانی» کردن، این پکیج دیگر در فرم‌های ثبت‌نام یا تمدید اعضا نمایش داده نمی‌شود؛ اما تمامی گزارش‌های حسابداری و پرونده‌های گذشته معتبر باقی می‌مانند.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setBlockedDeleteInfo(null)}
+                className="px-4 py-2 rounded-xl glass-subtle text-[var(--gym-text-muted)] hover:text-[var(--gym-text)] text-xs cursor-pointer"
+              >
+                بستن
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  archivePackage(blockedDeleteInfo.pkg.id);
+                  setBlockedDeleteInfo(null);
+                }}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs shadow-lg transition-all cursor-pointer"
+              >
+                <Archive className="w-4 h-4" />
+                <span>بایگانی این پکیج</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

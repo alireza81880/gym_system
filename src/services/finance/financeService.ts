@@ -531,7 +531,10 @@ export class FinanceService {
     memberId: string;
     memberName?: string;
     packageType: string;
+    packageId?: string;
     packageName?: string;
+    packageSnapshot?: Record<string, any>;
+    durationDays?: number;
     basePrice: number;
     discountAmount?: number;
     discountReason?: string;
@@ -547,10 +550,11 @@ export class FinanceService {
     tenantId?: string;
     recordedBy?: string;
     receiptNumber?: string;
-  }): { charge: FinancialCharge; payment?: PaymentRecord } {
+  }): { charge: FinancialCharge; payment?: PaymentRecord; membership: Membership } {
     ChargeRepository.initialize();
     PaymentRepository.initialize();
     MemberRepository.initialize();
+    MembershipRepository.initialize();
 
     const breakdown = this.calculateSaleBreakdown(
       params.basePrice,
@@ -563,13 +567,49 @@ export class FinanceService {
     const branchId = params.branchId || 'branch-tehran-central';
     const tenantId = params.tenantId || 'gym-org-1';
 
-    // 1. Create Sale / Charge Record
+    // 1. Create Membership Record with immutable snapshot
+    const existingActive = MembershipRepository.getActiveByMember(params.memberId);
+    if (existingActive) {
+      MembershipRepository.expire(existingActive.id);
+    }
+
+    const membershipId = `msh-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const membership: Membership = {
+      id: membershipId,
+      tenantId,
+      branchId,
+      studentId: params.memberId,
+      packageType: params.packageType,
+      packageId: params.packageId,
+      packageNameSnapshot: params.packageName || params.packageType,
+      basePrice: breakdown.basePrice,
+      discountAmount: breakdown.discountAmount,
+      finalPrice: breakdown.finalPrice,
+      durationDays: params.durationDays,
+      chargeId,
+      packageSnapshot: params.packageSnapshot,
+      startDate: todayJalali,
+      expireDate: params.expireDate,
+      status: 'active',
+      totalFee: breakdown.finalPrice,
+      paidAmount: breakdown.receivedAmount,
+      remainingDebt: breakdown.remainingDebt,
+      sessionsTotal: params.sessionsTotal,
+      sessionsAttended: 0,
+      coachId: params.coachId,
+      coachFee: params.coachFee,
+      createdAt: new Date().toISOString(),
+    };
+    MembershipRepository.create(membership);
+
+    // 2. Create Sale / Charge Record
     const charge: FinancialCharge = {
       id: chargeId,
       tenantId,
       branchId,
       memberId: params.memberId,
       memberName: params.memberName,
+      membershipId: membership.id,
       packageType: params.packageType,
       packageName: params.packageName || params.packageType,
       basePrice: breakdown.basePrice,
@@ -588,7 +628,7 @@ export class FinanceService {
 
     ChargeRepository.create(charge);
 
-    // 2. Create Payment Record if initialPayment > 0
+    // 3. Create Payment Record if initialPayment > 0
     let payment: PaymentRecord | undefined;
     if (breakdown.receivedAmount > 0) {
       payment = {
@@ -597,6 +637,7 @@ export class FinanceService {
         branchId,
         studentId: params.memberId,
         studentName: params.memberName,
+        membershipId: membership.id,
         chargeId: charge.id,
         amount: breakdown.receivedAmount,
         date: todayJalali,
@@ -611,7 +652,7 @@ export class FinanceService {
       PaymentRepository.addPayment(payment);
     }
 
-    // 3. Update Member entity cached financial balances
+    // 4. Update Member entity cached financial balances
     const member = MemberRepository.getById(params.memberId);
     if (member) {
       MemberRepository.updateMember(params.memberId, {
@@ -626,7 +667,7 @@ export class FinanceService {
       });
     }
 
-    // 4. Audit Log
+    // 5. Audit Log
     AuditService.logEvent({
       action: 'MEMBER_REGISTER',
       category: 'FINANCE',
@@ -635,7 +676,7 @@ export class FinanceService {
       branchId,
     });
 
-    return { charge, payment };
+    return { charge, payment, membership };
   }
 
   /**

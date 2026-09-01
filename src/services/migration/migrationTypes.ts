@@ -74,8 +74,8 @@ export interface ImportMappingProfile {
   sourceType: MigrationSourceType;
   sourceVendor?: string;
   mappings: Record<string, string>;
-  fullNameMode?: 'split' | 'preserve';
-  currencyUnit?: CurrencyUnit;
+  fullNameMode?: 'combined' | 'split' | 'preserve';
+  currencyUnit?: CurrencyUnit | string;
   customTransforms?: Record<string, string>;
   ignoredColumns?: string[];
   isSystemTemplate?: boolean;
@@ -130,13 +130,13 @@ export interface MigrationReport {
   duplicatesCount: number;
   conflictCount: number;
   errorCount: number;
-  warningCount: number;
-  status: 'SUCCESS' | 'PARTIAL' | 'FAILED';
+  warningCount?: number;
+  status: 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'CANCELLED' | 'ROLLED_BACK';
   errors: MigrationErrorRecord[];
   rollbackAvailable: boolean;
   durationMs?: number;
-  scope?: HistoricalMigrationScope;
-  importMode?: ImportMode;
+  scope?: any;
+  importMode?: any;
 }
 
 export interface MigrationSnapshot {

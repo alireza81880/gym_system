@@ -41,6 +41,8 @@ export interface MembershipPackage {
   sessionsCount: number;
   description?: string;
   isActive?: boolean;
+  isArchived?: boolean;
+  archivedAt?: string;
   includesLocker?: boolean;
   includesCoach?: boolean;
   includesDietPlan?: boolean;
@@ -927,6 +929,10 @@ export interface AccessPolicyConfig {
   duplicateEntrySameDay?: 'allow' | 'warn' | 'block';
   lockerRequired?: boolean;
   maxDebtAllowed?: number;
+  maxDebtTolerance?: number;
+  maxAllowedDebt?: number;
+  gracePeriodDays?: number;
+  allowLockerOnExpired?: boolean;
   allowEntryWithDebt?: boolean;
   maxAllowedDebtTolerated?: number;
   enforceHoursWindow?: boolean;

@@ -218,6 +218,11 @@ export const MigrationCenter: React.FC<MigrationCenterProps> = ({
             city: organizationInfo.city || 'تهران',
           },
           lockerCount: 0,
+          ownerData: {
+            fullName: organizationInfo.managerName || 'مدیریت',
+            phone: organizationInfo.phone || '09120000000',
+            username: 'admin',
+          },
         });
       }
     } catch (err) {

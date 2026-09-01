@@ -260,7 +260,7 @@ export const FinancialLedger: React.FC = () => {
               icon={<Plus className="h-4 w-4" />}
               onClick={() => setIsIncomeModalOpen(true)}
             >
-              {t.addIncome}
+              ثبت درآمد متفرقه
             </GlassButton>
           </div>
         }
@@ -283,7 +283,7 @@ export const FinancialLedger: React.FC = () => {
         />
 
         <GlassStatCard
-          title={t.balanceNet}
+          title="تراز و سود خالص"
           value={formatMoney(netBalance)}
           icon={<DollarSign className="h-6 w-6 text-[var(--gym-brand,#10b981)]" />}
           neonAccent={netBalance >= 0}
@@ -477,13 +477,13 @@ export const FinancialLedger: React.FC = () => {
                   onChange={(e) => setExpCategory(e.target.value as ExpenseCategory)}
                   className="w-full px-3 py-2 rounded-xl glass-subtle border-[var(--gym-border)] text-[var(--gym-text)] bg-[var(--gym-surface)] text-sm"
                 >
-                  <option value="rent" className="bg-stone-900 text-white">{t.catRent}</option>
-                  <option value="salary" className="bg-stone-900 text-white">{t.catSalary}</option>
-                  <option value="utility" className="bg-stone-900 text-white">{t.catUtility}</option>
-                  <option value="equipment" className="bg-stone-900 text-white">{t.catEquipment}</option>
-                  <option value="maintenance" className="bg-stone-900 text-white">{t.catMaintenance}</option>
-                  <option value="buffet_stock" className="bg-stone-900 text-white">{t.catBuffet}</option>
-                  <option value="other" className="bg-stone-900 text-white">{t.catOther}</option>
+                  <option value="rent" className="bg-stone-900 text-white">اجاره بها</option>
+                  <option value="salary" className="bg-stone-900 text-white">حقوق و دستمزد</option>
+                  <option value="utility" className="bg-stone-900 text-white">قبوض آب/برق/گاز</option>
+                  <option value="equipment" className="bg-stone-900 text-white">خرید تجهیزات</option>
+                  <option value="maintenance" className="bg-stone-900 text-white">تعمیرات و نگهداری</option>
+                  <option value="buffet_stock" className="bg-stone-900 text-white">شارژ بوفه</option>
+                  <option value="other" className="bg-stone-900 text-white">سایر هزینه‌ها</option>
                 </select>
               </div>
               <div>
@@ -560,7 +560,7 @@ export const FinancialLedger: React.FC = () => {
         <GlassModal
           isOpen={isIncomeModalOpen}
           onClose={() => setIsIncomeModalOpen(false)}
-          title={`${t.addIncome} (بوفه / مکمل / سایر)`}
+          title="ثبت درآمد متفرقه (بوفه / مکمل / سایر)"
           subtitle="ثبت درآمد آزاد فروشگاه، بوفه یا درآمدهای متفرقه باشگاه"
           icon={<ArrowUpRight className="w-5 h-5 text-emerald-400" />}
         >

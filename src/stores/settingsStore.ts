@@ -21,6 +21,8 @@ import { AuditService } from '../services/auditService';
 import { SyncEngine } from '../services/syncService';
 import { MemberRepository } from '../services/repositories/memberRepository';
 import { PaymentRepository } from '../services/repositories/paymentRepository';
+import { MembershipRepository } from '../services/repositories/membershipRepository';
+import { ChargeRepository } from '../services/repositories/chargeRepository';
 import { DateService } from '../services/dateService';
 import { financeActions } from './financeStore';
 import { AuthService } from '../services/auth/authService';
@@ -186,6 +188,56 @@ export const settingsActions = {
     PersistenceManager.setBatched('custom_fields', fields);
   },
 
+  checkPackageUsage(id: string): { isReferenced: boolean; count: number; details: string[] } {
+    const pkg = settingsStore.getState().packages.find(p => p.id === id);
+    if (!pkg) return { isReferenced: false, count: 0, details: [] };
+
+    let count = 0;
+    const details: string[] = [];
+
+    // Check MembershipRepository
+    try {
+      MembershipRepository.initialize();
+      const memberships = MembershipRepository.getAll().filter(m => 
+        m.packageId === id || m.packageType === pkg.type || m.packageType === pkg.name || m.packageNameSnapshot === pkg.name
+      );
+      if (memberships.length > 0) {
+        count += memberships.length;
+        details.push(`${memberships.length} دوره عضویت`);
+      }
+    } catch {}
+
+    // Check ChargeRepository
+    try {
+      ChargeRepository.initialize();
+      const charges = ChargeRepository.getAll().filter(c => 
+        c.packageType === pkg.type || c.packageName === pkg.name || c.packageType === pkg.id
+      );
+      if (charges.length > 0) {
+        count += charges.length;
+        details.push(`${charges.length} صورت‌حساب مالی`);
+      }
+    } catch {}
+
+    // Check MemberRepository
+    try {
+      MemberRepository.initialize();
+      const members = MemberRepository.getAll().filter(m => 
+        m.packageType === pkg.type || m.packageType === pkg.name || m.packageType === pkg.id
+      );
+      if (members.length > 0) {
+        count += members.length;
+        details.push(`${members.length} پرونده عضو`);
+      }
+    } catch {}
+
+    return {
+      isReferenced: count > 0,
+      count,
+      details,
+    };
+  },
+
   addPackage(pkgData: Omit<MembershipPackage, 'id'>): MembershipPackage {
     const state = settingsStore.getState();
     const newPkg: MembershipPackage = {
@@ -193,6 +245,8 @@ export const settingsActions = {
       id: `pkg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       tenantId: state.organizationInfo.tenantId,
       branchId: state.activeBranchId,
+      isActive: pkgData.isActive !== false,
+      isArchived: false,
     };
     const next = [...state.packages, newPkg];
     settingsStore.setState({ packages: next });
@@ -208,11 +262,39 @@ export const settingsActions = {
     SyncEngine.enqueue('package', id, 'UPDATE', pkgData);
   },
 
-  deletePackage(id: string): void {
+  archivePackage(id: string): void {
+    const next = settingsStore.getState().packages.map(p => 
+      p.id === id ? { ...p, isActive: false, isArchived: true, archivedAt: new Date().toISOString() } : p
+    );
+    settingsStore.setState({ packages: next });
+    PersistenceManager.setBatched('packages', next);
+    SyncEngine.enqueue('package', id, 'UPDATE', { isActive: false, isArchived: true });
+  },
+
+  reactivatePackage(id: string): void {
+    const next = settingsStore.getState().packages.map(p => 
+      p.id === id ? { ...p, isActive: true, isArchived: false, archivedAt: undefined } : p
+    );
+    settingsStore.setState({ packages: next });
+    PersistenceManager.setBatched('packages', next);
+    SyncEngine.enqueue('package', id, 'UPDATE', { isActive: true, isArchived: false });
+  },
+
+  deletePackage(id: string, force = false): { success: boolean; reason?: string; usageCount?: number } {
+    const usage = this.checkPackageUsage(id);
+    if (usage.isReferenced && !force) {
+      return {
+        success: false,
+        reason: `این پکیج دارای سابقه ثبت‌شده (${usage.details.join('، ')}) است و جهت حفظ تاریخچه و صحت محاسبات مالی قابل حذف فیزیکی نیست. می‌توانید پکیج را بایگانی نمایید تا برای اعضای جدید نمایش داده نشود.`,
+        usageCount: usage.count,
+      };
+    }
+
     const next = settingsStore.getState().packages.filter(p => p.id !== id);
     settingsStore.setState({ packages: next });
     PersistenceManager.setBatched('packages', next);
     SyncEngine.enqueue('package', id, 'DELETE', { id });
+    return { success: true };
   },
 
   updatePackages(packages: MembershipPackage[]): void {
