@@ -1,14 +1,17 @@
 {
   "name": "react-example",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
+  "main": "desktop/main.cjs",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
+    "dev:desktop": "vite build && electron desktop/main.cjs",
+    "start:desktop": "electron desktop/main.cjs",
     "build": "vite build",
+    "build:desktop": "vite build && electron-builder --config desktop/electron-builder.json --win",
     "preview": "vite preview",
-    "build:desktop": "vite build",
-    "clean": "rm -rf dist server.js",
+    "clean": "rm -rf dist release server.js",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
@@ -35,6 +38,8 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
     "autoprefixer": "^10.4.21",
+    "electron": "^44.1.1",
+    "electron-builder": "^26.15.3",
     "esbuild": "^0.25.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
