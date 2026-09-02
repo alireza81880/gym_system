@@ -160,7 +160,8 @@ export const settingsActions = {
   updateOrganizationInfo(partial: Partial<OrganizationInfo>): void {
     const updated = { ...settingsStore.getState().organizationInfo, ...partial };
     settingsStore.setState({ organizationInfo: updated });
-    PersistenceManager.setBatched('organization_info', updated);
+    PersistenceManager.setImmediate('organization_info', updated);
+    SyncEngine.enqueue('organization_info', updated.id || 'org-main', 'UPDATE', updated);
   },
 
   saveCustomField(field: CustomField): void {
@@ -195,11 +196,15 @@ export const settingsActions = {
     let count = 0;
     const details: string[] = [];
 
-    // Check MembershipRepository
+    // 1. Check MembershipRepository for real bindings (direct ID, snapshot ID, exact name snapshot, or exact package ID in legacy field)
     try {
       MembershipRepository.initialize();
       const memberships = MembershipRepository.getAll().filter(m => 
-        m.packageId === id || m.packageType === pkg.type || m.packageType === pkg.name || m.packageNameSnapshot === pkg.name
+        m.packageId === id ||
+        m.packageSnapshot?.id === id ||
+        (m.packageNameSnapshot && m.packageNameSnapshot === pkg.name) ||
+        m.packageType === id ||
+        m.packageType === pkg.name
       );
       if (memberships.length > 0) {
         count += memberships.length;
@@ -207,11 +212,13 @@ export const settingsActions = {
       }
     } catch {}
 
-    // Check ChargeRepository
+    // 2. Check ChargeRepository for exact financial invoices
     try {
       ChargeRepository.initialize();
       const charges = ChargeRepository.getAll().filter(c => 
-        c.packageType === pkg.type || c.packageName === pkg.name || c.packageType === pkg.id
+        c.packageType === id ||
+        c.packageType === pkg.name ||
+        c.packageName === pkg.name
       );
       if (charges.length > 0) {
         count += charges.length;
@@ -219,11 +226,12 @@ export const settingsActions = {
       }
     } catch {}
 
-    // Check MemberRepository
+    // 3. Check MemberRepository for active assigned profiles
     try {
       MemberRepository.initialize();
       const members = MemberRepository.getAll().filter(m => 
-        m.packageType === pkg.type || m.packageType === pkg.name || m.packageType === pkg.id
+        m.packageType === id ||
+        m.packageType === pkg.name
       );
       if (members.length > 0) {
         count += members.length;
@@ -250,7 +258,7 @@ export const settingsActions = {
     };
     const next = [...state.packages, newPkg];
     settingsStore.setState({ packages: next });
-    PersistenceManager.setBatched('packages', next);
+    PersistenceManager.setImmediate('packages', next);
     SyncEngine.enqueue('package', newPkg.id, 'INSERT', newPkg);
     return newPkg;
   },
@@ -258,7 +266,7 @@ export const settingsActions = {
   updatePackage(id: string, pkgData: Partial<MembershipPackage>): void {
     const next = settingsStore.getState().packages.map(p => p.id === id ? { ...p, ...pkgData } : p);
     settingsStore.setState({ packages: next });
-    PersistenceManager.setBatched('packages', next);
+    PersistenceManager.setImmediate('packages', next);
     SyncEngine.enqueue('package', id, 'UPDATE', pkgData);
   },
 
@@ -267,7 +275,7 @@ export const settingsActions = {
       p.id === id ? { ...p, isActive: false, isArchived: true, archivedAt: new Date().toISOString() } : p
     );
     settingsStore.setState({ packages: next });
-    PersistenceManager.setBatched('packages', next);
+    PersistenceManager.setImmediate('packages', next);
     SyncEngine.enqueue('package', id, 'UPDATE', { isActive: false, isArchived: true });
   },
 
@@ -276,7 +284,7 @@ export const settingsActions = {
       p.id === id ? { ...p, isActive: true, isArchived: false, archivedAt: undefined } : p
     );
     settingsStore.setState({ packages: next });
-    PersistenceManager.setBatched('packages', next);
+    PersistenceManager.setImmediate('packages', next);
     SyncEngine.enqueue('package', id, 'UPDATE', { isActive: true, isArchived: false });
   },
 
@@ -292,14 +300,14 @@ export const settingsActions = {
 
     const next = settingsStore.getState().packages.filter(p => p.id !== id);
     settingsStore.setState({ packages: next });
-    PersistenceManager.setBatched('packages', next);
+    PersistenceManager.setImmediate('packages', next);
     SyncEngine.enqueue('package', id, 'DELETE', { id });
     return { success: true };
   },
 
   updatePackages(packages: MembershipPackage[]): void {
     settingsStore.setState({ packages });
-    PersistenceManager.setBatched('packages', packages);
+    PersistenceManager.setImmediate('packages', packages);
   },
 
   addCoach(coachData: Omit<Coach, 'id'>, recordedBy = 'مدیر سیستم'): Coach {
@@ -312,7 +320,7 @@ export const settingsActions = {
     };
     const next = [newCoach, ...state.coaches];
     settingsStore.setState({ coaches: next });
-    PersistenceManager.setBatched('coaches', next);
+    PersistenceManager.setImmediate('coaches', next);
     SyncEngine.enqueue('coach', newCoach.id, 'INSERT', newCoach);
     AuditService.logEvent({
       action: 'COACH_ADDED',
@@ -326,7 +334,7 @@ export const settingsActions = {
   updateCoach(id: string, coachData: Partial<Coach>): void {
     const next = settingsStore.getState().coaches.map(c => c.id === id ? { ...c, ...coachData } : c);
     settingsStore.setState({ coaches: next });
-    PersistenceManager.setBatched('coaches', next);
+    PersistenceManager.setImmediate('coaches', next);
     SyncEngine.enqueue('coach', id, 'UPDATE', coachData);
   },
 
@@ -334,7 +342,7 @@ export const settingsActions = {
     const coach = settingsStore.getState().coaches.find(c => c.id === id);
     const next = settingsStore.getState().coaches.filter(c => c.id !== id);
     settingsStore.setState({ coaches: next });
-    PersistenceManager.setBatched('coaches', next);
+    PersistenceManager.setImmediate('coaches', next);
     SyncEngine.enqueue('coach', id, 'DELETE', { id });
     if (coach) {
       AuditService.logEvent({

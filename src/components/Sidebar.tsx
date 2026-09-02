@@ -79,6 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Granular store subscriptions
   const moduleFeatures = useSettingsStore(s => s.moduleFeatures);
   const coaches = useSettingsStore(s => s.coaches);
+  const organizationInfo = useSettingsStore(s => s.organizationInfo);
   const memberVersion = useMemberStore(s => s.version);
   const lockerVersion = useLockerStore(s => s.version);
   const hardwareVersion = useHardwareStore(s => s.version);
@@ -157,7 +158,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <Zap className="w-5 h-5 fill-current" />
               </div>
               <div className="truncate">
-                <span className="block font-bold text-xs sm:text-sm text-[var(--gym-text,#fff)] tracking-tight truncate">Gym OS Desk</span>
+                <span className="block font-bold text-xs sm:text-sm text-[var(--gym-text,#fff)] tracking-tight truncate">
+                  {organizationInfo?.name || 'Gym OS Desk'}
+                </span>
                 <span className="block text-[10px] text-[var(--gym-text-muted,#9ca3af)] font-mono">ماژول مدیریت باشگاه</span>
               </div>
             </div>

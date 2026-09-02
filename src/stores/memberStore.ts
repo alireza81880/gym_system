@@ -2,8 +2,10 @@ import { useMemo } from 'react';
 import { createStore, useStore } from './createStore';
 import { Student, PaymentMethod, PackageType } from '../types';
 import { MemberRepository, MemberQueryParams, PaginatedResult } from '../services/repositories/memberRepository';
+import { LockerRepository } from '../services/repositories/lockerRepository';
 import { FinanceService } from '../services/finance/financeService';
 import { notifyFinanceChange } from './financeStore';
+import { notifyLockerChange } from './lockerStore';
 import { generateFinancialId } from '../utils/idGenerator';
 import { DateService } from '../services/dateService';
 import { RBACService } from '../services/rbacService';
@@ -155,6 +157,22 @@ export const memberActions = {
     const prev = MemberRepository.getById(id);
     const res = MemberRepository.deleteMember(id);
     if (res && prev) {
+      // Release any active smart locker assigned to this member
+      try {
+        LockerRepository.initialize();
+        const lockers = LockerRepository.getAll();
+        let lockerReleased = false;
+        lockers.forEach(l => {
+          if (l.currentStudentId === id && l.status === 'occupied') {
+            LockerRepository.releaseLocker(l.number);
+            lockerReleased = true;
+          }
+        });
+        if (lockerReleased) {
+          notifyLockerChange();
+        }
+      } catch {}
+
       AuditService.logSensitiveMutation({
         actor,
         action: 'MEMBER_DELETED',

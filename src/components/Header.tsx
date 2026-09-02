@@ -45,7 +45,8 @@ export const Header: React.FC<HeaderProps> = ({
     integrationMode,
     syncState,
     triggerCloudSync,
-    currentUser
+    currentUser,
+    organizationInfo
   } = useApp();
 
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
@@ -92,7 +93,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h1 className="text-sm sm:text-base font-bold text-[var(--gym-text,#fff)] tracking-tight truncate">
-                  Gym OS
+                  {organizationInfo?.name || 'Gym OS'}
                 </h1>
                 
                 {/* Branch selector */}

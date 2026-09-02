@@ -21,11 +21,11 @@ interface OnboardingWizardModalProps {
 }
 
 export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ isOpen, onClose }) => {
-  const { setIntegrationMode } = useSettings();
+  const { setIntegrationMode, organizationInfo, updateOrganizationInfo } = useSettings();
   const [currentStep, setCurrentStep] = useState(1);
-  const [clubName, setClubName] = useState('باشگاه ورزشی رویال اکسیژن');
-  const [phone, setPhone] = useState('021-22800112');
-  const [city, setCity] = useState('تهران');
+  const [clubName, setClubName] = useState(organizationInfo?.name || 'باشگاه ورزشی رویال اکسیژن');
+  const [phone, setPhone] = useState(organizationInfo?.phone || '021-22800112');
+  const [city, setCity] = useState(organizationInfo?.city || 'تهران');
   const [enableVipZone, setEnableVipZone] = useState(true);
   const [allowDebtEntry, setAllowDebtEntry] = useState(true);
   const [pilotShadowMode, setPilotShadowMode] = useState(true);
@@ -35,6 +35,11 @@ export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ is
   const totalSteps = 8;
 
   const handleFinish = () => {
+    updateOrganizationInfo({
+      name: clubName.trim(),
+      phone: phone.trim(),
+      city: city.trim(),
+    });
     if (pilotShadowMode) {
       setIntegrationMode('shadow');
     }

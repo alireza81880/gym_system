@@ -14,7 +14,8 @@ import {
   MapPin, 
   User,
   Zap,
-  PlayCircle
+  PlayCircle,
+  X
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ValidationService } from '../../services/validationService';
@@ -24,20 +25,20 @@ interface InstallationWizardProps {
   isInitialSetup?: boolean;
 }
 
-export const InstallationWizard: React.FC<InstallationWizardProps> = ({ isInitialSetup = true }) => {
-  const { completeInstallation, enterDemoMode, formatMoney } = useApp();
+export const InstallationWizard: React.FC<InstallationWizardProps> = ({ onClose, isInitialSetup = true }) => {
+  const { completeInstallation, enterDemoMode, formatMoney, organizationInfo } = useApp();
 
   const [step, setStep] = useState<number>(1);
 
-  // Form State
-  const [gymName, setGymName] = useState('باشگاه ورزشی و بدنسازی آریا');
-  const [managerName, setManagerName] = useState('علیرضا احمدی');
-  const [managerMobile, setManagerMobile] = useState('09121112233');
-  const [city, setCity] = useState('تهران');
-  const [address, setAddress] = useState('تهران، خیابان شریعتی، بالاتر از پل رومی');
-  const [phone, setPhone] = useState('021-22001122');
-  const [currency, setCurrency] = useState<'تومان' | 'IRR' | 'ریال'>('تومان');
-  const [memberNumberLabel, setMemberNumberLabel] = useState('شماره عضویت');
+  // Form State initialized from current authoritative organizationInfo
+  const [gymName, setGymName] = useState(organizationInfo?.name || 'باشگاه ورزشی و بدنسازی آریا');
+  const [managerName, setManagerName] = useState(organizationInfo?.managerName || 'علیرضا احمدی');
+  const [managerMobile, setManagerMobile] = useState(organizationInfo?.managerMobile || '09121112233');
+  const [city, setCity] = useState(organizationInfo?.city || 'تهران');
+  const [address, setAddress] = useState(organizationInfo?.address || 'تهران، خیابان شریعتی، بالاتر از پل رومی');
+  const [phone, setPhone] = useState(organizationInfo?.phone || '021-22001122');
+  const [currency, setCurrency] = useState<'تومان' | 'IRR' | 'ریال'>(organizationInfo?.currency || 'تومان');
+  const [memberNumberLabel, setMemberNumberLabel] = useState(organizationInfo?.memberNumberLabel || 'شماره عضویت');
 
   // Lockers
   const [lockerCount, setLockerCount] = useState<number>(100);
@@ -125,6 +126,9 @@ export const InstallationWizard: React.FC<InstallationWizardProps> = ({ isInitia
         username: 'admin',
       },
     });
+    if (onClose) {
+      onClose();
+    }
   };
 
   return (
@@ -147,16 +151,27 @@ export const InstallationWizard: React.FC<InstallationWizardProps> = ({ isInitia
               </div>
             </div>
 
-            {isInitialSetup && (
-              <button
-                onClick={enterDemoMode}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-amber-300 border border-amber-500/30 text-xs font-medium transition-all"
-                title="تست سامانه با داده‌های آماده شبیه‌سازی شده"
-              >
-                <PlayCircle className="w-4 h-4 text-amber-400" />
-                <span>ورود به محیط دمو و داده‌های آزمایشی</span>
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {isInitialSetup && (
+                <button
+                  onClick={enterDemoMode}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-amber-300 border border-amber-500/30 text-xs font-medium transition-all cursor-pointer"
+                  title="تست سامانه با داده‌های آماده شبیه‌سازی شده"
+                >
+                  <PlayCircle className="w-4 h-4 text-amber-400" />
+                  <span>ورود به محیط دمو و داده‌های آزمایشی</span>
+                </button>
+              )}
+              {onClose && (
+                <button
+                  onClick={onClose}
+                  className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 text-slate-400 hover:text-white border border-slate-700 transition-all cursor-pointer"
+                  title="بستن پنجره"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Stepper Progress */}

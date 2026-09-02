@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Settings, 
   Download, 
@@ -80,14 +80,25 @@ export const SettingsView: React.FC = () => {
   const [blockedDeleteInfo, setBlockedDeleteInfo] = useState<{ pkg: MembershipPackage; reason: string } | null>(null);
 
   // Org State
-  const [gymName, setGymName] = useState(organizationInfo.name);
-  const [managerName, setManagerName] = useState(organizationInfo.managerName);
-  const [managerMobile, setManagerMobile] = useState(organizationInfo.managerMobile);
-  const [phone, setPhone] = useState(organizationInfo.phone);
-  const [city, setCity] = useState(organizationInfo.city);
-  const [address, setAddress] = useState(organizationInfo.address);
-  const [memberNumberLabel, setMemberNumberLabel] = useState(organizationInfo.memberNumberLabel);
+  const [gymName, setGymName] = useState(organizationInfo.name || '');
+  const [managerName, setManagerName] = useState(organizationInfo.managerName || '');
+  const [managerMobile, setManagerMobile] = useState(organizationInfo.managerMobile || '');
+  const [phone, setPhone] = useState(organizationInfo.phone || '');
+  const [city, setCity] = useState(organizationInfo.city || '');
+  const [address, setAddress] = useState(organizationInfo.address || '');
+  const [memberNumberLabel, setMemberNumberLabel] = useState(organizationInfo.memberNumberLabel || 'شماره عضویت');
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // Synchronize local form inputs whenever organizationInfo in store is updated
+  useEffect(() => {
+    setGymName(organizationInfo.name || '');
+    setManagerName(organizationInfo.managerName || '');
+    setManagerMobile(organizationInfo.managerMobile || '');
+    setPhone(organizationInfo.phone || '');
+    setCity(organizationInfo.city || '');
+    setAddress(organizationInfo.address || '');
+    setMemberNumberLabel(organizationInfo.memberNumberLabel || 'شماره عضویت');
+  }, [organizationInfo]);
 
   // Lockers Resize State
   const [newLockerCount, setNewLockerCount] = useState<number>(smartLockers.length || 100);
