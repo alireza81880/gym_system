@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Dumbbell, 
   Clock, 
@@ -14,6 +14,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { useSettings } from '../../stores';
+import { SetupService } from '../../services/setupService';
 
 interface OnboardingWizardModalProps {
   isOpen: boolean;
@@ -21,29 +22,35 @@ interface OnboardingWizardModalProps {
 }
 
 export const OnboardingWizardModal: React.FC<OnboardingWizardModalProps> = ({ isOpen, onClose }) => {
-  const { setIntegrationMode, organizationInfo, updateOrganizationInfo } = useSettings();
+  const { organizationInfo } = useSettings();
   const [currentStep, setCurrentStep] = useState(1);
-  const [clubName, setClubName] = useState(organizationInfo?.name || 'باشگاه ورزشی رویال اکسیژن');
+  const [clubName, setClubName] = useState(organizationInfo?.name || 'باشگاه ورزشی');
   const [phone, setPhone] = useState(organizationInfo?.phone || '021-22800112');
   const [city, setCity] = useState(organizationInfo?.city || 'تهران');
   const [enableVipZone, setEnableVipZone] = useState(true);
   const [allowDebtEntry, setAllowDebtEntry] = useState(true);
   const [pilotShadowMode, setPilotShadowMode] = useState(true);
 
+  // Sync form inputs when organizationInfo updates
+  useEffect(() => {
+    if (organizationInfo) {
+      if (organizationInfo.name) setClubName(organizationInfo.name);
+      if (organizationInfo.phone) setPhone(organizationInfo.phone);
+      if (organizationInfo.city) setCity(organizationInfo.city);
+    }
+  }, [organizationInfo]);
+
   if (!isOpen) return null;
 
   const totalSteps = 8;
 
   const handleFinish = () => {
-    updateOrganizationInfo({
+    SetupService.completeQuickSetup({
       name: clubName.trim(),
       phone: phone.trim(),
       city: city.trim(),
+      integrationMode: pilotShadowMode ? 'shadow' : undefined,
     });
-    if (pilotShadowMode) {
-      setIntegrationMode('shadow');
-    }
-    localStorage.setItem('gym_onboarding_completed', 'true');
     onClose();
   };
 

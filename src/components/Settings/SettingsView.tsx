@@ -1240,6 +1240,14 @@ export const SettingsView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Re-run Setup Wizard Modal */}
+      {showWizardModal && (
+        <InstallationWizard
+          isInitialSetup={false}
+          onClose={() => setShowWizardModal(false)}
+        />
+      )}
     </div>
   );
 };

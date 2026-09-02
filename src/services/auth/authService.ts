@@ -415,6 +415,32 @@ export class AuthService {
     this.updateStaffUser(id, { isActive: false }, performingActor);
   }
 
+  static initializeOwnerProfile(ownerData: { fullName: string; phone: string; username?: string }): StaffUser {
+    this.initialize();
+    let owner = this.staffUsersList.find(u => u.role === 'gym_owner');
+    if (!owner) {
+      owner = this.staffUsersList[0];
+    }
+    const updated: StaffUser = {
+      ...owner,
+      fullName: ownerData.fullName.trim() || owner.fullName,
+      phone: ownerData.phone.trim() || owner.phone,
+      username: ownerData.username?.trim() || owner.username,
+      role: 'gym_owner',
+      isActive: true,
+    };
+    this.staffUsersList = this.staffUsersList.map(u => u.id === updated.id ? updated : u);
+    PersistenceManager.setImmediate(this.USERS_KEY, this.staffUsersList);
+
+    // Update active session
+    const session = this.createSession(updated);
+    this.currentSession = session;
+    PersistenceManager.setImmediate(this.SESSION_KEY, session);
+    PersistenceManager.setImmediate('current_user', updated);
+    this.notifyListeners(session);
+    return updated;
+  }
+
   static subscribe(listener: AuthSessionListener): () => void {
     this.initialize();
     this.listeners.add(listener);

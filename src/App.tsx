@@ -122,6 +122,7 @@ const MainLayout: React.FC = () => {
       orgData: {
         name: setupData.gymName,
         managerName: setupData.managerName,
+        managerMobile: setupData.phone,
         phone: setupData.phone,
         city: setupData.city,
       },

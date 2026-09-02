@@ -55,8 +55,9 @@ export const InstallationWizard: React.FC<InstallationWizardProps> = ({ onClose,
   const [allowLockerOnExpired, setAllowLockerOnExpired] = useState<boolean>(false);
   const [integrationMode, setIntegrationMode] = useState<'shadow' | 'hybrid' | 'full_control'>('shadow');
 
-  // Validation
+  // Validation & Submission
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const handleNext = () => {
     setErrorMsg(null);
@@ -80,8 +81,8 @@ export const InstallationWizard: React.FC<InstallationWizardProps> = ({ onClose,
     }
 
     if (step === 2) {
-      if (lockerCount < 1) {
-        setErrorMsg('تعداد کمدها باید حداقل ۱ عدد باشد.');
+      if (lockerCount < 0) {
+        setErrorMsg('تعداد کمدها نمی‌تواند کمتر از صفر باشد.');
         return;
       }
     }
@@ -97,37 +98,53 @@ export const InstallationWizard: React.FC<InstallationWizardProps> = ({ onClose,
   };
 
   const handleFinish = () => {
-    completeInstallation({
-      orgData: {
-        name: gymName.trim(),
-        managerName: managerName.trim(),
-        managerMobile: managerMobile.trim(),
-        city: city.trim(),
-        address: address.trim(),
-        phone: phone.trim(),
-        currency,
-        memberNumberLabel,
-      },
-      lockerCount,
-      firstPackage: {
-        name: packageName,
-        price: packagePrice,
-        sessionsCount: packageSessions,
-        durationDays: packageDuration,
-      },
-      accessPolicy: {
-        maxDebtTolerance: maxAllowedDebt,
-        gracePeriodDays,
-        allowLockerOnExpired,
-      },
-      ownerData: {
-        fullName: managerName.trim(),
-        phone: managerMobile.trim(),
-        username: 'admin',
-      },
-    });
-    if (onClose) {
-      onClose();
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    try {
+      const res = completeInstallation({
+        orgData: {
+          name: gymName.trim(),
+          managerName: managerName.trim(),
+          managerMobile: managerMobile.trim(),
+          city: city.trim(),
+          address: address.trim(),
+          phone: phone.trim(),
+          currency,
+          memberNumberLabel,
+        },
+        lockerCount,
+        firstPackage: {
+          name: packageName.trim(),
+          price: packagePrice,
+          sessionsCount: packageSessions,
+          validityDays: packageDuration,
+          durationDays: packageDuration,
+          type: '1_month',
+        },
+        accessPolicy: {
+          maxDebtTolerance: maxAllowedDebt,
+          gracePeriodDays,
+          allowLockerOnExpired,
+        },
+        ownerData: {
+          fullName: managerName.trim(),
+          phone: managerMobile.trim(),
+          username: 'admin',
+        },
+      });
+
+      if (!res.success) {
+        setErrorMsg(res.error || 'خطا در ثبت اطلاعات و افتتاح باشگاه');
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (onClose) {
+        onClose();
+      }
+    } catch (err) {
+      setErrorMsg(`خطای غیرمنتظره در راه‌اندازی باشگاه: ${(err as Error).message}`);
+      setIsSubmitting(false);
     }
   };
 
@@ -622,10 +639,17 @@ export const InstallationWizard: React.FC<InstallationWizardProps> = ({ onClose,
           ) : (
             <button
               onClick={handleFinish}
-              className="flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 text-sm font-extrabold shadow-xl shadow-emerald-500/30 transition-all"
+              disabled={isSubmitting}
+              className={`flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 text-sm font-extrabold shadow-xl shadow-emerald-500/30 transition-all cursor-pointer ${
+                isSubmitting ? 'opacity-60 cursor-not-allowed' : ''
+              }`}
             >
-              <Zap className="w-5 h-5 fill-current" />
-              <span>راه‌اندازی و افتتاح باشگاه</span>
+              {isSubmitting ? (
+                <div className="w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <Zap className="w-5 h-5 fill-current" />
+              )}
+              <span>{isSubmitting ? 'در حال افتتاح باشگاه...' : 'راه‌اندازی و افتتاح باشگاه'}</span>
             </button>
           )}
         </div>

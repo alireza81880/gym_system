@@ -53,7 +53,8 @@ export class LockerEngine {
     tenantId: string = 'gym-org-1',
     branchId: string = 'branch-main'
   ): SmartLocker[] {
-    const validCount = Math.max(1, Math.min(1000, count));
+    const validCount = Math.max(0, Math.min(1000, count));
+    if (validCount === 0) return [];
     const lockers: SmartLocker[] = [];
 
     for (let i = 1; i <= validCount; i++) {
@@ -95,11 +96,24 @@ export class LockerEngine {
     tenantId: string = 'gym-org-1',
     branchId: string = 'branch-main'
   ): { updatedLockers: SmartLocker[]; warning?: string } {
-    const safeTargetCount = Math.max(1, newCount);
+    const safeTargetCount = Math.max(0, newCount);
     const currentMax = currentLockers.length > 0 ? Math.max(...currentLockers.map(l => l.number)) : 0;
 
     if (safeTargetCount === currentMax) {
       return { updatedLockers: currentLockers };
+    }
+
+    // Decreasing to zero or lower
+    if (safeTargetCount === 0) {
+      const occupiedBeyond = currentLockers.filter(l => l.status === 'occupied');
+      if (occupiedBeyond.length > 0) {
+        const occupiedNumbers = occupiedBeyond.map(l => `#${l.number}`).join(', ');
+        return {
+          updatedLockers: occupiedBeyond.sort((a, b) => a.number - b.number),
+          warning: `ظرفیت کمدها به صفر تنظیم شد، اما کمدهای (${occupiedNumbers}) به دلیل تحویل فعال به ورزشکار تا زمان آزادسازی حفظ شدند.`,
+        };
+      }
+      return { updatedLockers: [] };
     }
 
     // Increasing count: add new lockers

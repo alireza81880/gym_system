@@ -58,6 +58,8 @@ import { LockerRepository } from '../services/repositories/lockerRepository';
 import { PersistenceManager } from '../services/repositories/persistenceManager';
 import { LocalDatabase } from '../services/database/localDatabase';
 import { PerformanceDiagnostics } from '../services/diagnostics/performanceMetrics';
+import { SetupService, InitialSetupInput, QuickSetupInput, SetupResult } from '../services/setupService';
+import { LocalDbRepository } from '../services/localDb';
 import { useMemberStore, memberActions } from '../stores/memberStore';
 import { useFinanceStore, financeActions } from '../stores/financeStore';
 import { useAttendanceStore, attendanceActions, ScanResult } from '../stores/attendanceStore';
@@ -93,7 +95,8 @@ export interface AppContextType {
     firstPackage?: Partial<MembershipPackage>;
     accessPolicy?: Partial<AccessPolicyConfig>;
     ownerData: { fullName: string; phone: string; username?: string };
-  }) => void;
+  }) => SetupResult;
+  completeQuickSetup: (input: QuickSetupInput) => SetupResult;
   enterDemoMode: () => void;
   exitDemoMode: () => void;
   resetToEmptyProduction: () => void;
@@ -376,28 +379,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     firstPackage?: Partial<MembershipPackage>;
     accessPolicy?: Partial<AccessPolicyConfig>;
     ownerData: { fullName: string; phone: string; username?: string };
-  }) => {
-    settingsActions.updateOrganizationInfo(params.orgData);
-    if (params.lockerCount > 0) {
-      lockerActions.setLockerCount(params.lockerCount);
-    }
-    if (params.firstPackage?.name && params.firstPackage?.price) {
-      settingsActions.addPackage({
-        name: params.firstPackage.name,
-        type: params.firstPackage.type || '1_month',
+  }): SetupResult => {
+    return SetupService.completeInitialInstallation({
+      orgData: {
+        name: params.orgData.name || '',
+        managerName: params.orgData.managerName || '',
+        managerMobile: params.orgData.managerMobile || '',
+        city: params.orgData.city,
+        address: params.orgData.address,
+        phone: params.orgData.phone,
+        currency: params.orgData.currency,
+        memberNumberLabel: params.orgData.memberNumberLabel,
+      },
+      lockerCount: params.lockerCount,
+      lockerZones: params.lockerZones,
+      firstPackage: params.firstPackage ? {
+        name: params.firstPackage.name || '',
         price: Number(params.firstPackage.price) || 0,
-        validityDays: params.firstPackage.validityDays || 30,
-        sessionsCount: params.firstPackage.sessionsCount || 12,
-        includesLocker: true,
-        isActive: true,
-      });
-    }
-    if (params.accessPolicy) {
-      settingsActions.setAccessPolicyConfig(prev => ({ ...prev, ...params.accessPolicy }));
-    }
-    settingsActions.setCurrentUserRole('gym_owner');
-    settingsActions.setIsInstalled(true);
-    settingsActions.setIsDemoMode(false);
+        sessionsCount: params.firstPackage.sessionsCount,
+        validityDays: params.firstPackage.validityDays,
+        durationDays: (params.firstPackage as any).durationDays,
+        type: params.firstPackage.type,
+      } : undefined,
+      accessPolicy: params.accessPolicy,
+      ownerData: params.ownerData,
+    });
+  }, []);
+
+  const completeQuickSetup = useCallback((input: QuickSetupInput): SetupResult => {
+    return SetupService.completeQuickSetup(input);
   }, []);
 
   const enterDemoMode = useCallback(() => {
@@ -417,6 +427,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       details: 'اطلاعات عملیاتی سیستم ریست شد.',
       userName: currentUser.fullName,
     });
+    LocalDbRepository.setMetadata({
+      isInstalled: false,
+      isDemoMode: false,
+      tenantId: 'gym-org-1',
+    });
+    PersistenceManager.setImmediate('gym_installed', false);
+    PersistenceManager.setImmediate('gym_demo_mode', false);
+    PersistenceManager.setImmediate('gym_onboarding_completed', false);
     settingsActions.setIsInstalled(false);
     settingsActions.setIsDemoMode(false);
   }, [currentUser.fullName]);
@@ -485,6 +503,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     isInstalled,
     isDemoMode,
     completeInstallation,
+    completeQuickSetup,
     enterDemoMode,
     exitDemoMode,
     resetToEmptyProduction,
@@ -613,6 +632,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     isInstalled,
     isDemoMode,
     completeInstallation,
+    completeQuickSetup,
     enterDemoMode,
     exitDemoMode,
     resetToEmptyProduction,

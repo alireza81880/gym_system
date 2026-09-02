@@ -27,26 +27,7 @@ export class LockerRepository {
       stored = [];
     }
 
-    this.assignmentHistory = LocalDbRepository.get<LockerAssignment[]>('locker_assignments_history', [
-      {
-        id: 'lck-hist-init-1',
-        lockerNumber: 12,
-        memberId: 'std-2',
-        memberName: 'نیما کمالی',
-        assignedAt: '18:30',
-        assignedBy: 'auto_gate',
-        zone: 'men',
-      },
-      {
-        id: 'lck-hist-init-2',
-        lockerNumber: 4,
-        memberId: 'std-1',
-        memberName: 'سهراب مرادی',
-        assignedAt: '17:15',
-        assignedBy: 'auto_gate',
-        zone: 'vip',
-      }
-    ]);
+    this.assignmentHistory = LocalDbRepository.get<LockerAssignment[]>('locker_assignments_history', []);
     this.rebuildIndex(stored);
     this.isInitialized = true;
   }

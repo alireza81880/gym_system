@@ -435,12 +435,12 @@ export const settingsActions = {
 
   setIsInstalled(installed: boolean): void {
     settingsStore.setState({ isInstalled: installed });
-    PersistenceManager.setBatched('gym_installed', installed);
+    PersistenceManager.setImmediate('gym_installed', installed);
   },
 
   setIsDemoMode(demo: boolean): void {
     settingsStore.setState({ isDemoMode: demo });
-    PersistenceManager.setBatched('gym_demo_mode', demo);
+    PersistenceManager.setImmediate('gym_demo_mode', demo);
   },
 
   enterDemoMode(): void {
