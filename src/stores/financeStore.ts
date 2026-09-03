@@ -20,7 +20,14 @@ export const financeStore = createStore<FinanceState>({
   kpis: FinanceService.getFinancialMetrics(),
 });
 
-export function notifyFinanceChange(): void {
+export function notifyFinanceChange(shouldReconcile = true): void {
+  if (shouldReconcile) {
+    try {
+      FinanceService.reconcileAllFinancials();
+    } catch (e) {
+      console.warn('[FinanceStore] Reconcile error:', e);
+    }
+  }
   financeStore.setState({
     version: financeStore.getState().version + 1,
     summary: PaymentRepository.getSummary(),

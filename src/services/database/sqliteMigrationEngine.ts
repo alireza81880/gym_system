@@ -102,40 +102,72 @@ export class SQLiteMigrationEngine {
       } catch {}
     }
 
-    const isFirstTimeCleanSetup = !hasLegacy && !LocalDbRepository.isDatabaseInitialized();
+    // Check existing counts in SQLite tables to avoid overwriting restored or existing data
+    const currentPackageCount = await adapter.count('packages').catch(() => 0);
+    const currentMemberCount = await adapter.count('members').catch(() => 0);
+    const currentPaymentCount = await adapter.count('payments').catch(() => 0);
 
-    const finalStudents = hasLegacy ? parsedStudents : (isFirstTimeCleanSetup ? initialStudents : []);
-    const finalPayments = hasLegacy ? parsedPayments : (isFirstTimeCleanSetup ? initialPayments : []);
+    const isFirstTimeCleanSetup = !hasLegacy && 
+      !LocalDbRepository.isDatabaseInitialized() && 
+      currentPackageCount === 0 && 
+      currentMemberCount === 0 && 
+      !LocalDbRepository.hasKey('packages');
+
+    const finalStudents = hasLegacy ? parsedStudents : (currentMemberCount > 0 ? [] : (isFirstTimeCleanSetup ? initialStudents : []));
+    const finalPayments = hasLegacy ? parsedPayments : (currentPaymentCount > 0 ? [] : (isFirstTimeCleanSetup ? initialPayments : []));
     const finalAttendance = hasLegacy ? parsedAttendance : (isFirstTimeCleanSetup ? initialAttendance : []);
     const finalLockers = hasLegacy ? parsedLockers : (isFirstTimeCleanSetup ? initialSmartLockers : []);
     const finalCoaches = hasLegacy ? parsedCoaches : (isFirstTimeCleanSetup ? initialCoaches : []);
-    const finalPackages = hasLegacy ? parsedPackages : (isFirstTimeCleanSetup ? initialPackages : []);
+    
+    let finalPackages: any[] = [];
+    if (hasLegacy && parsedPackages.length > 0) {
+      finalPackages = parsedPackages;
+    } else if (currentPackageCount > 0) {
+      // Retain existing SQLite packages intact without re-seeding
+      finalPackages = [];
+    } else if (LocalDbRepository.hasKey('packages')) {
+      finalPackages = LocalDbRepository.get<any[]>('packages', []);
+    } else if (isFirstTimeCleanSetup) {
+      finalPackages = initialPackages;
+    }
 
     try {
       await adapter.transaction(async (tx) => {
-        // Insert packages
-        for (const pkg of finalPackages) {
-          await tx.insert('packages', pkg);
+        // Insert packages only if table is currently empty
+        if (currentPackageCount === 0 && finalPackages.length > 0) {
+          for (const pkg of finalPackages) {
+            await tx.insert('packages', pkg);
+          }
         }
         // Insert lockers
-        for (const locker of finalLockers) {
-          await tx.insert('lockers', locker);
+        if (finalLockers.length > 0) {
+          for (const locker of finalLockers) {
+            await tx.insert('lockers', locker);
+          }
         }
         // Insert coaches
-        for (const coach of finalCoaches) {
-          await tx.insert('coaches', coach);
+        if (finalCoaches.length > 0) {
+          for (const coach of finalCoaches) {
+            await tx.insert('coaches', coach);
+          }
         }
         // Insert members
-        for (const member of finalStudents) {
-          await tx.insert('members', member);
+        if (currentMemberCount === 0 && finalStudents.length > 0) {
+          for (const member of finalStudents) {
+            await tx.insert('members', member);
+          }
         }
         // Insert payments
-        for (const payment of finalPayments) {
-          await tx.insert('payments', payment);
+        if (currentPaymentCount === 0 && finalPayments.length > 0) {
+          for (const payment of finalPayments) {
+            await tx.insert('payments', payment);
+          }
         }
         // Insert attendance
-        for (const att of finalAttendance) {
-          await tx.insert('attendance', att);
+        if (finalAttendance.length > 0) {
+          for (const att of finalAttendance) {
+            await tx.insert('attendance', att);
+          }
         }
         // Insert organization info if present
         if (rawOrg) {

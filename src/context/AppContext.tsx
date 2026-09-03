@@ -58,6 +58,7 @@ import { LockerRepository } from '../services/repositories/lockerRepository';
 import { MembershipRepository } from '../services/repositories/membershipRepository';
 import { ChargeRepository } from '../services/repositories/chargeRepository';
 import { AuditRepository } from '../services/repositories/auditRepository';
+import { PackageRepository } from '../services/repositories/packageRepository';
 import { PersistenceManager } from '../services/repositories/persistenceManager';
 import { LocalDatabase } from '../services/database/localDatabase';
 import { PerformanceDiagnostics } from '../services/diagnostics/performanceMetrics';
@@ -555,6 +556,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       LockerRepository.reset(payload.lockers, payload.lockerAssignments || []);
       HardwareRepository.reset(payload.hardwareDevices || [], payload.hardwareEvents || []);
       AuditRepository.reset(payload.auditLogs || []);
+      if (Array.isArray(payload.packages)) {
+        PackageRepository.reset(payload.packages);
+      }
 
       // 2. Update React Zustand domain stores
       memberActions.batchSet(payload.students);
@@ -567,7 +571,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const newOrgInfo = payload.organizationInfo || currentSettings.organizationInfo;
       const newBranches = (payload.branches && payload.branches.length > 0) ? payload.branches : currentSettings.branches;
       const newActiveBranchId = payload.activeBranchId || newBranches[0]?.id || currentSettings.activeBranchId;
-      const newPackages = (payload.packages && payload.packages.length > 0) ? payload.packages : currentSettings.packages;
+      const newPackages = Array.isArray(payload.packages) ? payload.packages : currentSettings.packages;
       const newCoaches = (payload.coaches && payload.coaches.length > 0) ? payload.coaches : currentSettings.coaches;
       const newCustomFields = payload.customFields || currentSettings.customFields;
       const newAccessPolicy = payload.accessPolicyConfig || currentSettings.accessPolicyConfig;

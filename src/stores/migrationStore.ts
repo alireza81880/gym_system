@@ -17,6 +17,8 @@ import { PersistenceManager } from '../services/repositories/persistenceManager'
 import { MemberRepository } from '../services/repositories/memberRepository';
 import { memberActions } from './memberStore';
 import { settingsStore } from './settingsStore';
+import { notifyFinanceChange } from './financeStore';
+import { FinanceService } from '../services/finance/financeService';
 import { AuditService } from '../services/auditService';
 import { RBACService } from '../services/rbacService';
 
@@ -151,6 +153,15 @@ export const migrationActions = {
       memberActions.batchSet(result.updatedStudents);
       migrationActions.addReport(result.report);
       migrationActions.addSnapshot(result.snapshot);
+
+      // Trigger authoritative post-import financial reconciliation and refresh dashboard statistics
+      try {
+        FinanceService.reconcileAllFinancials();
+        memberActions.batchSet(MemberRepository.getAll());
+        notifyFinanceChange();
+      } catch (finErr) {
+        console.warn('[MigrationStore] Post-migration finance reconciliation warning:', finErr);
+      }
 
       const auditAction = result.report.status === 'PARTIAL' ? 'MIGRATION_PARTIAL' : 'MIGRATION_COMPLETED';
       AuditService.logSensitiveMutation({

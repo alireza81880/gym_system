@@ -1,5 +1,6 @@
 import { ImportMappingProfile } from './migrationTypes';
 import { CustomField } from '../../types';
+import { FieldAliasResolver } from './fieldAliasResolver';
 
 export interface TargetFieldDef {
   key: string;
@@ -121,46 +122,11 @@ export class MappingEngine {
   };
 
   /**
-   * Suggest automatic field mappings based on detected column names
+   * Suggest automatic field mappings based on detected column names using FieldAliasResolver
    */
   static suggestMappings(columns: string[], customFields: CustomField[] = []): Record<string, string> {
-    const mappings: Record<string, string> = {};
-    const usedTargets = new Set<string>();
-
-    columns.forEach(col => {
-      const normalizedCol = col.trim().toLowerCase().replace(/[_\s-]+/g, ' ');
-
-      // 1. Check custom fields
-      for (const cf of customFields) {
-        const cfKeyNorm = cf.key.toLowerCase().replace(/[_\s-]+/g, ' ');
-        const cfLabelNorm = cf.label.toLowerCase().replace(/[_\s-]+/g, ' ');
-        if (normalizedCol === cfKeyNorm || normalizedCol === cfLabelNorm) {
-          mappings[col] = `custom:${cf.key}`;
-          usedTargets.add(`custom:${cf.key}`);
-          return;
-        }
-      }
-
-      // 2. Check standard dictionary
-      for (const [targetKey, aliases] of Object.entries(this.FIELD_ALIASES)) {
-        if (usedTargets.has(targetKey)) continue;
-
-        const isMatch = aliases.some(alias => {
-          const normAlias = alias.toLowerCase().replace(/[_\s-]+/g, ' ');
-          return normalizedCol === normAlias || 
-                 normalizedCol.includes(normAlias) || 
-                 normAlias.includes(normalizedCol);
-        });
-
-        if (isMatch) {
-          mappings[col] = targetKey;
-          usedTargets.add(targetKey);
-          break;
-        }
-      }
-    });
-
-    return mappings;
+    const result = FieldAliasResolver.resolveAll(columns, customFields);
+    return result.mappings;
   }
 
   /**

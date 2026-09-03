@@ -116,6 +116,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return FinanceService.getFinancialMetrics({
       branchId: activeBranchId === 'all' ? undefined : activeBranchId,
       targetDate: dateFilter === 'today' ? todayJalali : undefined,
+      dateFilter: dateFilter as any,
     });
   }, [financeVersion, memberVersion, activeBranchId, dateFilter, todayJalali]);
 

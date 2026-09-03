@@ -208,10 +208,13 @@ export class FinanceService {
     targetDate?: string;
     startDate?: string;
     endDate?: string;
+    dateFilter?: 'today' | '7days' | '30days' | 'all';
   } = {}): FinancialKPIs {
-    const targetDate = options.targetDate || DateService.getTodayJalali();
     const branchId = options.branchId;
     const tenantId = options.tenantId;
+    const dateFilter = options.dateFilter;
+    const todayJalali = DateService.getTodayJalali();
+    const targetDate = options.targetDate || todayJalali;
 
     // 1. Initialize repositories
     PaymentRepository.initialize();
@@ -242,6 +245,23 @@ export class FinanceService {
       return true;
     });
 
+    const matchesPeriod = (recordDate?: string): boolean => {
+      if (!recordDate) return dateFilter === 'all';
+      const norm = DateService.normalizeJalaliDate(recordDate);
+      if (!norm) return false;
+      if (dateFilter === 'all') return true;
+      if (dateFilter === '7days') {
+        const start7 = DateService.addDaysToJalali(todayJalali, -7);
+        return norm >= start7 && norm <= todayJalali;
+      }
+      if (dateFilter === '30days') {
+        const start30 = DateService.addDaysToJalali(todayJalali, -30);
+        return norm >= start30 && norm <= todayJalali;
+      }
+      // 'today' or unspecified: match targetDate or today
+      return DateService.isSameJalaliDay(norm, targetDate);
+    };
+
     // 4. Sales metrics
     let salesToday = 0;
     let outstandingCreatedToday = 0;
@@ -250,11 +270,11 @@ export class FinanceService {
     for (const c of scopedCharges) {
       if (c.status === 'cancelled') continue;
 
-      // Charge created today
-      const isToday = DateService.isSameJalaliDay(c.date, targetDate);
-      if (isToday) {
+      // Charge created in active period
+      const inPeriod = matchesPeriod(c.date);
+      if (inPeriod) {
         salesToday += c.finalPrice;
-        // The unpaid portion created on this sale today
+        // The unpaid portion created on this sale today/in-period
         const initialUnpaid = Math.max(0, c.finalPrice - (c.paidAmount || 0));
         outstandingCreatedToday += initialUnpaid;
       }
@@ -278,7 +298,7 @@ export class FinanceService {
       // Exclude voided payments
       if (p.status === 'voided') continue;
 
-      const isToday = DateService.isSameJalaliDay(p.date, targetDate);
+      const inPeriod = matchesPeriod(p.date);
 
       if (p.type === 'coach_settlement') {
         totalCoachPayouts += p.amount;
@@ -287,14 +307,14 @@ export class FinanceService {
 
       if (p.type === 'refund' || p.amount < 0) {
         const refundVal = Math.abs(p.amount);
-        if (isToday) {
+        if (inPeriod) {
           refundedToday += refundVal;
         }
         totalRevenue -= refundVal;
       } else {
         // Normal positive payment
         const effectiveAmount = p.amount;
-        if (isToday) {
+        if (inPeriod) {
           collectedToday += effectiveAmount;
         }
         totalRevenue += effectiveAmount;

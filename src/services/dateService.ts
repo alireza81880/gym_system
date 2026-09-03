@@ -53,7 +53,7 @@ export class DateService {
    * Add duration in days to a Jalali date string and return accurate end Jalali date string
    */
   static addDaysToJalali(jalaliDateStr: string, daysToAdd: number): string {
-    if (!jalaliDateStr || daysToAdd <= 0) return jalaliDateStr;
+    if (!jalaliDateStr || daysToAdd === 0) return jalaliDateStr;
     const gDate = this.jalaliToGregorianDate(jalaliDateStr);
     gDate.setDate(gDate.getDate() + daysToAdd);
     return this.gregorianToJalali(gDate.getFullYear(), gDate.getMonth() + 1, gDate.getDate());
@@ -178,8 +178,9 @@ export class DateService {
       }
     }
 
-    // Split by slash, dash or space
-    const parts = en.split(/[/ -]/).filter(Boolean);
+    // Strip time portion if present (after space or 'T')
+    const datePortion = en.split(/[ T]/)[0];
+    const parts = datePortion.split(/[/ -]/).filter(Boolean);
     if (parts.length >= 3) {
       const y = parts[0];
       const m = parts[1].padStart(2, '0');

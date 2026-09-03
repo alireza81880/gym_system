@@ -23,6 +23,7 @@ import { MemberRepository } from '../services/repositories/memberRepository';
 import { PaymentRepository } from '../services/repositories/paymentRepository';
 import { MembershipRepository } from '../services/repositories/membershipRepository';
 import { ChargeRepository } from '../services/repositories/chargeRepository';
+import { PackageRepository } from '../services/repositories/packageRepository';
 import { DateService } from '../services/dateService';
 import { financeActions } from './financeStore';
 import { AuthService } from '../services/auth/authService';
@@ -124,6 +125,22 @@ export interface SettingsState {
   integrationMode: IntegrationMode;
 }
 
+const getInitialStorePackages = (): MembershipPackage[] => {
+  try {
+    PackageRepository.initialize();
+    const repoPackages = PackageRepository.getAll({ includeArchived: true });
+    if (repoPackages.length > 0) return repoPackages;
+    if (PersistenceManager.hasKey('packages')) {
+      const raw = PersistenceManager.get<MembershipPackage[]>('packages', []);
+      if (Array.isArray(raw)) return raw;
+    }
+  } catch {}
+  if (!PersistenceManager.hasKey('gym_db_initialized') && !PersistenceManager.hasKey('packages')) {
+    return initialPackages;
+  }
+  return [];
+};
+
 export const settingsStore = createStore<SettingsState>({
   isInstalled: PersistenceManager.get<boolean>('gym_installed', true),
   isDemoMode: PersistenceManager.get<boolean>('gym_demo_mode', false),
@@ -132,7 +149,7 @@ export const settingsStore = createStore<SettingsState>({
   branches: PersistenceManager.get<Branch[]>('branches', initialBranches),
   activeBranchId: PersistenceManager.get<Branch[]>('branches', initialBranches)[0]?.id || 'branch-main',
   customFields: PersistenceManager.get<CustomField[]>('custom_fields', defaultCustomFields),
-  packages: PersistenceManager.get<MembershipPackage[]>('packages', initialPackages),
+  packages: getInitialStorePackages(),
   coaches: PersistenceManager.get<Coach[]>('coaches', initialCoaches),
   accessPolicyConfig: PersistenceManager.get<AccessPolicyConfig>('access_policy_config', defaultAccessPolicyConfig),
   dashboardWidgets: PersistenceManager.get<DashboardWidgetConfig[]>('dashboard_widgets', defaultDashboardWidgets),
@@ -147,8 +164,8 @@ AuthService.subscribe((session) => {
   }
 });
 
-// Ensure initial settings domain records are durably present in storage if not set yet
-if (!PersistenceManager.hasKey('packages')) {
+// Ensure initial settings domain records are durably present in storage only on clean setup
+if (!PersistenceManager.hasKey('packages') && !PersistenceManager.hasKey('gym_db_initialized')) {
   PersistenceManager.setImmediate('packages', initialPackages);
 }
 if (!PersistenceManager.hasKey('branches')) {
@@ -254,58 +271,15 @@ export const settingsActions = {
   },
 
   checkPackageUsage(id: string): { isReferenced: boolean; count: number; details: string[] } {
-    const pkg = settingsStore.getState().packages.find(p => p.id === id);
-    if (!pkg) return { isReferenced: false, count: 0, details: [] };
-
-    let count = 0;
+    const usage = PackageRepository.checkUsage(id);
     const details: string[] = [];
-
-    // 1. Check MembershipRepository for real bindings (direct ID, snapshot ID, exact name snapshot, or exact package ID in legacy field)
-    try {
-      MembershipRepository.initialize();
-      const memberships = MembershipRepository.getAll().filter(m => 
-        m.packageId === id ||
-        m.packageSnapshot?.id === id ||
-        (m.packageNameSnapshot && m.packageNameSnapshot === pkg.name) ||
-        m.packageType === id ||
-        m.packageType === pkg.name
-      );
-      if (memberships.length > 0) {
-        count += memberships.length;
-        details.push(`${memberships.length} دوره عضویت`);
-      }
-    } catch {}
-
-    // 2. Check ChargeRepository for exact financial invoices
-    try {
-      ChargeRepository.initialize();
-      const charges = ChargeRepository.getAll().filter(c => 
-        c.packageType === id ||
-        c.packageType === pkg.name ||
-        c.packageName === pkg.name
-      );
-      if (charges.length > 0) {
-        count += charges.length;
-        details.push(`${charges.length} صورت‌حساب مالی`);
-      }
-    } catch {}
-
-    // 3. Check MemberRepository for active assigned profiles
-    try {
-      MemberRepository.initialize();
-      const members = MemberRepository.getAll().filter(m => 
-        m.packageType === id ||
-        m.packageType === pkg.name
-      );
-      if (members.length > 0) {
-        count += members.length;
-        details.push(`${members.length} پرونده عضو`);
-      }
-    } catch {}
+    if (usage.membershipReferences > 0) details.push(`${usage.membershipReferences} دوره عضویت`);
+    if (usage.chargeReferences > 0) details.push(`${usage.chargeReferences} صورت‌حساب مالی`);
+    if (usage.paymentReferences > 0) details.push(`${usage.paymentReferences} سند پرداخت`);
 
     return {
-      isReferenced: count > 0,
-      count,
+      isReferenced: usage.inUse,
+      count: usage.totalReferences,
       details,
     };
   },
@@ -320,7 +294,8 @@ export const settingsActions = {
       isActive: pkgData.isActive !== false,
       isArchived: false,
     };
-    const next = [...state.packages, newPkg];
+    PackageRepository.add(newPkg);
+    const next = PackageRepository.getAll({ includeArchived: true });
     settingsStore.setState({ packages: next });
     PersistenceManager.setImmediate('packages', next);
     SyncEngine.enqueue('package', newPkg.id, 'INSERT', newPkg);
@@ -328,25 +303,24 @@ export const settingsActions = {
   },
 
   updatePackage(id: string, pkgData: Partial<MembershipPackage>): void {
-    const next = settingsStore.getState().packages.map(p => p.id === id ? { ...p, ...pkgData } : p);
+    PackageRepository.update(id, pkgData);
+    const next = PackageRepository.getAll({ includeArchived: true });
     settingsStore.setState({ packages: next });
     PersistenceManager.setImmediate('packages', next);
     SyncEngine.enqueue('package', id, 'UPDATE', pkgData);
   },
 
   archivePackage(id: string): void {
-    const next = settingsStore.getState().packages.map(p => 
-      p.id === id ? { ...p, isActive: false, isArchived: true, archivedAt: new Date().toISOString() } : p
-    );
+    PackageRepository.update(id, { isActive: false, isArchived: true, archivedAt: new Date().toISOString() });
+    const next = PackageRepository.getAll({ includeArchived: true });
     settingsStore.setState({ packages: next });
     PersistenceManager.setImmediate('packages', next);
     SyncEngine.enqueue('package', id, 'UPDATE', { isActive: false, isArchived: true });
   },
 
   reactivatePackage(id: string): void {
-    const next = settingsStore.getState().packages.map(p => 
-      p.id === id ? { ...p, isActive: true, isArchived: false, archivedAt: undefined } : p
-    );
+    PackageRepository.update(id, { isActive: true, isArchived: false, archivedAt: undefined });
+    const next = PackageRepository.getAll({ includeArchived: true });
     settingsStore.setState({ packages: next });
     PersistenceManager.setImmediate('packages', next);
     SyncEngine.enqueue('package', id, 'UPDATE', { isActive: true, isArchived: false });
@@ -357,12 +331,13 @@ export const settingsActions = {
     if (usage.isReferenced && !force) {
       return {
         success: false,
-        reason: `این پکیج دارای سابقه ثبت‌شده (${usage.details.join('، ')}) است و جهت حفظ تاریخچه و صحت محاسبات مالی قابل حذف فیزیکی نیست. می‌توانید پکیج را بایگانی نمایید تا برای اعضای جدید نمایش داده نشود.`,
+        reason: `این پکیج دارای سابقه ثبت‌شده مستقیم (${usage.details.join('، ')}) است و جهت حفظ تاریخچه و صحت محاسبات مالی قابل حذف فیزیکی نیست. می‌توانید پکیج را بایگانی نمایید تا برای اعضای جدید نمایش داده نشود.`,
         usageCount: usage.count,
       };
     }
 
-    const next = settingsStore.getState().packages.filter(p => p.id !== id);
+    PackageRepository.delete(id);
+    const next = PackageRepository.getAll({ includeArchived: true });
     settingsStore.setState({ packages: next });
     PersistenceManager.setImmediate('packages', next);
     SyncEngine.enqueue('package', id, 'DELETE', { id });
@@ -370,6 +345,7 @@ export const settingsActions = {
   },
 
   updatePackages(packages: MembershipPackage[]): void {
+    PackageRepository.reset(packages);
     settingsStore.setState({ packages });
     PersistenceManager.setImmediate('packages', packages);
   },

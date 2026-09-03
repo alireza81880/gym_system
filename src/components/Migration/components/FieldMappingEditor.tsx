@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   CheckCircle2, 
   HelpCircle, 
@@ -12,7 +12,8 @@ import {
   DollarSign,
   UserCheck,
   Split,
-  EyeOff
+  EyeOff,
+  AlertCircle
 } from 'lucide-react';
 import { 
   ParseResult, 
@@ -20,6 +21,7 @@ import {
   CurrencyUnit
 } from '../../../services/migration/migrationTypes';
 import { MappingEngine } from '../../../services/migration/mappingEngine';
+import { FieldAliasResolver } from '../../../services/migration/fieldAliasResolver';
 import { useAppContext } from '../../../context/AppContext';
 
 interface FieldMappingEditorProps {
@@ -57,6 +59,26 @@ export const FieldMappingEditor: React.FC<FieldMappingEditorProps> = ({
   const [showSaveProfileModal, setShowSaveProfileModal] = useState(false);
   const [profileNameInput, setProfileNameInput] = useState('');
   const [matchedProfile, setMatchedProfile] = useState<ImportMappingProfile | null>(null);
+  const [filterMode, setFilterMode] = useState<'all' | 'unknown' | 'known'>('all');
+
+  // Auto-resolve known vs unknown fields with confidence metrics using FieldAliasResolver
+  const batchResolution = useMemo(() => {
+    return FieldAliasResolver.resolveAll(columns, customFields);
+  }, [columns, customFields]);
+
+  // Resolution lookup map for quick access
+  const resolutionMap = useMemo(() => {
+    const map = new Map<string, typeof batchResolution.resolutions[0]>();
+    batchResolution.resolutions.forEach(r => map.set(r.column, r));
+    return map;
+  }, [batchResolution]);
+
+  // Auto-map on first mount if mappings are empty
+  useEffect(() => {
+    if (Object.keys(mappings).length === 0 && batchResolution.knownCount > 0) {
+      onUpdateMappings(batchResolution.mappings);
+    }
+  }, [columns]);
 
   // Check for auto-matched profile on load
   useEffect(() => {
@@ -203,12 +225,80 @@ export const FieldMappingEditor: React.FC<FieldMappingEditorProps> = ({
 
       {/* Mapping Table */}
       <div className="p-6 glass-regular rounded-2xl border border-[var(--gym-border)] space-y-4">
+        {/* Auto Match Banner & Confidence Metric */}
+        <div className="p-4 rounded-xl border border-[var(--gym-border)] glass-subtle flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="p-2 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+              <Sparkles className="w-4 h-4" />
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-[var(--gym-text)]">تطبیق خودکار هوشمند فیلدها:</span>
+                <span className="text-xs font-black text-emerald-400">
+                  {batchResolution.knownCount} از {columns.length} ستون شناسایی شد (میانگین اطمینان {batchResolution.overallConfidence}٪)
+                </span>
+              </div>
+              <p className="text-[11px] text-[var(--gym-text-muted)] mt-0.5">
+                فیلدهای استاندارد با معادل‌های فارسی تطبیق داده شدند. فقط موارد ناشناخته نیاز به تعیین دستی دارند.
+              </p>
+            </div>
+          </div>
+
+          {batchResolution.unknownCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setFilterMode(filterMode === 'unknown' ? 'all' : 'unknown')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                filterMode === 'unknown'
+                  ? 'bg-amber-500 text-black shadow-md'
+                  : 'bg-amber-500/15 text-amber-300 border border-amber-500/30 hover:bg-amber-500/25'
+              }`}
+            >
+              <AlertCircle className="w-3.5 h-3.5" />
+              <span>{filterMode === 'unknown' ? 'نمایش همه ستون‌ها' : `فقط ستون‌های ناشناخته (${batchResolution.unknownCount})`}</span>
+            </button>
+          )}
+        </div>
+
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-          <div className="space-y-0.5">
-            <h3 className="text-sm font-bold text-[var(--gym-text)]">تطبیق فیلدهای منبع با Gym OS</h3>
-            <p className="text-xs text-[var(--gym-text-muted)]">
-              مشخص کنید داده‌های هر ستون در کدام بخش از پرونده ورزشکار در Gym OS ذخیره شود.
-            </p>
+          {/* Filter Tabs */}
+          <div className="flex items-center gap-1.5 p-1 rounded-xl glass-subtle border border-[var(--gym-border)]">
+            <button
+              type="button"
+              onClick={() => setFilterMode('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                filterMode === 'all'
+                  ? 'bg-[var(--gym-brand)] text-[var(--gym-bg)] shadow-sm'
+                  : 'text-[var(--gym-text-muted)] hover:text-[var(--gym-text)]'
+              }`}
+            >
+              همه ستون‌ها ({columns.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterMode('unknown')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1 ${
+                filterMode === 'unknown'
+                  ? 'bg-amber-500 text-black shadow-sm'
+                  : 'text-amber-400/90 hover:text-amber-300'
+              }`}
+            >
+              <span>نیازمند بررسی</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/20">
+                {batchResolution.unknownCount}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterMode('known')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                filterMode === 'known'
+                  ? 'bg-emerald-500 text-black shadow-sm'
+                  : 'text-emerald-400/90 hover:text-emerald-300'
+              }`}
+            >
+              تطبیق خودکار ({batchResolution.knownCount})
+            </button>
           </div>
 
           <div className="flex items-center gap-2">
@@ -234,20 +324,35 @@ export const FieldMappingEditor: React.FC<FieldMappingEditorProps> = ({
                 <th className="p-3.5 w-1/4">ستون در فایل شما (Source)</th>
                 <th className="p-3.5 w-1/4">نمونه مقادیر (Sample Data)</th>
                 <th className="p-3.5 w-1/3">فیلد مقصد در Gym OS (Target Field)</th>
-                <th className="p-3.5 text-center">وضعیت</th>
+                <th className="p-3.5 text-center">وضعیت و اطمینان</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--gym-border)]">
-              {columns.map((col, idx) => {
+              {columns
+                .filter(col => {
+                  if (filterMode === 'unknown') {
+                    const res = resolutionMap.get(col);
+                    return !res?.isKnown || !mappings[col];
+                  }
+                  if (filterMode === 'known') {
+                    const res = resolutionMap.get(col);
+                    return res?.isKnown && !!mappings[col];
+                  }
+                  return true;
+                })
+                .map((col, idx) => {
                 const currentTarget = mappings[col] || '';
                 const samples = rows.slice(0, 2).map(r => String(r[col] ?? '')).filter(Boolean);
+                const resolution = resolutionMap.get(col);
 
                 return (
                   <tr key={idx} className="hover:bg-[var(--gym-brand-soft)] transition-colors">
                     {/* Source Column Name */}
                     <td className="p-3.5 font-semibold text-[var(--gym-text)]">
                       <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-[var(--gym-brand)] shrink-0" />
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${
+                          resolution?.isKnown ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'
+                        }`} />
                         <span>{col}</span>
                       </div>
                     </td>
@@ -334,18 +439,34 @@ export const FieldMappingEditor: React.FC<FieldMappingEditorProps> = ({
                       </select>
                     </td>
 
-                    {/* Status Badge */}
+                    {/* Status & Confidence Badge */}
                     <td className="p-3.5 text-center">
                       {currentTarget ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--gym-brand)] bg-[var(--gym-brand-soft)] border border-[var(--gym-border-strong)] px-2 py-0.5 rounded-md">
-                          <CheckCircle2 className="w-3 h-3" />
-                          نگاشت شد
-                        </span>
+                        <div className="flex flex-col items-center gap-1">
+                          {resolution?.isKnown && resolution.targetKey === currentTarget ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-md">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>تطبیق خودکار ({resolution.confidence}٪)</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--gym-brand)] bg-[var(--gym-brand-soft)] border border-[var(--gym-border-strong)] px-2 py-0.5 rounded-md">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>نگاشت شد</span>
+                            </span>
+                          )}
+                          {resolution?.persianLabel && resolution.targetKey === currentTarget && (
+                            <span className="text-[10px] text-[var(--gym-text-muted)] truncate max-w-[120px]">
+                              {resolution.persianLabel}
+                            </span>
+                          )}
+                        </div>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--gym-text-muted)] glass-subtle border border-[var(--gym-border)] px-2 py-0.5 rounded-md">
-                          <EyeOff className="w-3 h-3" />
-                          نادیده
-                        </span>
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded-md">
+                            <AlertCircle className="w-3 h-3" />
+                            <span>نیازمند تعیین شما</span>
+                          </span>
+                        </div>
                       )}
                     </td>
                   </tr>
