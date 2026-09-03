@@ -32,12 +32,12 @@ import { RBACService } from '../services/rbacService';
 export const defaultOrganizationInfo: OrganizationInfo = {
   id: 'org-main',
   tenantId: 'gym-org-1',
-  name: 'باشگاه بدنسازی و فیتنس پروشات',
-  managerName: 'مهندس علیرضا حسینی',
-  managerMobile: '09121112233',
+  name: 'باشگاه بدنسازی و تندرستی',
+  managerName: 'مدیریت باشگاه',
+  managerMobile: '',
   city: 'تهران',
-  address: 'تهران، خیابان نیاوران، روبروی پارک، مجتمع ورزشی رویال',
-  phone: '021-22800112',
+  address: '',
+  phone: '',
   currency: 'تومان',
   timezone: 'Asia/Tehran',
   memberNumberLabel: 'شماره عضویت',
@@ -95,14 +95,14 @@ export const defaultDashboardWidgets: DashboardWidgetConfig[] = [
 
 export const initialBranches: Branch[] = [
   {
-    id: 'branch-tehran-central',
+    id: 'branch-main',
     tenantId: 'gym-org-1',
-    name: 'شعبه مرکزی (تهران - نیاوران)',
-    code: 'TEH-01',
+    name: 'شعبه مرکزی',
+    code: 'MAIN-01',
     city: 'تهران',
-    address: 'خیابان نیاوران، مجتمع ورزشی رویال، طبقه -۱',
-    phone: '021-22800112',
-    managerName: 'مهندس حسینی',
+    address: '',
+    phone: '',
+    managerName: 'مدیریت باشگاه',
     isMain: true,
     isActive: true,
   },
@@ -130,7 +130,7 @@ export const settingsStore = createStore<SettingsState>({
   organizationInfo: PersistenceManager.get<OrganizationInfo>('organization_info', defaultOrganizationInfo),
   currentUser: AuthService.getCurrentUser(),
   branches: PersistenceManager.get<Branch[]>('branches', initialBranches),
-  activeBranchId: 'branch-tehran-central',
+  activeBranchId: PersistenceManager.get<Branch[]>('branches', initialBranches)[0]?.id || 'branch-main',
   customFields: PersistenceManager.get<CustomField[]>('custom_fields', defaultCustomFields),
   packages: PersistenceManager.get<MembershipPackage[]>('packages', initialPackages),
   coaches: PersistenceManager.get<Coach[]>('coaches', initialCoaches),
@@ -158,9 +158,32 @@ export interface CoachFinancialStats {
 
 export const settingsActions = {
   updateOrganizationInfo(partial: Partial<OrganizationInfo>): void {
-    const updated = { ...settingsStore.getState().organizationInfo, ...partial };
-    settingsStore.setState({ organizationInfo: updated });
+    const currentState = settingsStore.getState();
+    const updated = { ...currentState.organizationInfo, ...partial };
+    
+    // Automatically keep the primary branch in sync with the updated organization identity
+    const currentBranches = currentState.branches.length > 0 ? currentState.branches : initialBranches;
+    const updatedBranches = currentBranches.map(branch => {
+      if (branch.isMain || currentBranches.length === 1) {
+        return {
+          ...branch,
+          tenantId: updated.tenantId || branch.tenantId,
+          name: updated.name ? `${updated.name} (${updated.city || 'مرکزی'})` : branch.name,
+          city: updated.city || branch.city,
+          address: updated.address !== undefined ? updated.address : branch.address,
+          phone: updated.phone !== undefined ? updated.phone : branch.phone,
+          managerName: updated.managerName !== undefined ? updated.managerName : branch.managerName,
+        };
+      }
+      return branch;
+    });
+
+    settingsStore.setState({ 
+      organizationInfo: updated,
+      branches: updatedBranches,
+    });
     PersistenceManager.setImmediate('organization_info', updated);
+    PersistenceManager.setImmediate('branches', updatedBranches);
     SyncEngine.enqueue('organization_info', updated.id || 'org-main', 'UPDATE', updated);
   },
 

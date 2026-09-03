@@ -521,9 +521,16 @@ export class MemberRepository {
     return this.queryPaginated(params);
   }
 
+  static reset(students: Student[] = []): void {
+    this.rebuildIndex(students);
+    LocalDbRepository.setImmediate('students', students);
+    this.isInitialized = true;
+  }
+
   static restoreSampleData(): void {
     this.rebuildIndex(initialStudents);
     LocalDbRepository.setImmediate('students', initialStudents);
+    this.isInitialized = true;
   }
 }
 

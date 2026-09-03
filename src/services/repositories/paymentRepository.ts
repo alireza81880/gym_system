@@ -299,5 +299,13 @@ export class PaymentRepository {
     this.rebuildIndex(payments, expenses);
     LocalDbRepository.setImmediate('payments', this.paymentsList);
     LocalDbRepository.setImmediate('expenses', this.expensesList);
+    this.isInitialized = true;
+  }
+
+  static reset(payments: PaymentRecord[] = [], expenses: ExpenseRecord[] = []): void {
+    this.rebuildIndex(payments, expenses);
+    LocalDbRepository.setImmediate('payments', payments);
+    LocalDbRepository.setImmediate('expenses', expenses);
+    this.isInitialized = true;
   }
 }

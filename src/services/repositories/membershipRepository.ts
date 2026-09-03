@@ -65,6 +65,12 @@ export class MembershipRepository {
     }
   }
 
+  static reset(memberships: Membership[] = []): void {
+    this.rebuildIndex(memberships);
+    LocalDbRepository.setImmediate('memberships', memberships);
+    this.isInitialized = true;
+  }
+
   static getAll(): Membership[] {
     this.initialize();
     return [...this.membershipsList];

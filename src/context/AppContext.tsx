@@ -55,6 +55,8 @@ import { PaymentRepository } from '../services/repositories/paymentRepository';
 import { AttendanceRepository } from '../services/repositories/attendanceRepository';
 import { HardwareRepository } from '../services/repositories/hardwareRepository';
 import { LockerRepository } from '../services/repositories/lockerRepository';
+import { MembershipRepository } from '../services/repositories/membershipRepository';
+import { ChargeRepository } from '../services/repositories/chargeRepository';
 import { PersistenceManager } from '../services/repositories/persistenceManager';
 import { LocalDatabase } from '../services/database/localDatabase';
 import { PerformanceDiagnostics } from '../services/diagnostics/performanceMetrics';
@@ -65,7 +67,7 @@ import { useFinanceStore, financeActions } from '../stores/financeStore';
 import { useAttendanceStore, attendanceActions, ScanResult } from '../stores/attendanceStore';
 import { useHardwareStore, hardwareActions } from '../stores/hardwareStore';
 import { useLockerStore, lockerActions } from '../stores/lockerStore';
-import { useSettingsStore, settingsActions, CoachFinancialStats } from '../stores/settingsStore';
+import { useSettingsStore, settingsActions, settingsStore, defaultOrganizationInfo, initialBranches, CoachFinancialStats } from '../stores/settingsStore';
 import { useThemeStore, themeActions } from '../stores/themeStore';
 import { useMigrationStore, migrationActions } from '../stores/migrationStore';
 import { usePlanStore, planActions } from '../stores/planStore';
@@ -240,10 +242,10 @@ export interface AppContextType {
   
   // Backups & Reset
   exportDatabaseJson: () => void;
-  importDatabaseJson: (jsonString: string) => boolean;
+  importDatabaseJson: (jsonString: string) => boolean | Promise<boolean>;
   resetToSampleData: () => void;
   exportAllDataAsJson: () => void;
-  importDataFromJson: (jsonString: string) => boolean;
+  importDataFromJson: (jsonString: string) => boolean | Promise<boolean>;
   resetToInitialData: () => void;
   
   // Helpers
@@ -418,23 +420,90 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     settingsActions.setIsDemoMode(false);
   }, []);
 
-  const resetToEmptyProduction = useCallback(() => {
+  const resetToEmptyProduction = useCallback(async () => {
+    // 1. Reset all repository indexes & in-memory caches
+    MemberRepository.reset([]);
+    PaymentRepository.reset([], []);
+    MembershipRepository.reset([]);
+    ChargeRepository.reset([]);
+    AttendanceRepository.reset([]);
+    LockerRepository.reset([]);
+
+    // 2. Clear all Zustand domain stores
     memberActions.batchSet([]);
     financeActions.batchSet([], []);
     attendanceActions.batchSet([]);
-    AuditService.logEvent({
-      action: 'SYSTEM_RESET_PRODUCTION',
-      details: 'اطلاعات عملیاتی سیستم ریست شد.',
-      userName: currentUser.fullName,
-    });
-    LocalDbRepository.setMetadata({
+    lockerActions.batchSet([]);
+    
+    // 3. Clear settings domain records
+    settingsStore.setState({
+      packages: [],
+      coaches: [],
+      customFields: [],
+      organizationInfo: defaultOrganizationInfo,
+      branches: initialBranches,
       isInstalled: false,
       isDemoMode: false,
-      tenantId: 'gym-org-1',
     });
+
+    // 4. Synchronously persist empty states to storage
+    PersistenceManager.setImmediate('students', []);
+    PersistenceManager.setImmediate('payments', []);
+    PersistenceManager.setImmediate('expenses', []);
+    PersistenceManager.setImmediate('memberships', []);
+    PersistenceManager.setImmediate('charges', []);
+    PersistenceManager.setImmediate('smart_lockers', []);
+    PersistenceManager.setImmediate('attendance', []);
+    PersistenceManager.setImmediate('coaches', []);
+    PersistenceManager.setImmediate('packages', []);
+    PersistenceManager.setImmediate('custom_fields', []);
+    PersistenceManager.setImmediate('organization_info', defaultOrganizationInfo);
+    PersistenceManager.setImmediate('branches', initialBranches);
     PersistenceManager.setImmediate('gym_installed', false);
     PersistenceManager.setImmediate('gym_demo_mode', false);
     PersistenceManager.setImmediate('gym_onboarding_completed', false);
+
+    LocalDbRepository.setMetadata({
+      schemaVersion: LocalDbRepository.getSchemaVersion(),
+      isInstalled: false,
+      isDemoMode: false,
+      tenantId: defaultOrganizationInfo.tenantId,
+      initializedAt: new Date().toISOString(),
+      lastUpdatedAt: new Date().toISOString(),
+    });
+
+    // 5. Clear SQLite relational database tables
+    try {
+      const adapter = LocalDatabase.getAdapter();
+      const tables = [
+        'members', 
+        'memberships', 
+        'packages', 
+        'payments', 
+        'charges', 
+        'expenses', 
+        'attendance', 
+        'lockers', 
+        'coaches', 
+        'settings', 
+        'hardware_devices', 
+        'hardware_events'
+      ];
+      for (const t of tables) {
+        try {
+          await adapter.clear(t);
+        } catch {}
+      }
+    } catch (err) {
+      console.warn('[AppContext] SQLite reset warning:', err);
+    }
+
+    AuditService.logEvent({
+      action: 'SYSTEM_RESET_PRODUCTION',
+      details: 'تمام اطلاعات عملیاتی، اعضا، بسته‌ها و سوابق مالی سیستم با موفقیت پاکسازی شد.',
+      userName: currentUser.fullName,
+    });
+
     settingsActions.setIsInstalled(false);
     settingsActions.setIsDemoMode(false);
   }, [currentUser.fullName]);
@@ -461,17 +530,76 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     URL.revokeObjectURL(url);
   }, []);
 
-  const importDatabaseJson = useCallback((jsonString: string) => {
+  const importDatabaseJson = useCallback(async (jsonString: string) => {
     const result = PersistenceManager.importFullBackup(jsonString);
-    if (result.success) {
-      memberActions.batchSet(MemberRepository.getAll());
-      financeActions.batchSet(PaymentRepository.getAllPayments(), PaymentRepository.getAllExpenses());
-      attendanceActions.batchSet(AttendanceRepository.getAll());
-      lockerActions.batchSet(LockerRepository.getAll());
+    if (result.success && result.payload) {
+      const payload = result.payload;
+
+      // 1. Reset all repositories with the restored data
+      MemberRepository.reset(payload.students);
+      PaymentRepository.reset(payload.payments, payload.expenses);
+      MembershipRepository.reset(payload.memberships);
+      ChargeRepository.reset(payload.charges);
+      AttendanceRepository.reset(payload.attendance);
+      LockerRepository.reset(payload.lockers);
+
+      // 2. Update React Zustand domain stores
+      memberActions.batchSet(payload.students);
+      financeActions.batchSet(payload.payments, payload.expenses);
+      attendanceActions.batchSet(payload.attendance);
+      lockerActions.batchSet(payload.lockers);
+
+      // 3. Update settings store
+      const currentSettings = settingsStore.getState();
+      const newOrgInfo = payload.organizationInfo || currentSettings.organizationInfo;
+      const newBranches = (payload.branches && payload.branches.length > 0) ? payload.branches : currentSettings.branches;
+      const newPackages = payload.packages || currentSettings.packages;
+      const newCoaches = payload.coaches || currentSettings.coaches;
+      const newCustomFields = payload.customFields || currentSettings.customFields;
+      const newAccessPolicy = payload.accessPolicyConfig || currentSettings.accessPolicyConfig;
+
+      settingsStore.setState({
+        organizationInfo: newOrgInfo,
+        branches: newBranches,
+        packages: newPackages,
+        coaches: newCoaches,
+        customFields: newCustomFields,
+        accessPolicyConfig: newAccessPolicy,
+        isInstalled: true,
+        isDemoMode: false,
+      });
+
+      // 4. Sync with SQLite database
+      try {
+        const adapter = LocalDatabase.getAdapter();
+        await adapter.importSnapshot({
+          schemaVersion: 3,
+          members: payload.students,
+          packages: newPackages,
+          memberships: payload.memberships,
+          charges: payload.charges,
+          payments: payload.payments,
+          expenses: payload.expenses,
+          attendance: payload.attendance,
+          lockers: payload.lockers,
+          coaches: newCoaches,
+          settings: newOrgInfo,
+        });
+      } catch (err) {
+        console.warn('[AppContext] SQLite sync after import warning:', err);
+      }
+
+      AuditService.logEvent({
+        action: 'DATA_RESTORED_BACKUP',
+        category: 'system',
+        details: `پشتیبان سیستم با موفقیت بازیابی شد (${payload.students.length} عضو، ${payload.payments.length} پرداخت).`,
+        userName: currentUser.fullName,
+      });
+
       return true;
     }
     return false;
-  }, []);
+  }, [currentUser.fullName]);
 
 
   // Async Cloud Sync

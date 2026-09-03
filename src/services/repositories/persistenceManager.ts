@@ -77,7 +77,7 @@ export class PersistenceManager {
   /**
    * Imports a full JSON backup
    */
-  static importFullBackup(backupJson: string): { success: boolean; message: string } {
+  static importFullBackup(backupJson: string): ReturnType<typeof LocalDbRepository.importFullBackup> {
     return LocalDbRepository.importFullBackup(backupJson);
   }
 }

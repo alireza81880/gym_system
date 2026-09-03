@@ -230,10 +230,26 @@ export class LocalDbRepository {
   static exportFullBackup(): string {
     this.flush();
     const backup: Record<string, unknown> = {
+      gym_os_backup_version: this.SCHEMA_VERSION,
       schemaVersion: this.SCHEMA_VERSION,
       exportedAt: new Date().toISOString(),
       platform: 'Gym OS Local Core V3 (Reliable Persistence)',
-      data: {},
+      data: {
+        gym_os_students: this.get('students', []),
+        gym_os_payments: this.get('payments', []),
+        gym_os_expenses: this.get('expenses', []),
+        gym_os_memberships: this.get('memberships', []),
+        gym_os_charges: this.get('charges', []),
+        gym_os_smart_lockers: this.get('smart_lockers', []),
+        gym_os_attendance: this.get('attendance', []),
+        gym_os_coaches: this.get('coaches', []),
+        gym_os_packages: this.get('packages', []),
+        gym_os_organization_info: this.get('organization_info', null),
+        gym_os_branches: this.get('branches', []),
+        gym_os_custom_fields: this.get('custom_fields', []),
+        gym_os_access_policy_config: this.get('access_policy_config', null),
+        gym_os_meta: this.getMetadata(),
+      },
     };
 
     if (typeof localStorage !== 'undefined') {
@@ -256,30 +272,121 @@ export class LocalDbRepository {
   /**
    * Imports a full JSON backup restoring all domain records
    */
-  static importFullBackup(backupJson: string): { success: boolean; message: string } {
+  static importFullBackup(backupJson: string): { 
+    success: boolean; 
+    message: string; 
+    payload?: {
+      students: any[];
+      payments: any[];
+      expenses: any[];
+      memberships: any[];
+      charges: any[];
+      lockers: any[];
+      attendance: any[];
+      coaches: any[];
+      packages: any[];
+      organizationInfo?: any;
+      branches?: any[];
+      customFields?: any[];
+      accessPolicyConfig?: any;
+    };
+  } {
     try {
-      const parsed = JSON.parse(backupJson);
-      if (!parsed || typeof parsed !== 'object' || !parsed.data) {
+      const cleanStr = backupJson.replace(/^\uFEFF/, '').trim();
+      const parsed = JSON.parse(cleanStr);
+      if (!parsed || typeof parsed !== 'object') {
         return { success: false, message: 'ساختار فایل پشتیبان نامعتبر است.' };
       }
 
       this.pendingSaves.clear();
 
-      const dataObj = parsed.data as Record<string, unknown>;
-      Object.entries(dataObj).forEach(([k, v]) => {
-        try {
-          localStorage.setItem(k, JSON.stringify(v));
-        } catch (e) {
-          console.error(`[LocalDb] Failed importing key ${k}:`, e);
+      // Find data dictionary or root object
+      let rawData: Record<string, any> = {};
+      if (parsed.data && typeof parsed.data === 'object' && !Array.isArray(parsed.data)) {
+        rawData = parsed.data;
+      } else {
+        rawData = parsed;
+      }
+
+      // Helper to extract by multiple possible key variations
+      const extract = (keys: string[]): any => {
+        for (const k of keys) {
+          if (rawData[k] !== undefined) return rawData[k];
+          if (rawData[`gym_os_${k}`] !== undefined) return rawData[`gym_os_${k}`];
+          if (rawData[`gym_${k}`] !== undefined) return rawData[`gym_${k}`];
+        }
+        return undefined;
+      };
+
+      const students = extract(['students', 'members']) || [];
+      const payments = extract(['payments']) || [];
+      const expenses = extract(['expenses']) || [];
+      const memberships = extract(['memberships']) || [];
+      const charges = extract(['charges']) || [];
+      const lockers = extract(['smart_lockers', 'lockers']) || [];
+      const attendance = extract(['attendance']) || [];
+      const coaches = extract(['coaches']) || [];
+      const packages = extract(['packages']) || [];
+      const organizationInfo = extract(['organization_info', 'organizationInfo', 'settings']);
+      const branches = extract(['branches']);
+      const customFields = extract(['custom_fields', 'customFields']);
+      const accessPolicyConfig = extract(['access_policy_config', 'accessPolicyConfig']);
+
+      // 1. Synchronously persist to local storage
+      if (Array.isArray(students)) this.setImmediate('students', students);
+      if (Array.isArray(payments)) this.setImmediate('payments', payments);
+      if (Array.isArray(expenses)) this.setImmediate('expenses', expenses);
+      if (Array.isArray(memberships)) this.setImmediate('memberships', memberships);
+      if (Array.isArray(charges)) this.setImmediate('charges', charges);
+      if (Array.isArray(lockers)) this.setImmediate('smart_lockers', lockers);
+      if (Array.isArray(attendance)) this.setImmediate('attendance', attendance);
+      if (Array.isArray(coaches)) this.setImmediate('coaches', coaches);
+      if (Array.isArray(packages)) this.setImmediate('packages', packages);
+      if (organizationInfo && typeof organizationInfo === 'object') this.setImmediate('organization_info', organizationInfo);
+      if (Array.isArray(branches)) this.setImmediate('branches', branches);
+      if (Array.isArray(customFields)) this.setImmediate('custom_fields', customFields);
+      if (accessPolicyConfig && typeof accessPolicyConfig === 'object') this.setImmediate('access_policy_config', accessPolicyConfig);
+
+      // Also copy any other raw prefixed keys present in backup
+      Object.entries(rawData).forEach(([k, v]) => {
+        if (k.startsWith(this.DB_PREFIX) || k.startsWith(this.LEGACY_PREFIX)) {
+          try {
+            if (typeof localStorage !== 'undefined') {
+              localStorage.setItem(k, JSON.stringify(v));
+            }
+          } catch {}
         }
       });
 
       this.setMetadata({
         schemaVersion: this.SCHEMA_VERSION,
+        isInstalled: true,
+        isDemoMode: false,
         lastUpdatedAt: new Date().toISOString(),
       });
+      this.setImmediate('gym_installed', true);
+      this.setImmediate('gym_demo_mode', false);
+      this.setImmediate('gym_onboarding_completed', true);
 
-      return { success: true, message: 'اطلاعات پشتیبان با موفقیت بازیابی شد. سامانه آماده به‌کار است.' };
+      return { 
+        success: true, 
+        message: 'اطلاعات پشتیبان با موفقیت بازیابی شد. سامانه آماده به‌کار است.',
+        payload: {
+          students: Array.isArray(students) ? students : [],
+          payments: Array.isArray(payments) ? payments : [],
+          expenses: Array.isArray(expenses) ? expenses : [],
+          memberships: Array.isArray(memberships) ? memberships : [],
+          charges: Array.isArray(charges) ? charges : [],
+          lockers: Array.isArray(lockers) ? lockers : [],
+          attendance: Array.isArray(attendance) ? attendance : [],
+          coaches: Array.isArray(coaches) ? coaches : [],
+          packages: Array.isArray(packages) ? packages : [],
+          organizationInfo,
+          branches,
+          customFields,
+          accessPolicyConfig,
+        }
+      };
     } catch (e) {
       return { success: false, message: `خطا در بازخوانی فایل پشتیبان: ${(e as Error).message}` };
     }

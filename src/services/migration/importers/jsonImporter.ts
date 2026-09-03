@@ -3,6 +3,22 @@ import { MigrationNormalizers } from '../normalizers';
 
 export class JsonImporter {
   /**
+   * Checks if the parsed structure or JSON string is a Gym OS complete system backup
+   */
+  static isGymOsBackup(parsed: any): boolean {
+    if (!parsed || typeof parsed !== 'object') return false;
+    if (parsed.platform && typeof parsed.platform === 'string' && parsed.platform.toLowerCase().includes('gym os')) {
+      return true;
+    }
+    if (parsed.gym_os_backup_version !== undefined) return true;
+    if (parsed.data && typeof parsed.data === 'object' && !Array.isArray(parsed.data)) {
+      if (parsed.data.gym_os_students || parsed.data.students || parsed.data.members) return true;
+    }
+    if (parsed._meta && parsed._meta.engine) return true;
+    return false;
+  }
+
+  /**
    * Parse JSON string and extract records from arrays or nested paths
    */
   static parse(
@@ -39,8 +55,17 @@ export class JsonImporter {
           targetArray = parsed.users;
         } else if (Array.isArray(parsed.data)) {
           targetArray = parsed.data;
-        } else if (parsed.data && Array.isArray(parsed.data.members)) {
-          targetArray = parsed.data.members;
+        } else if (parsed.data && typeof parsed.data === 'object') {
+          // Handle Gym OS Backup data container
+          if (Array.isArray(parsed.data.gym_os_students)) {
+            targetArray = parsed.data.gym_os_students;
+          } else if (Array.isArray(parsed.data.students)) {
+            targetArray = parsed.data.students;
+          } else if (Array.isArray(parsed.data.members)) {
+            targetArray = parsed.data.members;
+          } else {
+            targetArray = [parsed];
+          }
         } else if (Array.isArray(parsed.items)) {
           targetArray = parsed.items;
         } else {

@@ -48,6 +48,14 @@ export class LockerRepository {
     this.cachedOccupiedCount = occ;
   }
 
+  static reset(lockers: SmartLocker[] = []): void {
+    this.rebuildIndex(lockers);
+    this.assignmentHistory = [];
+    LocalDbRepository.setImmediate('smart_lockers', lockers);
+    LocalDbRepository.setImmediate('locker_assignments_history', []);
+    this.isInitialized = true;
+  }
+
   static getAll(): SmartLocker[] {
     this.initialize();
     return [...this.lockersList];

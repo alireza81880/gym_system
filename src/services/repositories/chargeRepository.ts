@@ -82,6 +82,12 @@ export class ChargeRepository {
     }
   }
 
+  static reset(charges: FinancialCharge[] = []): void {
+    this.rebuildIndex(charges);
+    LocalDbRepository.setImmediate('charges', charges);
+    this.isInitialized = true;
+  }
+
   static getAll(): FinancialCharge[] {
     this.initialize();
     return this.chargesList;

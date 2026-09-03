@@ -246,18 +246,23 @@ export const SettingsView: React.FC = () => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = async (event) => {
         const text = event.target?.result as string;
         if (text) {
-          const success = importDataFromJson(text);
-          if (success) {
-            alert('اطلاعات با موفقیت بازیابی شد.');
-          } else {
-            alert('فرمت فایل نامعتبر است.');
+          try {
+            const success = await importDataFromJson(text);
+            if (success) {
+              alert('اطلاعات پشتیبان با موفقیت بازیابی شد و تمامی داده‌های سامانه به‌روز شدند.');
+            } else {
+              alert('فرمت فایل پشتیبان نامعتبر است یا ساختار داده همخوانی ندارد.');
+            }
+          } catch (err) {
+            alert(`خطا در بازیابی اطلاعات: ${(err as Error).message}`);
           }
         }
       };
       reader.readAsText(file);
+      e.target.value = '';
     }
   };
 

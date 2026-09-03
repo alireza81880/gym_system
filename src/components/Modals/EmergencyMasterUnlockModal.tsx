@@ -11,9 +11,10 @@ interface EmergencyMasterUnlockModalProps {
 }
 
 export const EmergencyMasterUnlockModal: React.FC<EmergencyMasterUnlockModalProps> = ({ isOpen, onClose }) => {
-  const { lang } = useApp();
+  const { lang, activeBranchId, branches, organizationInfo } = useApp();
   const { triggerMasterUnlock, lockers: smartLockers } = useLockers();
   const { currentUser } = useSettings();
+  const activeBranch = branches.find(b => b.id === activeBranchId) || branches[0];
   const [reason, setReason] = useState('تخلیه و نظافت پایان روز');
   const [customReason, setCustomReason] = useState('');
   const [confirmStep, setConfirmStep] = useState<1 | 2>(1);
@@ -129,7 +130,7 @@ export const EmergencyMasterUnlockModal: React.FC<EmergencyMasterUnlockModalProp
 
               <div className="p-3 rounded-2xl glass-subtle text-xs text-[var(--gym-text-muted)] space-y-1">
                 <div><strong>اپراتور مسئول:</strong> {currentUser.fullName} ({currentUser.role})</div>
-                <div><strong>شعبه:</strong> شعبه مرکزی</div>
+                <div><strong>شعبه:</strong> {activeBranch?.name || organizationInfo?.name || 'شعبه اصلی'}</div>
               </div>
 
               <div className="flex items-center justify-end gap-2.5 pt-2">

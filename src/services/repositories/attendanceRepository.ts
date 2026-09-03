@@ -55,6 +55,12 @@ export class AttendanceRepository {
     }
   }
 
+  static reset(records: AttendanceRecord[] = []): void {
+    this.rebuildIndex(records);
+    LocalDbRepository.setImmediate('attendance', records);
+    this.isInitialized = true;
+  }
+
   static getAll(): AttendanceRecord[] {
     this.initialize();
     return [...this.attendanceList];
