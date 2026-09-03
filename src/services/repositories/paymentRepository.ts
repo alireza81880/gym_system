@@ -103,9 +103,17 @@ export class PaymentRepository {
     return [...this.paymentsList];
   }
 
+  static getPayments(): PaymentRecord[] {
+    return this.getAllPayments();
+  }
+
   static getAllExpenses(): ExpenseRecord[] {
     this.initialize();
     return [...this.expensesList];
+  }
+
+  static getExpenses(): ExpenseRecord[] {
+    return this.getAllExpenses();
   }
 
   static getSummary(): FinanceSummaryMetrics {

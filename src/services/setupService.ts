@@ -155,9 +155,38 @@ export class SetupService {
         updatedAt: new Date().toISOString(),
       };
 
-      // 2. Persist Organization Data Immediately
+      // 2. Persist Organization Data & Synchronize Main Branch Immediately
+      const branchName = nextOrg.name ? `${nextOrg.name} (${nextOrg.city || 'مرکزی'})` : 'شعبه مرکزی';
+      const currentBranches = settingsStore.getState().branches;
+      const updatedBranches = (currentBranches && currentBranches.length > 0)
+        ? currentBranches.map(b => (b.isMain || currentBranches.length === 1) ? {
+            ...b,
+            name: branchName,
+            city: nextOrg.city,
+            address: nextOrg.address,
+            phone: nextOrg.phone || nextOrg.managerMobile,
+            managerName: nextOrg.managerName,
+          } : b)
+        : [{
+            id: 'branch-main',
+            tenantId: nextOrg.tenantId || 'gym-org-1',
+            name: branchName,
+            code: 'MAIN-01',
+            city: nextOrg.city || 'تهران',
+            address: nextOrg.address || '',
+            phone: nextOrg.phone || nextOrg.managerMobile || '',
+            managerName: nextOrg.managerName || '',
+            isMain: true,
+            isActive: true,
+          }];
+
       PersistenceManager.setImmediate('organization_info', nextOrg);
-      settingsStore.setState({ organizationInfo: nextOrg });
+      PersistenceManager.setImmediate('branches', updatedBranches);
+      settingsStore.setState({ 
+        organizationInfo: nextOrg,
+        branches: updatedBranches,
+        activeBranchId: updatedBranches[0]?.id || 'branch-main',
+      });
 
       // 3. Initialize Lockers (supports lockerCount === 0 and > 0)
       if (input.lockerCount !== undefined) {

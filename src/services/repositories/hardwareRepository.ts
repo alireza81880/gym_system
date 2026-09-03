@@ -211,4 +211,12 @@ export class HardwareRepository {
     PersistenceManager.setBatched('hardware_devices', this.devicesList);
     PersistenceManager.setBatched('hardware_events', this.eventsRingBuffer);
   }
+
+  static reset(devices: HardwareDevice[] = [], events: HardwareEvent[] = []): void {
+    this.devicesList = [...devices];
+    this.eventsRingBuffer = [...events].slice(0, this.MAX_EVENTS_BUFFER);
+    PersistenceManager.setImmediate('hardware_devices', this.devicesList);
+    PersistenceManager.setImmediate('hardware_events', this.eventsRingBuffer);
+    this.isInitialized = true;
+  }
 }

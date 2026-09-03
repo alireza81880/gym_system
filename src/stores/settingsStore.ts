@@ -147,6 +147,35 @@ AuthService.subscribe((session) => {
   }
 });
 
+// Ensure initial settings domain records are durably present in storage if not set yet
+if (!PersistenceManager.hasKey('packages')) {
+  PersistenceManager.setImmediate('packages', initialPackages);
+}
+if (!PersistenceManager.hasKey('branches')) {
+  PersistenceManager.setImmediate('branches', initialBranches);
+}
+if (!PersistenceManager.hasKey('active_branch_id')) {
+  PersistenceManager.setImmediate('active_branch_id', initialBranches[0]?.id || 'branch-main');
+}
+if (!PersistenceManager.hasKey('coaches')) {
+  PersistenceManager.setImmediate('coaches', initialCoaches);
+}
+if (!PersistenceManager.hasKey('organization_info')) {
+  PersistenceManager.setImmediate('organization_info', defaultOrganizationInfo);
+}
+if (!PersistenceManager.hasKey('custom_fields')) {
+  PersistenceManager.setImmediate('custom_fields', defaultCustomFields);
+}
+if (!PersistenceManager.hasKey('access_policy_config')) {
+  PersistenceManager.setImmediate('access_policy_config', defaultAccessPolicyConfig);
+}
+if (!PersistenceManager.hasKey('dashboard_widgets')) {
+  PersistenceManager.setImmediate('dashboard_widgets', defaultDashboardWidgets);
+}
+if (!PersistenceManager.hasKey('module_features')) {
+  PersistenceManager.setImmediate('module_features', initialModuleFeatures);
+}
+
 export interface CoachFinancialStats {
   totalStudents: number;
   totalGeneratedRevenue: number;
@@ -185,6 +214,18 @@ export const settingsActions = {
     PersistenceManager.setImmediate('organization_info', updated);
     PersistenceManager.setImmediate('branches', updatedBranches);
     SyncEngine.enqueue('organization_info', updated.id || 'org-main', 'UPDATE', updated);
+  },
+
+  updateBranch(branchId: string, partial: Partial<Branch>): void {
+    const currentState = settingsStore.getState();
+    const updatedBranches = currentState.branches.map(b => {
+      if (b.id === branchId) {
+        return { ...b, ...partial };
+      }
+      return b;
+    });
+    settingsStore.setState({ branches: updatedBranches });
+    PersistenceManager.setImmediate('branches', updatedBranches);
   },
 
   saveCustomField(field: CustomField): void {
@@ -412,6 +453,7 @@ export const settingsActions = {
 
   setActiveBranchId(branchId: string): void {
     settingsStore.setState({ activeBranchId: branchId });
+    PersistenceManager.setImmediate('active_branch_id', branchId);
   },
 
   setCurrentUserRole(role: import('../types').UserRole): { success: boolean; error?: string } {

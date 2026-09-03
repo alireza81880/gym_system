@@ -18,6 +18,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { useFinance } from '../../stores';
 import { ExpenseCategory, PaymentMethod, TransactionType, PaymentRecord, ExpenseRecord } from '../../types';
+import { DateService } from '../../services/dateService';
 import { GlassPageHeader } from '../common/GlassPageHeader';
 import { GlassCard } from '../common/GlassCard';
 import { GlassStatCard } from '../common/GlassStatCard';
@@ -166,7 +167,7 @@ export const FinancialLedger: React.FC = () => {
       title: expTitle,
       category: expCategory,
       amount: expAmount,
-      date: new Date().toLocaleDateString('fa-IR'),
+      date: DateService.getTodayJalali(),
       paidTo: expPaidTo || 'طرف حساب',
       paymentMethod: expMethod,
       description: expDesc,
@@ -184,7 +185,7 @@ export const FinancialLedger: React.FC = () => {
 
     addPayment({
       amount: incAmount,
-      date: new Date().toLocaleDateString('fa-IR'),
+      date: DateService.getTodayJalali(),
       paymentMethod: incMethod,
       type: incType,
       description: incDesc || 'درآمد جانبی بوفه یا مکمل',

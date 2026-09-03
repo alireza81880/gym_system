@@ -156,4 +156,48 @@ export class DateService {
     const mins = String(d.getMinutes()).padStart(2, '0');
     return `${hours}:${mins}`;
   }
+
+  /**
+   * Normalize any date representation into standard 'YYYY/MM/DD' Jalali format
+   */
+  static normalizeJalaliDate(input?: string): string {
+    if (!input || typeof input !== 'string') return '';
+    const trimmed = input.trim();
+    if (!trimmed) return '';
+
+    // Convert Persian/Arabic digits to English
+    const en = trimmed
+      .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString())
+      .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d).toString());
+
+    // If ISO date format like "2026-09-03" or "2026-09-03T10:00:00Z"
+    if (en.includes('-') && !en.includes('/')) {
+      const parsedG = new Date(en);
+      if (!isNaN(parsedG.getTime())) {
+        return this.gregorianToJalali(parsedG.getFullYear(), parsedG.getMonth() + 1, parsedG.getDate());
+      }
+    }
+
+    // Split by slash, dash or space
+    const parts = en.split(/[/ -]/).filter(Boolean);
+    if (parts.length >= 3) {
+      const y = parts[0];
+      const m = parts[1].padStart(2, '0');
+      const d = parts[2].padStart(2, '0');
+      return `${y}/${m}/${d}`;
+    }
+
+    return en;
+  }
+
+  /**
+   * Compare two dates to check if they belong to the exact same Jalali calendar day
+   */
+  static isSameJalaliDay(date1?: string, date2?: string): boolean {
+    if (!date1 || !date2) return false;
+    const norm1 = this.normalizeJalaliDate(date1);
+    const norm2 = this.normalizeJalaliDate(date2);
+    if (!norm1 || !norm2) return false;
+    return norm1 === norm2;
+  }
 }

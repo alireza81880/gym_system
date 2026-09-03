@@ -113,7 +113,9 @@ export class FinanceService {
     const member = MemberRepository.getById(memberId);
     if (!member) return;
 
-    const charges = ChargeRepository.getByMemberId(memberId).filter(c => c.status !== 'cancelled');
+    const charges = ChargeRepository.getByMemberId(memberId)
+      .filter(c => c.status !== 'cancelled')
+      .sort((a, b) => (a.createdAt || a.date).localeCompare(b.createdAt || b.date));
     const payments = PaymentRepository.getMemberPayments(memberId).filter(p => p.status !== 'voided');
 
     let calculatedTotalFee = 0;
@@ -133,8 +135,42 @@ export class FinanceService {
     calculatedPaid = Math.max(0, calculatedPaid);
 
     // If no charges recorded yet (legacy fallback), maintain base totalFee
-    if (charges.length === 0 && member.totalFee) {
-      calculatedTotalFee = member.totalFee;
+    if (charges.length === 0) {
+      calculatedTotalFee = Math.max(member.totalFee || 0, calculatedPaid);
+      if (calculatedTotalFee > 0) {
+        // Synthesize an official charge so the financial ledger is populated
+        ChargeRepository.create({
+          id: generateFinancialId('chg'),
+          tenantId: member.tenantId || 'gym-org-1',
+          branchId: member.branchId || 'branch-main',
+          memberId: member.id,
+          memberName: member.fullName,
+          packageType: member.packageType || 'membership',
+          basePrice: calculatedTotalFee,
+          discountAmount: 0,
+          finalPrice: calculatedTotalFee,
+          paidAmount: calculatedPaid,
+          outstandingAmount: Math.max(0, calculatedTotalFee - calculatedPaid),
+          status: calculatedPaid >= calculatedTotalFee ? 'settled' : 'active',
+          date: member.registrationDate || DateService.getTodayJalali(),
+          timestamp: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          notes: 'شهریه عضویت (انتقال‌یافته / پایه)',
+        });
+      }
+    } else {
+      // Re-distribute calculatedPaid across the existing charges
+      let remainingToApply = calculatedPaid;
+      for (const chg of charges) {
+        const alloc = Math.min(chg.finalPrice, remainingToApply);
+        const newOutstanding = Math.max(0, chg.finalPrice - alloc);
+        ChargeRepository.update(chg.id, {
+          paidAmount: alloc,
+          outstandingAmount: newOutstanding,
+          status: newOutstanding === 0 ? 'settled' : 'active',
+        });
+        remainingToApply -= alloc;
+      }
     }
 
     const calculatedDebt = Math.max(0, calculatedTotalFee - calculatedPaid);
@@ -187,15 +223,21 @@ export class FinanceService {
     const allExpenses = PaymentRepository.getAllExpenses();
 
     // 2. Filter charges by branch/tenant
+    const matchesBranch = (recordBranchId?: string) => {
+      if (!branchId || branchId === 'all') return true;
+      if (!recordBranchId) return true; // Include non-partitioned or legacy data
+      return recordBranchId === branchId;
+    };
+
     const scopedCharges = allCharges.filter(c => {
-      if (branchId && c.branchId && c.branchId !== branchId) return false;
+      if (!matchesBranch(c.branchId)) return false;
       if (tenantId && c.tenantId && c.tenantId !== tenantId) return false;
       return true;
     });
 
     // 3. Filter payments by branch/tenant
     const scopedPayments = allPayments.filter(p => {
-      if (branchId && p.branchId && p.branchId !== branchId) return false;
+      if (!matchesBranch(p.branchId)) return false;
       if (tenantId && p.tenantId && p.tenantId !== tenantId) return false;
       return true;
     });
@@ -209,7 +251,8 @@ export class FinanceService {
       if (c.status === 'cancelled') continue;
 
       // Charge created today
-      if (c.date === targetDate) {
+      const isToday = DateService.isSameJalaliDay(c.date, targetDate);
+      if (isToday) {
         salesToday += c.finalPrice;
         // The unpaid portion created on this sale today
         const initialUnpaid = Math.max(0, c.finalPrice - (c.paidAmount || 0));
@@ -235,7 +278,7 @@ export class FinanceService {
       // Exclude voided payments
       if (p.status === 'voided') continue;
 
-      const isToday = p.date === targetDate;
+      const isToday = DateService.isSameJalaliDay(p.date, targetDate);
 
       if (p.type === 'coach_settlement') {
         totalCoachPayouts += p.amount;
@@ -487,23 +530,41 @@ export class FinanceService {
     const activeCharges = ChargeRepository.getByMemberId(memberId).filter(c => c.status !== 'cancelled');
     const paymentHistory = PaymentRepository.getMemberPayments(memberId);
 
+    // Calculate actual non-voided paid amount from payment history
+    let actualPaidFromPayments = 0;
+    for (const p of paymentHistory) {
+      if (p.status !== 'voided' && p.type !== 'coach_settlement') {
+        if (p.type === 'refund' || p.amount < 0) {
+          actualPaidFromPayments -= Math.abs(p.amount);
+        } else {
+          actualPaidFromPayments += p.amount;
+        }
+      }
+    }
+    actualPaidFromPayments = Math.max(0, actualPaidFromPayments);
+
     let totalPrice = 0;
     let totalDiscount = 0;
     let totalFinal = 0;
-    let totalPaid = 0;
+    let totalPaidFromCharges = 0;
 
     for (const c of activeCharges) {
       totalPrice += c.basePrice;
       totalDiscount += c.discountAmount;
       totalFinal += c.finalPrice;
-      totalPaid += c.paidAmount;
+      totalPaidFromCharges += c.paidAmount;
     }
+
+    // Effective total paid is the authoritative maximum of actual payments, charge allocations, or member record
+    const totalPaid = Math.max(totalPaidFromCharges, actualPaidFromPayments, member.paidAmount || 0);
 
     // If no charges found (e.g. legacy imported member), derive from member entity
     if (activeCharges.length === 0) {
-      totalPrice = member.totalFee || 0;
-      totalFinal = member.totalFee || 0;
-      totalPaid = member.paidAmount || 0;
+      totalPrice = Math.max(member.totalFee || 0, totalPaid);
+      totalFinal = Math.max(member.totalFee || 0, totalPaid);
+    } else {
+      totalFinal = Math.max(totalFinal, member.totalFee || 0);
+      totalPrice = Math.max(totalPrice, member.totalFee || 0);
     }
 
     const totalOutstanding = Math.max(0, totalFinal - totalPaid);

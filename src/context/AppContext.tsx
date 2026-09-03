@@ -57,13 +57,15 @@ import { HardwareRepository } from '../services/repositories/hardwareRepository'
 import { LockerRepository } from '../services/repositories/lockerRepository';
 import { MembershipRepository } from '../services/repositories/membershipRepository';
 import { ChargeRepository } from '../services/repositories/chargeRepository';
+import { AuditRepository } from '../services/repositories/auditRepository';
 import { PersistenceManager } from '../services/repositories/persistenceManager';
 import { LocalDatabase } from '../services/database/localDatabase';
 import { PerformanceDiagnostics } from '../services/diagnostics/performanceMetrics';
 import { SetupService, InitialSetupInput, QuickSetupInput, SetupResult } from '../services/setupService';
+import { FinanceService } from '../services/finance/financeService';
 import { LocalDbRepository } from '../services/localDb';
 import { useMemberStore, memberActions } from '../stores/memberStore';
-import { useFinanceStore, financeActions } from '../stores/financeStore';
+import { useFinanceStore, financeActions, notifyFinanceChange } from '../stores/financeStore';
 import { useAttendanceStore, attendanceActions, ScanResult } from '../stores/attendanceStore';
 import { useHardwareStore, hardwareActions } from '../stores/hardwareStore';
 import { useLockerStore, lockerActions } from '../stores/lockerStore';
@@ -242,10 +244,10 @@ export interface AppContextType {
   
   // Backups & Reset
   exportDatabaseJson: () => void;
-  importDatabaseJson: (jsonString: string) => boolean | Promise<boolean>;
+  importDatabaseJson: (jsonString: string) => Promise<any> | any;
   resetToSampleData: () => void;
   exportAllDataAsJson: () => void;
-  importDataFromJson: (jsonString: string) => boolean | Promise<boolean>;
+  importDataFromJson: (jsonString: string) => Promise<any> | any;
   resetToInitialData: () => void;
   
   // Helpers
@@ -427,13 +429,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     MembershipRepository.reset([]);
     ChargeRepository.reset([]);
     AttendanceRepository.reset([]);
-    LockerRepository.reset([]);
+    LockerRepository.reset([], []);
+    HardwareRepository.reset([], []);
+    AuditRepository.reset([]);
 
     // 2. Clear all Zustand domain stores
     memberActions.batchSet([]);
     financeActions.batchSet([], []);
     attendanceActions.batchSet([]);
     lockerActions.batchSet([]);
+    notifyFinanceChange();
     
     // 3. Clear settings domain records
     settingsStore.setState({
@@ -442,6 +447,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       customFields: [],
       organizationInfo: defaultOrganizationInfo,
       branches: initialBranches,
+      activeBranchId: initialBranches[0]?.id || 'branch-main',
       isInstalled: false,
       isDemoMode: false,
     });
@@ -459,6 +465,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     PersistenceManager.setImmediate('custom_fields', []);
     PersistenceManager.setImmediate('organization_info', defaultOrganizationInfo);
     PersistenceManager.setImmediate('branches', initialBranches);
+    PersistenceManager.setImmediate('active_branch_id', initialBranches[0]?.id || 'branch-main');
+    PersistenceManager.setImmediate('hardware_devices', []);
+    PersistenceManager.setImmediate('hardware_events', []);
+    PersistenceManager.setImmediate('audit_logs', []);
+    PersistenceManager.setImmediate('locker_assignments_history', []);
     PersistenceManager.setImmediate('gym_installed', false);
     PersistenceManager.setImmediate('gym_demo_mode', false);
     PersistenceManager.setImmediate('gym_onboarding_completed', false);
@@ -541,7 +552,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       MembershipRepository.reset(payload.memberships);
       ChargeRepository.reset(payload.charges);
       AttendanceRepository.reset(payload.attendance);
-      LockerRepository.reset(payload.lockers);
+      LockerRepository.reset(payload.lockers, payload.lockerAssignments || []);
+      HardwareRepository.reset(payload.hardwareDevices || [], payload.hardwareEvents || []);
+      AuditRepository.reset(payload.auditLogs || []);
 
       // 2. Update React Zustand domain stores
       memberActions.batchSet(payload.students);
@@ -553,37 +566,67 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const currentSettings = settingsStore.getState();
       const newOrgInfo = payload.organizationInfo || currentSettings.organizationInfo;
       const newBranches = (payload.branches && payload.branches.length > 0) ? payload.branches : currentSettings.branches;
-      const newPackages = payload.packages || currentSettings.packages;
-      const newCoaches = payload.coaches || currentSettings.coaches;
+      const newActiveBranchId = payload.activeBranchId || newBranches[0]?.id || currentSettings.activeBranchId;
+      const newPackages = (payload.packages && payload.packages.length > 0) ? payload.packages : currentSettings.packages;
+      const newCoaches = (payload.coaches && payload.coaches.length > 0) ? payload.coaches : currentSettings.coaches;
       const newCustomFields = payload.customFields || currentSettings.customFields;
       const newAccessPolicy = payload.accessPolicyConfig || currentSettings.accessPolicyConfig;
+      const newDashboardWidgets = payload.dashboardWidgets || currentSettings.dashboardWidgets;
+      const newModuleFeatures = payload.moduleFeatures || currentSettings.moduleFeatures;
 
       settingsStore.setState({
         organizationInfo: newOrgInfo,
         branches: newBranches,
+        activeBranchId: newActiveBranchId,
         packages: newPackages,
         coaches: newCoaches,
         customFields: newCustomFields,
         accessPolicyConfig: newAccessPolicy,
+        dashboardWidgets: newDashboardWidgets,
+        moduleFeatures: newModuleFeatures,
         isInstalled: true,
         isDemoMode: false,
       });
 
-      // 4. Sync with SQLite database
+      // Persist restored settings to local storage immediately
+      PersistenceManager.setImmediate('packages', newPackages);
+      PersistenceManager.setImmediate('branches', newBranches);
+      PersistenceManager.setImmediate('active_branch_id', newActiveBranchId);
+      PersistenceManager.setImmediate('coaches', newCoaches);
+      PersistenceManager.setImmediate('organization_info', newOrgInfo);
+      PersistenceManager.setImmediate('custom_fields', newCustomFields);
+      PersistenceManager.setImmediate('access_policy_config', newAccessPolicy);
+      if (newDashboardWidgets) PersistenceManager.setImmediate('dashboard_widgets', newDashboardWidgets);
+      if (newModuleFeatures) PersistenceManager.setImmediate('module_features', newModuleFeatures);
+
+      // 4. Trigger authoritative post-restore Financial Reconciliation
+      try {
+        FinanceService.reconcileAllFinancials();
+        // Update members store with reconciled balance calculations
+        memberActions.batchSet(MemberRepository.getAll());
+        // Notify finance store to recompute summary and KPIs
+        notifyFinanceChange();
+      } catch (finErr) {
+        console.warn('[AppContext] Post-restore finance reconciliation warning:', finErr);
+      }
+
+      // 5. Sync with SQLite database
       try {
         const adapter = LocalDatabase.getAdapter();
         await adapter.importSnapshot({
           schemaVersion: 3,
-          members: payload.students,
+          members: MemberRepository.getAll(),
           packages: newPackages,
           memberships: payload.memberships,
-          charges: payload.charges,
+          charges: ChargeRepository.getAll(),
           payments: payload.payments,
           expenses: payload.expenses,
           attendance: payload.attendance,
           lockers: payload.lockers,
           coaches: newCoaches,
           settings: newOrgInfo,
+          hardware_devices: payload.hardwareDevices || [],
+          hardware_events: payload.hardwareEvents || [],
         });
       } catch (err) {
         console.warn('[AppContext] SQLite sync after import warning:', err);
@@ -592,13 +635,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       AuditService.logEvent({
         action: 'DATA_RESTORED_BACKUP',
         category: 'system',
-        details: `پشتیبان سیستم با موفقیت بازیابی شد (${payload.students.length} عضو، ${payload.payments.length} پرداخت).`,
+        details: `پشتیبان سیستم با موفقیت بازیابی شد (${payload.students.length} عضو، ${payload.payments.length} پرداخت، ${payload.packages.length} بسته، ${payload.charges.length} صورت‌حساب).`,
         userName: currentUser.fullName,
       });
 
-      return true;
+      return {
+        success: true,
+        counts: payload.counts,
+        message: result.message
+      };
     }
-    return false;
+    return {
+      success: false,
+      message: result.message || 'خطا در بازیابی اطلاعات'
+    };
   }, [currentUser.fullName]);
 
 

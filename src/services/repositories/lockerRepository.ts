@@ -48,11 +48,11 @@ export class LockerRepository {
     this.cachedOccupiedCount = occ;
   }
 
-  static reset(lockers: SmartLocker[] = []): void {
+  static reset(lockers: SmartLocker[] = [], assignments: LockerAssignment[] = []): void {
     this.rebuildIndex(lockers);
-    this.assignmentHistory = [];
+    this.assignmentHistory = [...assignments];
     LocalDbRepository.setImmediate('smart_lockers', lockers);
-    LocalDbRepository.setImmediate('locker_assignments_history', []);
+    LocalDbRepository.setImmediate('locker_assignments_history', this.assignmentHistory);
     this.isInitialized = true;
   }
 
@@ -92,9 +92,9 @@ export class LockerRepository {
     return this.byNumberMap.get(num);
   }
 
-  static getAssignmentHistory(limit = 50): LockerAssignment[] {
+  static getAssignmentHistory(limit?: number): LockerAssignment[] {
     this.initialize();
-    return this.assignmentHistory.slice(0, limit);
+    return limit ? this.assignmentHistory.slice(0, limit) : [...this.assignmentHistory];
   }
 
   static recordAssignment(assignment: LockerAssignment): void {

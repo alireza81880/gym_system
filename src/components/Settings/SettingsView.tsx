@@ -250,9 +250,28 @@ export const SettingsView: React.FC = () => {
         const text = event.target?.result as string;
         if (text) {
           try {
-            const success = await importDataFromJson(text);
-            if (success) {
-              alert('اطلاعات پشتیبان با موفقیت بازیابی شد و تمامی داده‌های سامانه به‌روز شدند.');
+            const res = await importDataFromJson(text);
+            const isOk = typeof res === 'object' ? res.success : Boolean(res);
+            if (isOk) {
+              const counts = typeof res === 'object' ? res.counts : null;
+              if (counts) {
+                alert(
+                  `اطلاعات پشتیبان با موفقیت بازیابی شد.\n\n` +
+                  `📊 آمار داده‌های بازیابی‌شده:\n` +
+                  `• اعضا: ${counts.members}\n` +
+                  `• دوره‌های عضویت: ${counts.memberships}\n` +
+                  `• بسته‌ها و تعرفه‌ها: ${counts.packages}\n` +
+                  `• صورت‌حساب‌های مالی: ${counts.charges}\n` +
+                  `• پرداخت‌ها: ${counts.payments}\n` +
+                  `• هزینه‌ها: ${counts.expenses}\n` +
+                  `• ترددها: ${counts.attendance}\n` +
+                  `• کمدها: ${counts.lockers}\n` +
+                  `• مربیان: ${counts.coaches}\n` +
+                  `• لاگ‌های سیستمی: ${counts.auditLogs}`
+                );
+              } else {
+                alert('اطلاعات پشتیبان با موفقیت بازیابی شد و تمامی داده‌های سامانه به‌روز شدند.');
+              }
             } else {
               alert('فرمت فایل پشتیبان نامعتبر است یا ساختار داده همخوانی ندارد.');
             }

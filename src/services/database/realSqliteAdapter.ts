@@ -12,7 +12,7 @@
  */
 
 import initSqlJs, { Database, SqlJsStatic } from 'sql.js';
-import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
+const sqlWasmUrl = '/sql-wasm.wasm';
 import { DatabaseAdapter, DatabaseTransaction, QueryOptions } from './types';
 import { SQLiteSchema } from './sqliteSchema';
 import { StoragePathService } from './storagePathService';
@@ -27,6 +27,7 @@ export class RealSQLiteAdapter implements DatabaseAdapter {
   private dbPath: string = '';
   private isDesktopRuntime: boolean = false;
   private saveDebounceTimer: any = null;
+  private tableColumnsCache = new Map<string, Set<string>>();
   
   // Write Queue Mutex to ensure strictly serialized disk writes
   private writeQueue: Promise<void> = Promise.resolve();
@@ -547,20 +548,89 @@ export class RealSQLiteAdapter implements DatabaseAdapter {
 
   // --- Helper Serialization Methods ---
 
+  private getTableColumns(tableName: string): Set<string> | null {
+    if (this.tableColumnsCache.has(tableName)) {
+      return this.tableColumnsCache.get(tableName)!;
+    }
+    if (!this.db) return null;
+    try {
+      const res = this.db.exec(`PRAGMA table_info(${tableName});`);
+      if (res && res.length > 0 && res[0].values) {
+        const set = new Set<string>();
+        // Column name is at index 1 in PRAGMA table_info: [cid, name, type, notnull, dflt_value, pk]
+        for (const row of res[0].values) {
+          if (row[1]) set.add(String(row[1]));
+        }
+        this.tableColumnsCache.set(tableName, set);
+        return set;
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  }
+
   private entityToRow(collection: string, item: any): Record<string, any> {
     const row: any = { ...item };
 
     if (collection === 'members') {
+      row.nationalCode = item.nationalId || item.nationalCode || '';
+      row.registrationDate = item.registrationDate || new Date().toISOString().split('T')[0];
+      row.expireDate = item.expireDate || new Date().toISOString().split('T')[0];
+      row.sessionsUsed = item.sessionsAttended ?? item.sessionsUsed ?? 0;
       if (typeof row.metadata === 'object') row.metadata = JSON.stringify(row.metadata);
     } else if (collection === 'memberships') {
+      row.memberId = item.studentId || item.memberId || 'unknown';
+      row.packageType = item.packageType || 'standard';
+      row.packageNameSnapshot = item.packageNameSnapshot || item.packageType || 'عضویت';
+      row.durationDays = item.durationDays ?? (item.durationMonths ? item.durationMonths * 30 : 30);
+      row.sessionsTotal = item.sessionsTotal ?? 12;
+      row.sessionsUsed = item.sessionsAttended ?? item.sessionsUsed ?? 0;
+      row.basePrice = item.basePrice ?? item.totalFee ?? 0;
+      row.finalPrice = item.finalPrice ?? item.totalFee ?? 0;
+      row.startDate = item.startDate || new Date().toISOString().split('T')[0];
+      row.expireDate = item.expireDate || new Date().toISOString().split('T')[0];
+      row.createdAt = item.createdAt || new Date().toISOString();
       if (typeof row.packageSnapshot === 'object') row.packageSnapshot = JSON.stringify(row.packageSnapshot);
     } else if (collection === 'charges') {
+      row.packageName = item.packageName || item.packageType || 'شهریه';
+      row.chargeDate = item.date || item.chargeDate || new Date().toISOString().split('T')[0];
+      row.basePrice = item.basePrice ?? item.finalPrice ?? 0;
+      row.finalAmount = item.finalPrice ?? item.finalAmount ?? item.basePrice ?? 0;
+      row.remainingAmount = item.outstandingAmount ?? item.remainingAmount ?? 0;
+      row.paidAmount = item.paidAmount ?? 0;
+      row.createdAt = item.createdAt || item.timestamp || new Date().toISOString();
       if (typeof row.packageSnapshot === 'object') row.packageSnapshot = JSON.stringify(row.packageSnapshot);
     } else if (collection === 'payments') {
+      row.memberId = item.studentId || item.memberId || 'unknown';
+      row.memberName = item.studentName || item.memberName || 'عضو';
+      row.paymentDate = item.date || item.paymentDate || new Date().toISOString().split('T')[0];
+      row.method = item.paymentMethod || item.method || 'cash';
+      row.amount = Number(item.amount || 0);
+      row.receiptNumber = item.receiptNumber || `REC-${item.id || Date.now()}`;
+      row.status = item.status || 'completed';
+      row.createdAt = item.timestamp || item.createdAt || new Date().toISOString();
       if (typeof row.posResponse === 'object') row.posResponse = JSON.stringify(row.posResponse);
+    } else if (collection === 'attendance') {
+      row.memberId = item.studentId || item.memberId || 'unknown';
+      row.memberName = item.studentName || item.memberName || 'عضو';
+      row.date = item.date || new Date().toISOString().split('T')[0];
+      row.entryTime = item.checkInTime || item.entryTime || '00:00';
+      row.exitTime = item.checkOutTime || item.exitTime || null;
+      row.method = item.method || 'manual';
+      row.status = item.isCurrentlyInside ? 'inside' : (item.status || 'present');
+      row.assignedLockerNumber = item.lockerNumber ?? item.assignedLockerNumber ?? null;
+      row.createdAt = item.createdAt || new Date().toISOString();
     } else if (collection === 'lockers') {
-      row.isVip = row.isVip ? 1 : 0;
+      row.assignedMemberId = item.currentStudentId || item.assignedMemberId || null;
+      row.assignedMemberName = item.currentStudentName || item.assignedMemberName || null;
+      row.type = item.zone || item.type || 'general';
+      row.isVip = (item.zone === 'vip' || item.isVip) ? 1 : 0;
     } else if (collection === 'packages') {
+      row.type = item.type || 'standard';
+      row.durationDays = item.durationDays ?? (item.durationMonths ? item.durationMonths * 30 : 30);
+      row.sessionsCount = item.sessionsCount ?? 12;
+      row.price = Number(item.price ?? 0);
       row.includesLocker = row.includesLocker ? 1 : 0;
       row.includesCoach = row.includesCoach ? 1 : 0;
       row.includesWorkoutPlan = row.includesWorkoutPlan ? 1 : 0;
@@ -580,6 +650,18 @@ export class RealSQLiteAdapter implements DatabaseAdapter {
       row.updatedAt = row.updatedAt || new Date().toISOString();
     }
 
+    // Filter to only existing table columns to prevent SQLite syntax errors
+    const cols = this.getTableColumns(collection);
+    if (cols && cols.size > 0) {
+      const filtered: Record<string, any> = {};
+      for (const [k, v] of Object.entries(row)) {
+        if (cols.has(k)) {
+          filtered[k] = v;
+        }
+      }
+      return filtered;
+    }
+
     return row;
   }
 
@@ -587,22 +669,44 @@ export class RealSQLiteAdapter implements DatabaseAdapter {
     const entity: any = { ...row };
 
     if (collection === 'members') {
+      entity.nationalId = row.nationalCode || entity.nationalId || '';
+      entity.sessionsAttended = row.sessionsUsed ?? entity.sessionsAttended ?? 0;
       if (typeof entity.metadata === 'string') {
         try { entity.metadata = JSON.parse(entity.metadata); } catch {}
       }
     } else if (collection === 'memberships') {
+      entity.studentId = row.memberId || entity.studentId;
+      entity.sessionsAttended = row.sessionsUsed ?? entity.sessionsAttended ?? 0;
       if (typeof entity.packageSnapshot === 'string') {
         try { entity.packageSnapshot = JSON.parse(entity.packageSnapshot); } catch {}
       }
     } else if (collection === 'charges') {
+      entity.date = row.chargeDate || entity.date;
+      entity.finalPrice = row.finalAmount ?? entity.finalPrice;
+      entity.outstandingAmount = row.remainingAmount ?? entity.outstandingAmount;
       if (typeof entity.packageSnapshot === 'string') {
         try { entity.packageSnapshot = JSON.parse(entity.packageSnapshot); } catch {}
       }
     } else if (collection === 'payments') {
+      entity.studentId = row.memberId || entity.studentId;
+      entity.studentName = row.memberName || entity.studentName;
+      entity.date = row.paymentDate || entity.date;
+      entity.paymentMethod = row.method || entity.paymentMethod;
+      entity.timestamp = row.createdAt || entity.timestamp;
       if (typeof entity.posResponse === 'string') {
         try { entity.posResponse = JSON.parse(entity.posResponse); } catch {}
       }
+    } else if (collection === 'attendance') {
+      entity.studentId = row.memberId || entity.studentId;
+      entity.studentName = row.memberName || entity.studentName;
+      entity.checkInTime = row.entryTime || entity.checkInTime;
+      entity.checkOutTime = row.exitTime || entity.checkOutTime;
+      entity.lockerNumber = row.assignedLockerNumber ?? entity.lockerNumber;
+      entity.isCurrentlyInside = row.status === 'inside';
     } else if (collection === 'lockers') {
+      entity.currentStudentId = row.assignedMemberId || entity.currentStudentId;
+      entity.currentStudentName = row.assignedMemberName || entity.currentStudentName;
+      entity.zone = row.type || entity.zone || 'general';
       entity.isVip = Boolean(entity.isVip);
     } else if (collection === 'packages') {
       entity.includesLocker = Boolean(entity.includesLocker);

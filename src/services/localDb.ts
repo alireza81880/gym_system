@@ -229,26 +229,101 @@ export class LocalDbRepository {
    */
   static exportFullBackup(): string {
     this.flush();
+    
+    // Pull authoritative values with safe fallbacks
+    const students = this.get('students', []);
+    const payments = this.get('payments', []);
+    const expenses = this.get('expenses', []);
+    const memberships = this.get('memberships', []);
+    const charges = this.get('charges', []);
+    const smartLockers = this.get('smart_lockers', []);
+    const attendance = this.get('attendance', []);
+    const coaches = this.get('coaches', []);
+    const packages = this.get('packages', []);
+    const organizationInfo = this.get('organization_info', null);
+    const branches = this.get('branches', []);
+    const activeBranchId = this.get('active_branch_id', null);
+    const customFields = this.get('custom_fields', []);
+    const accessPolicyConfig = this.get('access_policy_config', null);
+    const hardwareDevices = this.get('hardware_devices', []);
+    const hardwareEvents = this.get('hardware_events', []);
+    const auditLogs = this.get('audit_logs', []);
+    const lockerAssignments = this.get('locker_assignments_history', []);
+    const dashboardWidgets = this.get('dashboard_widgets', []);
+    const moduleFeatures = this.get('module_features', []);
+    const meta = this.getMetadata();
+
     const backup: Record<string, unknown> = {
       gym_os_backup_version: this.SCHEMA_VERSION,
       schemaVersion: this.SCHEMA_VERSION,
       exportedAt: new Date().toISOString(),
       platform: 'Gym OS Local Core V3 (Reliable Persistence)',
+      students,
+      payments,
+      expenses,
+      memberships,
+      charges,
+      lockers: smartLockers,
+      attendance,
+      coaches,
+      packages,
+      organizationInfo,
+      branches,
+      activeBranchId,
+      customFields,
+      accessPolicyConfig,
+      hardwareDevices,
+      hardwareEvents,
+      auditLogs,
+      lockerAssignments,
+      dashboardWidgets,
+      moduleFeatures,
       data: {
-        gym_os_students: this.get('students', []),
-        gym_os_payments: this.get('payments', []),
-        gym_os_expenses: this.get('expenses', []),
-        gym_os_memberships: this.get('memberships', []),
-        gym_os_charges: this.get('charges', []),
-        gym_os_smart_lockers: this.get('smart_lockers', []),
-        gym_os_attendance: this.get('attendance', []),
-        gym_os_coaches: this.get('coaches', []),
-        gym_os_packages: this.get('packages', []),
-        gym_os_organization_info: this.get('organization_info', null),
-        gym_os_branches: this.get('branches', []),
-        gym_os_custom_fields: this.get('custom_fields', []),
-        gym_os_access_policy_config: this.get('access_policy_config', null),
-        gym_os_meta: this.getMetadata(),
+        // Canonical keys
+        students,
+        payments,
+        expenses,
+        memberships,
+        charges,
+        smart_lockers: smartLockers,
+        lockers: smartLockers,
+        attendance,
+        coaches,
+        packages,
+        organization_info: organizationInfo,
+        branches,
+        active_branch_id: activeBranchId,
+        custom_fields: customFields,
+        access_policy_config: accessPolicyConfig,
+        hardware_devices: hardwareDevices,
+        hardware_events: hardwareEvents,
+        audit_logs: auditLogs,
+        locker_assignments_history: lockerAssignments,
+        dashboard_widgets: dashboardWidgets,
+        module_features: moduleFeatures,
+        meta,
+        // gym_os_ prefixed keys for complete backward compatibility
+        gym_os_students: students,
+        gym_os_payments: payments,
+        gym_os_expenses: expenses,
+        gym_os_memberships: memberships,
+        gym_os_charges: charges,
+        gym_os_smart_lockers: smartLockers,
+        gym_os_attendance: attendance,
+        gym_os_coaches: coaches,
+        gym_os_packages: packages,
+        gym_os_organization_info: organizationInfo,
+        gym_os_branches: branches,
+        gym_os_active_branch_id: activeBranchId,
+        gym_os_custom_fields: customFields,
+        gym_os_access_policy_config: accessPolicyConfig,
+        gym_os_hardware_devices: hardwareDevices,
+        gym_os_hardware_events: hardwareEvents,
+        gym_os_audit_logs: auditLogs,
+        gym_os_locker_assignments_history: lockerAssignments,
+        gym_os_dashboard_widgets: dashboardWidgets,
+        gym_os_module_features: moduleFeatures,
+        gym_os_meta: meta,
       },
     };
 
@@ -287,8 +362,27 @@ export class LocalDbRepository {
       packages: any[];
       organizationInfo?: any;
       branches?: any[];
+      activeBranchId?: string;
       customFields?: any[];
       accessPolicyConfig?: any;
+      hardwareDevices?: any[];
+      hardwareEvents?: any[];
+      auditLogs?: any[];
+      lockerAssignments?: any[];
+      dashboardWidgets?: any[];
+      moduleFeatures?: any[];
+      counts: {
+        members: number;
+        memberships: number;
+        packages: number;
+        charges: number;
+        payments: number;
+        expenses: number;
+        attendance: number;
+        lockers: number;
+        coaches: number;
+        auditLogs: number;
+      };
     };
   } {
     try {
@@ -315,6 +409,13 @@ export class LocalDbRepository {
           if (rawData[`gym_os_${k}`] !== undefined) return rawData[`gym_os_${k}`];
           if (rawData[`gym_${k}`] !== undefined) return rawData[`gym_${k}`];
         }
+        if (parsed !== rawData) {
+          for (const k of keys) {
+            if (parsed[k] !== undefined) return parsed[k];
+            if (parsed[`gym_os_${k}`] !== undefined) return parsed[`gym_os_${k}`];
+            if (parsed[`gym_${k}`] !== undefined) return parsed[`gym_${k}`];
+          }
+        }
         return undefined;
       };
 
@@ -329,8 +430,15 @@ export class LocalDbRepository {
       const packages = extract(['packages']) || [];
       const organizationInfo = extract(['organization_info', 'organizationInfo', 'settings']);
       const branches = extract(['branches']);
+      const activeBranchId = extract(['active_branch_id', 'activeBranchId']);
       const customFields = extract(['custom_fields', 'customFields']);
       const accessPolicyConfig = extract(['access_policy_config', 'accessPolicyConfig']);
+      const hardwareDevices = extract(['hardware_devices', 'hardwareDevices']) || [];
+      const hardwareEvents = extract(['hardware_events', 'hardwareEvents']) || [];
+      const auditLogs = extract(['audit_logs', 'auditLogs', 'logs']) || [];
+      const lockerAssignments = extract(['locker_assignments_history', 'lockerAssignmentsHistory']) || [];
+      const dashboardWidgets = extract(['dashboard_widgets', 'dashboardWidgets']);
+      const moduleFeatures = extract(['module_features', 'moduleFeatures']);
 
       // 1. Synchronously persist to local storage
       if (Array.isArray(students)) this.setImmediate('students', students);
@@ -344,8 +452,15 @@ export class LocalDbRepository {
       if (Array.isArray(packages)) this.setImmediate('packages', packages);
       if (organizationInfo && typeof organizationInfo === 'object') this.setImmediate('organization_info', organizationInfo);
       if (Array.isArray(branches)) this.setImmediate('branches', branches);
+      if (activeBranchId) this.setImmediate('active_branch_id', activeBranchId);
       if (Array.isArray(customFields)) this.setImmediate('custom_fields', customFields);
       if (accessPolicyConfig && typeof accessPolicyConfig === 'object') this.setImmediate('access_policy_config', accessPolicyConfig);
+      if (Array.isArray(hardwareDevices)) this.setImmediate('hardware_devices', hardwareDevices);
+      if (Array.isArray(hardwareEvents)) this.setImmediate('hardware_events', hardwareEvents);
+      if (Array.isArray(auditLogs)) this.setImmediate('audit_logs', auditLogs);
+      if (Array.isArray(lockerAssignments)) this.setImmediate('locker_assignments_history', lockerAssignments);
+      if (Array.isArray(dashboardWidgets)) this.setImmediate('dashboard_widgets', dashboardWidgets);
+      if (Array.isArray(moduleFeatures)) this.setImmediate('module_features', moduleFeatures);
 
       // Also copy any other raw prefixed keys present in backup
       Object.entries(rawData).forEach(([k, v]) => {
@@ -368,23 +483,53 @@ export class LocalDbRepository {
       this.setImmediate('gym_demo_mode', false);
       this.setImmediate('gym_onboarding_completed', true);
 
+      const parsedStudents = Array.isArray(students) ? students : [];
+      const parsedMemberships = Array.isArray(memberships) ? memberships : [];
+      const parsedPackages = Array.isArray(packages) ? packages : [];
+      const parsedCharges = Array.isArray(charges) ? charges : [];
+      const parsedPayments = Array.isArray(payments) ? payments : [];
+      const parsedExpenses = Array.isArray(expenses) ? expenses : [];
+      const parsedAttendance = Array.isArray(attendance) ? attendance : [];
+      const parsedLockers = Array.isArray(lockers) ? lockers : [];
+      const parsedCoaches = Array.isArray(coaches) ? coaches : [];
+      const parsedAuditLogs = Array.isArray(auditLogs) ? auditLogs : [];
+
       return { 
         success: true, 
         message: 'اطلاعات پشتیبان با موفقیت بازیابی شد. سامانه آماده به‌کار است.',
         payload: {
-          students: Array.isArray(students) ? students : [],
-          payments: Array.isArray(payments) ? payments : [],
-          expenses: Array.isArray(expenses) ? expenses : [],
-          memberships: Array.isArray(memberships) ? memberships : [],
-          charges: Array.isArray(charges) ? charges : [],
-          lockers: Array.isArray(lockers) ? lockers : [],
-          attendance: Array.isArray(attendance) ? attendance : [],
-          coaches: Array.isArray(coaches) ? coaches : [],
-          packages: Array.isArray(packages) ? packages : [],
+          students: parsedStudents,
+          payments: parsedPayments,
+          expenses: parsedExpenses,
+          memberships: parsedMemberships,
+          charges: parsedCharges,
+          lockers: parsedLockers,
+          attendance: parsedAttendance,
+          coaches: parsedCoaches,
+          packages: parsedPackages,
           organizationInfo,
           branches,
+          activeBranchId,
           customFields,
           accessPolicyConfig,
+          hardwareDevices: Array.isArray(hardwareDevices) ? hardwareDevices : [],
+          hardwareEvents: Array.isArray(hardwareEvents) ? hardwareEvents : [],
+          auditLogs: parsedAuditLogs,
+          lockerAssignments: Array.isArray(lockerAssignments) ? lockerAssignments : [],
+          dashboardWidgets,
+          moduleFeatures,
+          counts: {
+            members: parsedStudents.length,
+            memberships: parsedMemberships.length,
+            packages: parsedPackages.length,
+            charges: parsedCharges.length,
+            payments: parsedPayments.length,
+            expenses: parsedExpenses.length,
+            attendance: parsedAttendance.length,
+            lockers: parsedLockers.length,
+            coaches: parsedCoaches.length,
+            auditLogs: parsedAuditLogs.length,
+          }
         }
       };
     } catch (e) {

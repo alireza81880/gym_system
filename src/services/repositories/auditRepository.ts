@@ -141,4 +141,10 @@ export class AuditRepository {
     this.logsList = [];
     PersistenceManager.setBatched('audit_logs', []);
   }
+
+  static reset(logs: AuditLog[] = []): void {
+    this.logsList = [...logs].slice(0, this.MAX_AUDIT_LOGS);
+    PersistenceManager.setImmediate('audit_logs', this.logsList);
+    this.isInitialized = true;
+  }
 }
