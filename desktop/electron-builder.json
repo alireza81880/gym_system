@@ -25,14 +25,18 @@
         "arch": ["x64"]
       }
     ],
-    "icon": "public/icon.png",
-    "requestedExecutionLevel": "asInvoker"
+    "icon": "public/icon.ico",
+    "requestedExecutionLevel": "asInvoker",
+    "signExecutable": false,
+    "forceCodeSigning": false
   },
   "nsis": {
     "oneClick": false,
     "allowToChangeInstallationDirectory": true,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
+    "installerIcon": "public/icon.ico",
+    "uninstallerIcon": "public/icon.ico",
     "shortcutName": "Gym OS",
     "uninstallDisplayName": "Gym OS - سامانه مدیریت باشگاه",
     "language": "1065"

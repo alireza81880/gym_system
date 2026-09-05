@@ -88,6 +88,10 @@ function createWindow() {
   const paths = getStoragePaths();
   logToFile('info', 'Creating main application window', { version: app.getVersion() });
 
+  const appIconPath = process.platform === 'win32'
+    ? path.join(__dirname, '..', 'public', 'icon.ico')
+    : path.join(__dirname, '..', 'public', 'icon.png');
+
   mainWindow = new BrowserWindow({
     title: 'Gym OS - سامانه یکپارچه مدیریت باشگاه ورزشی',
     width: 1400,
@@ -97,6 +101,7 @@ function createWindow() {
     backgroundColor: '#0c0a09',
     show: false,
     autoHideMenuBar: true,
+    icon: fs.existsSync(appIconPath) ? appIconPath : undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
