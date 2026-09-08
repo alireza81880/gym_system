@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
@@ -33,7 +33,12 @@ import { LicenseActivationScreen } from './components/License/LicenseActivationS
 import { licenseService } from './services/licenseService';
 import { LicenseInfo } from './types/license';
 
-const MainLayout: React.FC = () => {
+interface MainLayoutProps {
+  licenseInfo: LicenseInfo;
+  onLicenseChanged: (info: LicenseInfo) => void;
+}
+
+const MainLayout: React.FC<MainLayoutProps> = ({ licenseInfo, onLicenseChanged }) => {
   const { activeTab, setActiveTab, isInstalled, isDemoMode, exitDemoMode, enterDemoMode, completeInstallation } = useApp();
   
   // Responsive Sidebar States
@@ -58,23 +63,6 @@ const MainLayout: React.FC = () => {
   const [isEmergencyUnlockOpen, setIsEmergencyUnlockOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [openStudentModalTrigger, setOpenStudentModalTrigger] = useState(false);
-
-  // License State & Hardware Binding Guard
-  const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
-  const [isLicenseChecking, setIsLicenseChecking] = useState<boolean>(true);
-
-  useEffect(() => {
-    let isMounted = true;
-    licenseService.getLicenseStatus().then((info) => {
-      if (isMounted) {
-        setLicenseInfo(info);
-        setIsLicenseChecking(false);
-      }
-    });
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   // Global Keyboard Shortcuts
   useEffect(() => {
@@ -155,26 +143,6 @@ const MainLayout: React.FC = () => {
     setIsMigrationSetupOpen(false);
     setActiveTab('migration');
   };
-
-  // 1. Hardware License Verification Gate
-  if (isLicenseChecking) {
-    return (
-      <div className="min-h-screen w-screen flex flex-col items-center justify-center bg-slate-950 text-slate-300 gap-3 font-sans" dir="rtl">
-        <div className="w-10 h-10 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
-        <span className="text-xs font-semibold tracking-wide">در حال اعتبارسنجی لایسنس سخت‌افزاری...</span>
-      </div>
-    );
-  }
-
-  // 2. Unactivated / Hardware Mismatch / Expired / Revoked Gate
-  if (!isDemoMode && licenseInfo?.status !== 'ACTIVE') {
-    return (
-      <LicenseActivationScreen
-        initialInfo={licenseInfo}
-        onActivated={(info) => setLicenseInfo(info)}
-      />
-    );
-  }
 
   if (!isInstalled && !isDemoMode) {
     if (isWizardOpen) {
@@ -339,9 +307,64 @@ const MainLayout: React.FC = () => {
 };
 
 export function App() {
+  const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
+  const [isLicenseChecking, setIsLicenseChecking] = useState<boolean>(true);
+
+  const checkLicense = useCallback(async () => {
+    try {
+      const info = await licenseService.getLicenseStatus();
+      setLicenseInfo(info);
+    } catch (err: any) {
+      setLicenseInfo({
+        status: 'UNACTIVATED',
+        licenseId: null,
+        gymId: null,
+        gymName: null,
+        plan: null,
+        activatedAt: null,
+        expiresAt: null,
+        deviceBindingStatus: 'UNBOUND',
+        tokenVersion: 1,
+        deviceFingerprintMasked: 'FP-ERR',
+        isOfflineValid: false,
+        message: err?.message || 'خطا در اعتبارسنجی لایسنس',
+      });
+    } finally {
+      setIsLicenseChecking(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkLicense();
+  }, [checkLicense]);
+
+  // 1. Hardware License Verification Gate
+  if (isLicenseChecking) {
+    return (
+      <div className="min-h-screen w-screen flex flex-col items-center justify-center bg-slate-950 text-slate-300 gap-3 font-sans" dir="rtl">
+        <div className="w-10 h-10 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
+        <span className="text-xs font-semibold tracking-wide">در حال اعتبارسنجی لایسنس سخت‌افزاری...</span>
+      </div>
+    );
+  }
+
+  // 2. Unactivated / Hardware Mismatch / Expired / Revoked Gate
+  // Invariant: AppProvider, SQLite data, and application modules are completely blocked before valid activation
+  if (!licenseInfo || licenseInfo.status !== 'ACTIVE') {
+    return (
+      <LicenseActivationScreen
+        initialInfo={licenseInfo}
+        onActivated={(info) => {
+          setLicenseInfo(info);
+        }}
+      />
+    );
+  }
+
+  // 3. Normal Application Boot: Only executed when cryptographic hardware license is strictly verified ACTIVE
   return (
     <AppProvider>
-      <MainLayout />
+      <MainLayout licenseInfo={licenseInfo} onLicenseChanged={setLicenseInfo} />
     </AppProvider>
   );
 }

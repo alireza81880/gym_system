@@ -142,7 +142,7 @@ const getInitialStorePackages = (): MembershipPackage[] => {
 };
 
 export const settingsStore = createStore<SettingsState>({
-  isInstalled: PersistenceManager.get<boolean>('gym_installed', true),
+  isInstalled: PersistenceManager.get<boolean>('gym_installed', false),
   isDemoMode: PersistenceManager.get<boolean>('gym_demo_mode', false),
   organizationInfo: PersistenceManager.get<OrganizationInfo>('organization_info', defaultOrganizationInfo),
   currentUser: AuthService.getCurrentUser(),

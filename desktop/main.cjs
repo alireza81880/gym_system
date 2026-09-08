@@ -87,7 +87,13 @@ function logToFile(level, message, meta) {
 
 function createWindow() {
   const paths = getStoragePaths();
-  logToFile('info', 'Creating main application window', { version: app.getVersion() });
+  const initialLicense = licenseManager.getLicenseStatus(paths);
+  logToFile('info', 'Creating main application window', { 
+    version: app.getVersion(), 
+    licenseStatus: initialLicense.status,
+    licenseId: initialLicense.licenseId,
+    deviceBindingStatus: initialLicense.deviceBindingStatus 
+  });
 
   const appIconPath = process.platform === 'win32'
     ? path.join(__dirname, '..', 'public', 'icon.ico')
@@ -147,11 +153,29 @@ function createWindow() {
 function setupIpcHandlers() {
   const paths = getStoragePaths();
 
+  function isLicenseActive() {
+    try {
+      const status = licenseManager.getLicenseStatus(paths);
+      return status && status.status === 'ACTIVE';
+    } catch {
+      return false;
+    }
+  }
+
+  function requireActiveLicense() {
+    if (!isLicenseActive()) {
+      const status = licenseManager.getLicenseStatus(paths);
+      logToFile('warn', 'Unauthorized IPC operation attempted without active license', { status: status ? status.status : 'NO_STATUS' });
+      throw new Error('ACCESS_DENIED_UNLICENSED: دسترسی به پایگاه‌داده نیازمند فعال‌سازی لایسنس معتبر سخت‌افزاری است.');
+    }
+  }
+
   ipcMain.handle('desktop:getAppPaths', () => {
     return paths;
   });
 
   ipcMain.handle('desktop:readDatabaseFile', async (event, customPath) => {
+    requireActiveLicense();
     const targetPath = customPath || paths.databaseFile;
     try {
       if (fs.existsSync(targetPath)) {
@@ -168,6 +192,7 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle('desktop:writeDatabaseFile', async (event, targetPath, byteArray) => {
+    requireActiveLicense();
     const dest = targetPath || paths.databaseFile;
     try {
       const buffer = Buffer.from(byteArray);
@@ -183,6 +208,10 @@ function setupIpcHandlers() {
   });
 
   ipcMain.on('desktop:writeDatabaseFileSync', (event, targetPath, byteArray) => {
+    if (!isLicenseActive()) {
+      logToFile('warn', 'Sync-write SQLite rejected: no active license');
+      return;
+    }
     const dest = targetPath || paths.databaseFile;
     try {
       const buffer = Buffer.from(byteArray);
@@ -195,6 +224,7 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle('desktop:createBackup', async () => {
+    requireActiveLicense();
     try {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const backupFilename = `gym_os_backup_${timestamp}.db`;
@@ -227,6 +257,7 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle('desktop:restoreBackup', async (event, backupFilePath) => {
+    requireActiveLicense();
     try {
       if (!fs.existsSync(backupFilePath)) {
         return { success: false, message: 'فایل پشتیبان در مسیر مشخص شده یافت نشد' };
