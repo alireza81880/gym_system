@@ -1,8 +1,12 @@
 node_modules/
 build/
 dist/
+release/
 coverage/
 .DS_Store
 *.log
+*.db
+*.exe
+*.blockmap
 .env*
 !.env.example
