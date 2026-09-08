@@ -18,6 +18,7 @@ export interface FieldResolutionResult {
   matchedAlias?: string;
   category?: string;
   reason: string;
+  isSystemMetadata?: boolean;
 }
 
 export interface BatchResolutionResult {
@@ -30,6 +31,53 @@ export interface BatchResolutionResult {
 }
 
 export class FieldAliasResolver {
+  /**
+   * System metadata keys from Gym OS exports and backups that should be recognized and ignored cleanly
+   */
+  static readonly SYSTEM_METADATA_KEYS = new Set([
+    '__metadata',
+    'exportdate',
+    'exportedat',
+    'systemversion',
+    'schemaversion',
+    'gymosbackupversion',
+    'gym_os_backup_version',
+    'platform',
+    'platformversion',
+    '_meta',
+    'meta',
+    'tenantid',
+    'branchid',
+    'id',
+    'createdat',
+    'updatedat',
+    'data',
+    'counts',
+    'gym_os_students',
+    'gym_os_payments',
+    'gym_os_expenses',
+    'gym_os_memberships',
+    'gym_os_charges',
+    'gym_os_smart_lockers',
+    'gym_os_attendance',
+    'gym_os_coaches',
+    'gym_os_packages',
+    'gym_os_organization_info',
+    'gym_os_branches',
+    'gym_os_active_branch_id',
+    'gym_os_custom_fields',
+    'gym_os_access_policy_config',
+    'gym_os_hardware_devices',
+    'gym_os_hardware_events',
+    'gym_os_audit_logs',
+    'gym_os_locker_assignments_history',
+    'gym_os_dashboard_widgets',
+    'gym_os_module_features',
+    'gym_installed',
+    'gym_demo_mode',
+    'gym_onboarding_completed',
+  ]);
+
   /**
    * Authoritative canonical target definitions mapping English backup fields to Persian UI labels
    */
@@ -237,6 +285,111 @@ export class FieldAliasResolver {
         'نکات پزشکی', 'بیماری', 'سوابق پزشکی', 'پزشکی', 'آسیب دیدگی'
       ],
     },
+    {
+      targetKey: 'coachFee',
+      persianLabel: 'هزینه مربی اختصاصی',
+      category: 'coach',
+      type: 'number',
+      aliases: ['coachfee', 'coach_fee', 'trainerfee', 'trainer_fee', 'هزینه مربی', 'شهریه مربی'],
+    },
+    {
+      targetKey: 'planFee',
+      persianLabel: 'هزینه برنامه تمرینی / غذایی',
+      category: 'finance',
+      type: 'number',
+      aliases: ['planfee', 'plan_fee', 'workoutplanfee', 'workout_plan_fee', 'dietfee', 'diet_fee', 'هزینه برنامه', 'شهریه برنامه'],
+    },
+    {
+      targetKey: 'packageSnapshot',
+      persianLabel: 'اسنپ‌شات و جزئیات پکیج',
+      category: 'membership',
+      type: 'string',
+      aliases: ['packagesnapshot', 'package_snapshot', 'snapshot', 'اسنپ شات پکیج', 'اطلاعات پکیج'],
+    },
+    {
+      targetKey: 'customFields',
+      persianLabel: 'فیلدهای سفارشی و متغیر',
+      category: 'custom',
+      type: 'string',
+      aliases: ['customfields', 'custom_fields', 'customdata', 'custom_data', 'فیلدهای سفارشی', 'اطلاعات متغیر'],
+    },
+    {
+      targetKey: 'sessionsTotal',
+      persianLabel: 'تعداد کل جلسات مجاز',
+      category: 'membership',
+      type: 'number',
+      aliases: ['sessionstotal', 'sessions_total', 'totalsessions', 'total_sessions', 'sessionscount', 'sessions_count', 'sessions', 'تعداد جلسات', 'کل جلسات', 'جلسات مجاز'],
+    },
+    {
+      targetKey: 'sessionsAttended',
+      persianLabel: 'جلسات مصرف‌شده / حضوریافته',
+      category: 'membership',
+      type: 'number',
+      aliases: ['sessionsattended', 'sessions_attended', 'attendedsessions', 'attended_sessions', 'usedsessions', 'used_sessions', 'جلسات مصرفی', 'جلسات رفته', 'حضورها'],
+    },
+    {
+      targetKey: 'height',
+      persianLabel: 'قد (سانتی‌متر)',
+      category: 'core',
+      type: 'number',
+      aliases: ['height', 'stature', 'قد', 'قد ورزشکار'],
+    },
+    {
+      targetKey: 'weight',
+      persianLabel: 'وزن (کیلوگرم)',
+      category: 'core',
+      type: 'number',
+      aliases: ['weight', 'وزن', 'وزن ورزشکار'],
+    },
+    {
+      targetKey: 'goal',
+      persianLabel: 'هدف ورزشی',
+      category: 'core',
+      type: 'string',
+      aliases: ['goal', 'target', 'fitnessgoal', 'fitness_goal', 'هدف', 'هدف ورزشی'],
+    },
+    {
+      targetKey: 'assignedLocker',
+      persianLabel: 'شماره کمد اختصاصی',
+      category: 'hardware',
+      type: 'number',
+      aliases: ['assignedlocker', 'assigned_locker', 'lockerno', 'locker_number', 'lockernumber', 'کمد', 'شماره کمد'],
+    },
+    {
+      targetKey: 'packageId',
+      persianLabel: 'شناسه پکیج / تعرفه',
+      category: 'membership',
+      type: 'string',
+      aliases: ['packageid', 'package_id', 'pkgid', 'pkg_id', 'شناسه پکیج', 'کد پکیج'],
+    },
+    {
+      targetKey: 'status',
+      persianLabel: 'وضعیت پرونده',
+      category: 'core',
+      type: 'string',
+      aliases: ['status', 'memberstatus', 'member_status', 'وضعیت', 'وضعیت عضو'],
+    },
+    {
+      targetKey: 'wantsCoach',
+      persianLabel: 'درخواست مربی اختصاصی',
+      category: 'coach',
+      type: 'string',
+      aliases: ['wantscoach', 'wants_coach', 'hascoach', 'has_coach', 'مربی اختصاصی'],
+    },
+    {
+      targetKey: 'wantsWorkoutPlan',
+      persianLabel: 'درخواست برنامه تمرینی',
+      category: 'membership',
+      type: 'string',
+      aliases: ['wantsworkoutplan', 'wants_workout_plan', 'hasworkoutplan', 'برنامه تمرینی'],
+    },
+    {
+      targetKey: 'wantsDietPlan',
+      persianLabel: 'درخواست برنامه غذایی',
+      category: 'membership',
+      type: 'string',
+      aliases: ['wantsdietplan', 'wants_diet_plan', 'hasdietplan', 'برنامه غذایی'],
+    },
   ];
 
   /**
@@ -270,6 +423,20 @@ export class FieldAliasResolver {
         confidence: 0,
         isKnown: false,
         reason: 'ستون خالی یا بدون نام',
+      };
+    }
+
+    // 0. Check system metadata keys
+    if (this.SYSTEM_METADATA_KEYS.has(normCol)) {
+      return {
+        column: rawCol,
+        targetKey: null,
+        persianLabel: 'متادیتای سیستمی (صرف‌نظر می‌شود)',
+        confidence: 100,
+        isKnown: true,
+        isSystemMetadata: true,
+        category: 'metadata',
+        reason: 'متادیتای ساختاری سیستم یا نسخه پشتیبان',
       };
     }
 
@@ -400,7 +567,7 @@ export class FieldAliasResolver {
       if (res.isKnown && res.targetKey) {
         mappings[col] = res.targetKey;
         usedTargets.add(res.targetKey);
-      } else {
+      } else if (!res.isSystemMetadata) {
         unknownColumns.push(col);
       }
     }

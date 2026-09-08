@@ -29,6 +29,9 @@ import { NewPaymentModal } from './components/Modals/NewPaymentModal';
 import { CommandPaletteModal } from './components/Modals/CommandPaletteModal';
 import { EmergencyMasterUnlockModal } from './components/Modals/EmergencyMasterUnlockModal';
 import { OnboardingWizardModal } from './components/Modals/OnboardingWizardModal';
+import { LicenseActivationScreen } from './components/License/LicenseActivationScreen';
+import { licenseService } from './services/licenseService';
+import { LicenseInfo } from './types/license';
 
 const MainLayout: React.FC = () => {
   const { activeTab, setActiveTab, isInstalled, isDemoMode, exitDemoMode, enterDemoMode, completeInstallation } = useApp();
@@ -55,6 +58,23 @@ const MainLayout: React.FC = () => {
   const [isEmergencyUnlockOpen, setIsEmergencyUnlockOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [openStudentModalTrigger, setOpenStudentModalTrigger] = useState(false);
+
+  // License State & Hardware Binding Guard
+  const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
+  const [isLicenseChecking, setIsLicenseChecking] = useState<boolean>(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    licenseService.getLicenseStatus().then((info) => {
+      if (isMounted) {
+        setLicenseInfo(info);
+        setIsLicenseChecking(false);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Global Keyboard Shortcuts
   useEffect(() => {
@@ -135,6 +155,26 @@ const MainLayout: React.FC = () => {
     setIsMigrationSetupOpen(false);
     setActiveTab('migration');
   };
+
+  // 1. Hardware License Verification Gate
+  if (isLicenseChecking) {
+    return (
+      <div className="min-h-screen w-screen flex flex-col items-center justify-center bg-slate-950 text-slate-300 gap-3 font-sans" dir="rtl">
+        <div className="w-10 h-10 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
+        <span className="text-xs font-semibold tracking-wide">در حال اعتبارسنجی لایسنس سخت‌افزاری...</span>
+      </div>
+    );
+  }
+
+  // 2. Unactivated / Hardware Mismatch / Expired / Revoked Gate
+  if (!isDemoMode && licenseInfo?.status !== 'ACTIVE') {
+    return (
+      <LicenseActivationScreen
+        initialInfo={licenseInfo}
+        onActivated={(info) => setLicenseInfo(info)}
+      />
+    );
+  }
 
   if (!isInstalled && !isDemoMode) {
     if (isWizardOpen) {

@@ -107,6 +107,8 @@ export interface Student {
   wantsWorkoutPlan?: boolean;
   wantsDietPlan?: boolean;
   packageType: PackageType;
+  packageId?: string;
+  packageSnapshot?: any;
   registrationDate: string;
   expireDate: string;
   totalFee: number;

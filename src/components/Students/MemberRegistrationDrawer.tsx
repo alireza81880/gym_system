@@ -115,7 +115,8 @@ export const MemberRegistrationDrawer: React.FC<MemberRegistrationDrawerProps> =
   }, [activePackages, selectedPackageId]);
 
   const selectedPackage = useMemo(() => {
-    return activePackages.find(p => p.id === selectedPackageId) || activePackages[0] || null;
+    if (!selectedPackageId) return null;
+    return activePackages.find(p => p.id === selectedPackageId) || null;
   }, [activePackages, selectedPackageId]);
 
   // Dates
@@ -282,6 +283,7 @@ export const MemberRegistrationDrawer: React.FC<MemberRegistrationDrawerProps> =
 
     addPackage(newPkg);
     setSelectedPackageId(newPkgId);
+    setHasUserModifiedPayment(false);
     setInlinePkgName('');
     setInlinePkgPrice('');
     setInlinePkgDuration(30);
@@ -347,7 +349,8 @@ export const MemberRegistrationDrawer: React.FC<MemberRegistrationDrawerProps> =
           gender,
           birthDate: birthDate.trim(),
           coachId: coachId || '',
-          packageType: selectedPackage.type || selectedPackage.name,
+          packageType: (selectedPackage.type || selectedPackage.name) as any,
+          packageId: selectedPackage.id,
           registrationDate: startDate,
           expireDate: expireDate || DateService.addDaysToJalali(startDate, selectedPackage.durationDays || 30),
           totalFee: financial.finalPrice,
@@ -367,6 +370,16 @@ export const MemberRegistrationDrawer: React.FC<MemberRegistrationDrawerProps> =
         {
           basePrice: financial.basePrice,
           discountAmount: financial.discountAmount,
+          packageId: selectedPackage.id,
+          packageName: selectedPackage.name,
+          packageSnapshot: {
+            packageId: selectedPackage.id,
+            name: selectedPackage.name,
+            price: selectedPackage.price,
+            sessionsCount: selectedPackage.sessionsCount || 0,
+            durationDays: selectedPackage.durationDays || 30,
+            type: selectedPackage.type || selectedPackage.name,
+          },
         }
       );
 

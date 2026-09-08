@@ -64,6 +64,7 @@ import { LocalDatabase } from '../services/database/localDatabase';
 import { PerformanceDiagnostics } from '../services/diagnostics/performanceMetrics';
 import { SetupService, InitialSetupInput, QuickSetupInput, SetupResult } from '../services/setupService';
 import { FinanceService } from '../services/finance/financeService';
+import { MemberService } from '../services/memberService';
 import { LocalDbRepository } from '../services/localDb';
 import { useMemberStore, memberActions } from '../stores/memberStore';
 import { useFinanceStore, financeActions, notifyFinanceChange } from '../stores/financeStore';
@@ -603,8 +604,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (newDashboardWidgets) PersistenceManager.setImmediate('dashboard_widgets', newDashboardWidgets);
       if (newModuleFeatures) PersistenceManager.setImmediate('module_features', newModuleFeatures);
 
-      // 4. Trigger authoritative post-restore Financial Reconciliation
+      // 4. Trigger authoritative post-restore Financial Reconciliation and Member Sequence Sync
       try {
+        let maxRestoredMemberNum = 0;
+        for (const s of payload.students) {
+          if (s.memberNumber) {
+            const digitsOnly = s.memberNumber.toString().replace(/[^0-9]/g, '');
+            const parsed = parseInt(digitsOnly, 10);
+            if (!isNaN(parsed) && parsed > maxRestoredMemberNum) {
+              maxRestoredMemberNum = parsed;
+            }
+          }
+        }
+        if (maxRestoredMemberNum > 0) {
+          MemberService.recordAllocatedNumber(maxRestoredMemberNum);
+        }
+
         FinanceService.reconcileAllFinancials();
         // Update members store with reconciled balance calculations
         memberActions.batchSet(MemberRepository.getAll());

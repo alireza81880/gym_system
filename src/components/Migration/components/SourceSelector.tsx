@@ -19,15 +19,26 @@ interface SourceSelectorProps {
   selectedSource: MigrationSourceType;
   onSelectSource: (source: MigrationSourceType) => void;
   onNext: () => void;
+  onDirectRestoreFile?: (file: File) => void;
 }
 
 export const SourceSelector: React.FC<SourceSelectorProps> = ({
   selectedSource,
   onSelectSource,
   onNext,
+  onDirectRestoreFile,
 }) => {
+  const directRestoreInputRef = React.useRef<HTMLInputElement>(null);
+
   const handleDownloadSample = () => {
     SampleExcelGenerator.downloadSampleExcel();
+  };
+
+  const handleDirectFilePicked = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onDirectRestoreFile) {
+      onDirectRestoreFile(file);
+    }
   };
 
   const sources: {
@@ -107,6 +118,28 @@ export const SourceSelector: React.FC<SourceSelectorProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-3 self-start lg:self-center">
+          {onDirectRestoreFile && (
+            <>
+              <input
+                ref={directRestoreInputRef}
+                type="file"
+                accept=".json"
+                onChange={handleDirectFilePicked}
+                className="hidden"
+                id="input-direct-native-backup"
+              />
+              <button
+                type="button"
+                id="btn-direct-native-restore-source"
+                onClick={() => directRestoreInputRef.current?.click()}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-stone-950 text-xs font-black transition-all shadow-md cursor-pointer group"
+              >
+                <Database className="w-4 h-4 text-stone-950 group-hover:scale-110 transition-transform" />
+                <span>بازیابی مستقیم فایل پشتیبان Gym OS (.json)</span>
+              </button>
+            </>
+          )}
+
           <button
             type="button"
             id="btn-download-sample-excel-source"

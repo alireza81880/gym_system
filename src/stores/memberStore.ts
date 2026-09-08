@@ -3,6 +3,8 @@ import { createStore, useStore } from './createStore';
 import { Student, PaymentMethod, PackageType } from '../types';
 import { MemberRepository, MemberQueryParams, PaginatedResult } from '../services/repositories/memberRepository';
 import { LockerRepository } from '../services/repositories/lockerRepository';
+import { MembershipRepository } from '../services/repositories/membershipRepository';
+import { ChargeRepository } from '../services/repositories/chargeRepository';
 import { FinanceService } from '../services/finance/financeService';
 import { notifyFinanceChange } from './financeStore';
 import { notifyLockerChange } from './lockerStore';
@@ -47,6 +49,16 @@ export const memberActions = {
       basePrice?: number;
       discountAmount?: number;
       discountReason?: string;
+      packageId?: string;
+      packageName?: string;
+      packageSnapshot?: {
+        packageId?: string;
+        name?: string;
+        price?: number;
+        sessionsCount?: number;
+        durationDays?: number;
+        type?: string;
+      };
     }
   ): Student {
     const actor = settingsStore.getState().currentUser;
@@ -75,18 +87,29 @@ export const memberActions = {
 
     MemberRepository.addMember(newStudent);
 
-    // Find matching package snapshot if available
+    // Find matching package snapshot: prioritize explicit packageId from financialOptions or studentData
     const packages = settingsStore.getState().packages;
-    const matchedPkg = packages.find(p => p.id === newStudent.packageType || p.type === newStudent.packageType || p.name === newStudent.packageType);
+    const requestedPkgId = financialOptions?.packageId || (newStudent as any).packageId;
+    const matchedPkg = (requestedPkgId ? packages.find(p => p.id === requestedPkgId) : null)
+      || packages.find(p => p.id === newStudent.packageType || p.type === newStudent.packageType || p.name === newStudent.packageType);
+
+    const snapshotToStore = financialOptions?.packageSnapshot || (matchedPkg ? {
+      packageId: matchedPkg.id,
+      name: matchedPkg.name,
+      price: matchedPkg.price,
+      sessionsCount: matchedPkg.sessionsCount || 0,
+      durationDays: matchedPkg.durationDays || 30,
+      type: matchedPkg.type || matchedPkg.name,
+    } : undefined);
 
     // Record Financial Charge & Payment with full price breakdown & snapshot
     FinanceService.recordMembershipSale({
       memberId: studentId,
       memberName: newStudent.fullName,
       packageType: newStudent.packageType,
-      packageId: matchedPkg?.id,
-      packageName: matchedPkg?.name || newStudent.packageType,
-      packageSnapshot: matchedPkg ? { ...matchedPkg } : undefined,
+      packageId: matchedPkg?.id || requestedPkgId,
+      packageName: matchedPkg?.name || financialOptions?.packageName || newStudent.packageType,
+      packageSnapshot: snapshotToStore,
       durationDays: matchedPkg?.durationDays || (matchedPkg?.durationMonths ? matchedPkg.durationMonths * 30 : 30),
       basePrice,
       discountAmount,
@@ -129,6 +152,78 @@ export const memberActions = {
     const updated = MemberRepository.updateMember(id, partial);
     
     if (updated && prev) {
+      // 1. If package changed, synchronize active membership record and snapshot
+      const packages = settingsStore.getState().packages;
+      const targetPackageId = (partial as any).packageId;
+      const targetPackageType = partial.packageType;
+      
+      const activeMsh = MembershipRepository.getActiveByMember(id);
+      if (activeMsh && (targetPackageId || targetPackageType)) {
+        const newPkg = (targetPackageId ? packages.find(p => p.id === targetPackageId) : null)
+          || packages.find(p => p.id === targetPackageType || p.type === targetPackageType || p.name === targetPackageType);
+
+        if (newPkg) {
+          MembershipRepository.update(activeMsh.id, {
+            packageId: newPkg.id,
+            packageType: (newPkg.type || newPkg.name) as any,
+            packageNameSnapshot: newPkg.name,
+            packageSnapshot: {
+              id: newPkg.id,
+              name: newPkg.name,
+              price: newPkg.price,
+              sessionsCount: newPkg.sessionsCount || 0,
+              durationDays: newPkg.durationDays || 30,
+              type: newPkg.type || newPkg.name,
+            },
+            durationDays: newPkg.durationDays || activeMsh.durationDays,
+            sessionsTotal: newPkg.sessionsCount ?? activeMsh.sessionsTotal,
+            expireDate: partial.expireDate || activeMsh.expireDate,
+          });
+        }
+      }
+
+      // 2. If totalFee was changed, calculate the difference and record an adjustment charge
+      if (partial.totalFee !== undefined && prev.totalFee !== undefined && partial.totalFee !== prev.totalFee) {
+        const feeDiff = partial.totalFee - prev.totalFee;
+        const adjChargeId = generateFinancialId('CHG');
+        ChargeRepository.create({
+          id: adjChargeId,
+          tenantId: updated.tenantId || 'gym-org-1',
+          branchId: updated.branchId || 'branch-tehran-central',
+          memberId: updated.id,
+          memberName: updated.fullName,
+          packageType: updated.packageType,
+          packageName: targetPackageType || updated.packageType,
+          basePrice: feeDiff,
+          discountAmount: 0,
+          finalPrice: feeDiff,
+          paidAmount: 0,
+          outstandingAmount: feeDiff > 0 ? feeDiff : 0,
+          date: DateService.getTodayJalali(),
+          timestamp: new Date().toISOString(),
+          status: feeDiff > 0 ? 'active' : 'settled',
+          createdAt: new Date().toISOString(),
+          notes: feeDiff > 0 
+            ? `تعدیل افزایشی شهریه (تغییر تعرفه/پکیج) - ${updated.fullName}`
+            : `تعدیل کاهشی شهریه (تغییر تعرفه/پکیج) - ${updated.fullName}`,
+        });
+      }
+
+      // 3. If paidAmount was increased, record a differential payment
+      if (partial.paidAmount !== undefined && prev.paidAmount !== undefined && partial.paidAmount > prev.paidAmount) {
+        const paidDiff = partial.paidAmount - prev.paidAmount;
+        FinanceService.allocatePayment({
+          memberId: updated.id,
+          amount: paidDiff,
+          paymentMethod: 'pos',
+          description: `دریافتی مابه‌التفاوت هنگام ویرایش پکیج (${updated.fullName})`,
+        });
+      }
+
+      // Reconcile member balance and notify
+      FinanceService.reconcileMemberFinancials(updated.id);
+      notifyFinanceChange();
+
       AuditService.logSensitiveMutation({
         actor,
         action: 'MEMBER_UPDATED',

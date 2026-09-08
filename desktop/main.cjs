@@ -8,6 +8,7 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const licenseManager = require('./licenseManager.cjs');
 
 const APP_NAME = 'GymOS';
 let mainWindow = null;
@@ -259,6 +260,42 @@ function setupIpcHandlers() {
 
   ipcMain.on('desktop:log', (event, { level, message, meta }) => {
     logToFile(level, message, meta);
+  });
+
+  // Licensing & Hardware-bound Activation Handlers
+  ipcMain.handle('desktop:getLicenseStatus', async () => {
+    const status = licenseManager.getLicenseStatus(paths);
+    logToFile('info', 'Queried license status', { status: status.status, licenseId: status.licenseId });
+    return status;
+  });
+
+  ipcMain.handle('desktop:activateLicense', async (event, licenseKey) => {
+    logToFile('info', 'Attempting license activation', { licenseKey: licenseKey ? `${licenseKey.slice(0, 4)}***` : null });
+    const result = await licenseManager.activateLicense(licenseKey, paths);
+    logToFile(result.success ? 'info' : 'warn', 'License activation attempt finished', {
+      success: result.success,
+      status: result.status,
+      error: result.error,
+    });
+    return result;
+  });
+
+  ipcMain.handle('desktop:recoverLicense', async (event, licenseKey, recoveryCode) => {
+    logToFile('info', 'Attempting authorized license recovery', {
+      licenseKey: licenseKey ? `${licenseKey.slice(0, 4)}***` : null,
+      recoveryCodeProvided: Boolean(recoveryCode),
+    });
+    const result = await licenseManager.recoverLicense(licenseKey, recoveryCode, paths);
+    logToFile(result.success ? 'info' : 'warn', 'License recovery attempt finished', {
+      success: result.success,
+      status: result.status,
+      error: result.error,
+    });
+    return result;
+  });
+
+  ipcMain.handle('desktop:getDeviceFingerprint', async () => {
+    return licenseManager.getMaskedFingerprint();
   });
 }
 

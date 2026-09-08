@@ -25,8 +25,10 @@ import {
   ArchiveRestore,
   AlertTriangle,
   Info,
-  Database
+  Database,
+  ShieldCheck,
 } from 'lucide-react';
+import { LicenseSettingsTab } from './LicenseSettingsTab';
 import { useApp } from '../../context/AppContext';
 import { useTheme, useSettings, useLockers } from '../../stores';
 import { MembershipPackage, CustomField, CustomFieldType } from '../../types';
@@ -73,7 +75,7 @@ export const SettingsView: React.FC = () => {
   } = useLockers();
 
   // Active Sub-Tab
-  const [activeTab, setActiveTab] = useState<'theme' | 'org' | 'packages' | 'lockers' | 'custom_fields' | 'migration' | 'backup'>('theme');
+  const [activeTab, setActiveTab] = useState<'theme' | 'org' | 'packages' | 'lockers' | 'custom_fields' | 'migration' | 'backup' | 'license'>('theme');
 
   // Package Filter State
   const [packageFilter, setPackageFilter] = useState<'all' | 'active' | 'archived'>('all');
@@ -354,6 +356,7 @@ export const SettingsView: React.FC = () => {
           { id: 'custom_fields', label: 'فیلدهای اختصاصی پرونده', icon: Tag },
           { id: 'migration', label: 'انتقال اطلاعات (Migration)', icon: ArrowRightLeft },
           { id: 'backup', label: 'پشتیبان و ریست سیستم', icon: Shield },
+          { id: 'license', label: 'لایسنس نرم‌افزار', icon: ShieldCheck },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -1262,6 +1265,15 @@ export const SettingsView: React.FC = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* TAB 8: SOFTWARE LICENSE & ANTI-COPY                  */}
+      {/* ---------------------------------------------------- */}
+      {activeTab === 'license' && (
+        <div className="space-y-6">
+          <LicenseSettingsTab />
         </div>
       )}
 

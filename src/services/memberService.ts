@@ -1,5 +1,6 @@
 import { Student } from '../types';
 import { ValidationService } from './validationService';
+import { LocalDbRepository } from './localDb';
 
 export interface DuplicateDetectionResult {
   isDuplicate: boolean;
@@ -19,18 +20,29 @@ export class MemberService {
    * Get highest allocated member sequence number across history and active members
    */
   static getHighestAllocatedSequence(): number {
+    let highest = 0;
     try {
       const stored = localStorage.getItem(this.HIGH_WATER_MARK_KEY);
       if (stored) {
         const parsed = parseInt(stored, 10);
-        if (!isNaN(parsed) && parsed > 0) {
-          return parsed;
+        if (!isNaN(parsed) && parsed > highest) {
+          highest = parsed;
         }
       }
     } catch {
       // LocalStorage unavailable
     }
-    return 0;
+
+    try {
+      const dbStored = LocalDbRepository.get<number>(this.HIGH_WATER_MARK_KEY, 0);
+      if (typeof dbStored === 'number' && !isNaN(dbStored) && dbStored > highest) {
+        highest = dbStored;
+      }
+    } catch {
+      // safe fallback
+    }
+
+    return highest;
   }
 
   /**
@@ -42,9 +54,10 @@ export class MemberService {
       const currentHighest = this.getHighestAllocatedSequence();
       if (num > currentHighest) {
         localStorage.setItem(this.HIGH_WATER_MARK_KEY, String(num));
+        LocalDbRepository.setImmediate(this.HIGH_WATER_MARK_KEY, num);
       }
     } catch {
-      // LocalStorage unavailable
+      // safe fallback
     }
   }
 

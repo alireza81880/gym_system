@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Student, PackageType, PaymentMethod } from '../../types';
+import { DateService } from '../../services/dateService';
 import { StudentDetailModal } from './StudentDetailModal';
 import { MemberRegistrationDrawer } from './MemberRegistrationDrawer';
 import { MoneyInput } from '../common/MoneyInput';
@@ -300,6 +301,7 @@ export const StudentList: React.FC<StudentListProps> = ({
   const [phone, setPhone] = useState('');
   const [coachId, setCoachId] = useState('');
   const [packageType, setPackageType] = useState<PackageType>('1_month');
+  const [editPackageId, setEditPackageId] = useState<string>('');
   const [expireDate, setExpireDate] = useState('1403/06/25');
   const [totalFee, setTotalFee] = useState<number>(2800000);
   const [initialPayment, setInitialPayment] = useState<number>(2800000);
@@ -311,8 +313,17 @@ export const StudentList: React.FC<StudentListProps> = ({
   const [coachFee, setCoachFee] = useState<number>(0);
   const [workoutPlanFee, setWorkoutPlanFee] = useState<number>(500000);
 
+  const editAvailablePackages = useMemo(() => {
+    const list = packages.filter(p => p.isActive !== false && !p.isArchived);
+    if (editPackageId && !list.some(p => p.id === editPackageId)) {
+      const current = packages.find(p => p.id === editPackageId);
+      if (current) list.unshift(current);
+    }
+    return list;
+  }, [packages, editPackageId]);
+
   const getPackagePrice = (type: string) => {
-    const pkg = packages.find(p => p.type === type);
+    const pkg = packages.find(p => p.type === type || p.id === type);
     return pkg ? pkg.price : 2800000;
   };
 
@@ -326,7 +337,14 @@ export const StudentList: React.FC<StudentListProps> = ({
     setFullName(student.fullName);
     setPhone(student.phone);
     setCoachId(student.coachId || '');
-    setPackageType((student.packageType as PackageType) || '1_month');
+
+    const matched = (student as any).packageId
+      ? packages.find(p => p.id === (student as any).packageId)
+      : packages.find(p => p.id === student.packageType || p.type === student.packageType || p.name === student.packageType);
+    const selectedPkgId = matched?.id || packages[0]?.id || '';
+    setEditPackageId(selectedPkgId);
+    setPackageType(((matched?.type || matched?.name || student.packageType) as PackageType) || '1_month');
+
     setExpireDate(student.expireDate);
     setTotalFee(student.totalFee);
     setInitialPayment(student.paidAmount);
@@ -347,15 +365,26 @@ export const StudentList: React.FC<StudentListProps> = ({
     e.preventDefault();
     if (!editingStudent) return;
 
+    const selectedPkg = packages.find(p => p.id === editPackageId);
     updateStudent(editingStudent.id, {
       fullName,
       phone,
       coachId: wantsCoach ? coachId : '',
-      packageType,
+      packageType: (selectedPkg?.type || selectedPkg?.name || packageType) as any,
+      packageId: selectedPkg?.id || editPackageId,
+      packageSnapshot: selectedPkg ? {
+        packageId: selectedPkg.id,
+        name: selectedPkg.name,
+        price: selectedPkg.price,
+        sessionsCount: selectedPkg.sessionsCount || 0,
+        durationDays: selectedPkg.durationDays || 30,
+        type: selectedPkg.type || selectedPkg.name,
+      } : undefined,
       expireDate,
       totalFee,
       paidAmount: initialPayment,
       remainingDebt: Math.max(0, totalFee - initialPayment),
+      sessionsTotal: selectedPkg?.sessionsCount ?? editingStudent.sessionsTotal,
       goal,
       medicalNotes,
       wantsCoach,
@@ -697,18 +726,24 @@ export const StudentList: React.FC<StudentListProps> = ({
                   <span className="text-xs font-normal text-[var(--gym-text-muted)]">بر اساس تعرفه‌های مصوب باشگاه</span>
                 </label>
                 <select
-                  value={packageType}
+                  value={editPackageId}
                   onChange={(e) => {
-                    const val = e.target.value as PackageType;
-                    setPackageType(val);
-                    const pr = getPackagePrice(val);
-                    setTotalFee(pr);
+                    const newPkgId = e.target.value;
+                    setEditPackageId(newPkgId);
+                    const selectedPkg = packages.find(p => p.id === newPkgId);
+                    if (selectedPkg) {
+                      setPackageType((selectedPkg.type || selectedPkg.name) as PackageType);
+                      setTotalFee(selectedPkg.price);
+                      if (editingStudent?.registrationDate) {
+                        setExpireDate(DateService.addDaysToJalali(editingStudent.registrationDate, selectedPkg.durationDays || 30));
+                      }
+                    }
                   }}
                   className="w-full px-3 py-2.5 rounded-xl glass-subtle border-[var(--gym-border)] text-sm font-semibold text-[var(--gym-text,#fff)] bg-[var(--gym-surface)]"
                 >
-                  {packages.map(p => (
-                    <option key={p.id} value={p.type} className="bg-stone-900 text-white">
-                      {p.name} ({p.durationDays} روزه / {p.sessionsCount} جلسه) - {formatMoney(p.price)}
+                  {editAvailablePackages.map(p => (
+                    <option key={p.id} value={p.id} className="bg-stone-900 text-white">
+                      {p.name} ({p.durationDays} روزه / {p.sessionsCount} جلسه) - {formatMoney(p.price)} {p.isArchived ? '(آرشیو شده)' : ''}
                     </option>
                   ))}
                 </select>

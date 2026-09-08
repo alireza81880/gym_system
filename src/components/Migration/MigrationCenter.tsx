@@ -53,7 +53,8 @@ export const MigrationCenter: React.FC<MigrationCenterProps> = ({
 }) => {
   const { 
     completeInstallation,
-    isInstalled
+    isInstalled,
+    importDatabaseJson,
   } = useAppContext();
 
   const {
@@ -77,6 +78,10 @@ export const MigrationCenter: React.FC<MigrationCenterProps> = ({
 
   // Primary top-level navigation
   const [activeMainTab, setActiveMainTab] = useState<'wizard' | 'history' | 'profiles'>('wizard');
+
+  // Direct Restore state for native Gym OS JSON backups
+  const [directRestoreResult, setDirectRestoreResult] = useState<any | null>(null);
+  const [isDirectRestoring, setIsDirectRestoring] = useState<boolean>(false);
 
   // Wizard state
   const [currentStep, setCurrentStep] = useState<MigrationStep>('source');
@@ -114,6 +119,37 @@ export const MigrationCenter: React.FC<MigrationCenterProps> = ({
 
   // Completed Report state
   const [latestReport, setLatestReport] = useState<MigrationReport | null>(null);
+
+  // ----------------------------------------------------
+  // Native Direct Restore Handlers (Bypass Migration Wizard)
+  // ----------------------------------------------------
+  const handleDirectRestore = async (jsonString: string) => {
+    setIsDirectRestoring(true);
+    try {
+      const res = await importDatabaseJson(jsonString);
+      const isOk = typeof res === 'object' ? res.success : Boolean(res);
+      if (isOk) {
+        setDirectRestoreResult(res);
+      } else {
+        alert(res?.message || 'خطا در بازیابی مستقیم پشتیبان Gym OS');
+      }
+    } catch (err) {
+      alert((err as Error).message || 'خطا در فرآیند بازیابی مستقیم');
+    } finally {
+      setIsDirectRestoring(false);
+    }
+  };
+
+  const handleDirectRestoreFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const text = e.target?.result as string;
+      if (text) {
+        await handleDirectRestore(text);
+      }
+    };
+    reader.readAsText(file);
+  };
 
   // ----------------------------------------------------
   // Step Navigation Handlers
@@ -342,7 +378,81 @@ export const MigrationCenter: React.FC<MigrationCenterProps> = ({
       </div>
 
       {/* Main Tab Content */}
-      {activeMainTab === 'history' ? (
+      {directRestoreResult ? (
+        <div className="p-8 glass-regular rounded-3xl border border-emerald-500/50 shadow-2xl space-y-6 max-w-3xl mx-auto animate-fadeIn text-center" id="direct-restore-success-card">
+          <div className="w-16 h-16 rounded-3xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
+            <CheckCircle2 className="w-9 h-9" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-black text-white">پشتیبان رسمی و بومی Gym OS با موفقیت بازیابی شد</h2>
+            <p className="text-xs sm:text-sm text-stone-300">
+              تمامی اطلاعات پایگاه داده به صورت مستقیم بازنشانی و همگام‌سازی شد و نیازی به گذر از مراحل ویزارد نگاشت فیلدها نبود.
+            </p>
+          </div>
+
+          {directRestoreResult.counts && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-start">
+              <div className="p-3 rounded-2xl glass-subtle border border-[var(--gym-border)]">
+                <span className="text-xs text-[var(--gym-text-muted)] block">اعضا و ورزشکاران</span>
+                <span className="text-lg font-black text-emerald-400 font-mono">{directRestoreResult.counts.members}</span>
+              </div>
+              <div className="p-3 rounded-2xl glass-subtle border border-[var(--gym-border)]">
+                <span className="text-xs text-[var(--gym-text-muted)] block">دوره‌های عضویت</span>
+                <span className="text-lg font-black text-emerald-400 font-mono">{directRestoreResult.counts.memberships}</span>
+              </div>
+              <div className="p-3 rounded-2xl glass-subtle border border-[var(--gym-border)]">
+                <span className="text-xs text-[var(--gym-text-muted)] block">بسته‌ها و تعرفه‌ها</span>
+                <span className="text-lg font-black text-emerald-400 font-mono">{directRestoreResult.counts.packages}</span>
+              </div>
+              <div className="p-3 rounded-2xl glass-subtle border border-[var(--gym-border)]">
+                <span className="text-xs text-[var(--gym-text-muted)] block">پرداخت‌ها و تراکنش‌ها</span>
+                <span className="text-lg font-black text-emerald-400 font-mono">{directRestoreResult.counts.payments}</span>
+              </div>
+              <div className="p-3 rounded-2xl glass-subtle border border-[var(--gym-border)]">
+                <span className="text-xs text-[var(--gym-text-muted)] block">صورت‌حساب‌های مالی</span>
+                <span className="text-lg font-black text-emerald-400 font-mono">{directRestoreResult.counts.charges}</span>
+              </div>
+              <div className="p-3 rounded-2xl glass-subtle border border-[var(--gym-border)]">
+                <span className="text-xs text-[var(--gym-text-muted)] block">کمدهای هوشمند</span>
+                <span className="text-lg font-black text-emerald-400 font-mono">{directRestoreResult.counts.lockers}</span>
+              </div>
+              <div className="p-3 rounded-2xl glass-subtle border border-[var(--gym-border)]">
+                <span className="text-xs text-[var(--gym-text-muted)] block">سوابق تردد</span>
+                <span className="text-lg font-black text-emerald-400 font-mono">{directRestoreResult.counts.attendance}</span>
+              </div>
+              <div className="p-3 rounded-2xl glass-subtle border border-[var(--gym-border)]">
+                <span className="text-xs text-[var(--gym-text-muted)] block">مربیان</span>
+                <span className="text-lg font-black text-emerald-400 font-mono">{directRestoreResult.counts.coaches}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-center gap-3 pt-4">
+            <button
+              type="button"
+              id="btn-return-after-direct-restore"
+              onClick={() => {
+                setDirectRestoreResult(null);
+                if (onBack) onBack();
+              }}
+              className="px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-bold text-xs transition-all shadow-lg cursor-pointer"
+            >
+              مشاهده اطلاعات در سامانه
+            </button>
+            <button
+              type="button"
+              id="btn-reset-after-direct-restore"
+              onClick={() => {
+                setDirectRestoreResult(null);
+                setCurrentStep('source');
+              }}
+              className="px-4 py-2.5 rounded-xl glass-subtle text-stone-300 hover:text-white border border-[var(--gym-border)] text-xs font-medium transition-all cursor-pointer"
+            >
+              شروع عملیات جدید
+            </button>
+          </div>
+        </div>
+      ) : activeMainTab === 'history' ? (
         <MigrationHistory
           reports={migrationReports}
           onRollback={rollbackMigration}
@@ -401,6 +511,7 @@ export const MigrationCenter: React.FC<MigrationCenterProps> = ({
               selectedSource={sourceType}
               onSelectSource={setSourceType}
               onNext={() => setCurrentStep('upload')}
+              onDirectRestoreFile={handleDirectRestoreFile}
             />
           )}
 
@@ -409,6 +520,7 @@ export const MigrationCenter: React.FC<MigrationCenterProps> = ({
               sourceType={sourceType}
               onDataParsed={handleDataParsed}
               onBack={() => setCurrentStep('source')}
+              onDirectRestore={handleDirectRestore}
             />
           )}
 

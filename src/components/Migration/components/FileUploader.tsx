@@ -36,18 +36,36 @@ interface FileUploaderProps {
   sourceType: MigrationSourceType;
   onDataParsed: (result: ParseResult, file?: File) => void;
   onBack: () => void;
+  onDirectRestore?: (jsonString: string) => Promise<any>;
 }
 
 export const FileUploader: React.FC<FileUploaderProps> = ({
   sourceType,
   onDataParsed,
   onBack,
+  onDirectRestore,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Native Gym OS Backup Auto-Detection
+  const [detectedNativeBackup, setDetectedNativeBackup] = useState<{
+    isNative: boolean;
+    rawJson: string;
+    summary: {
+      members: number;
+      memberships: number;
+      packages: number;
+      charges: number;
+      payments: number;
+      version: string;
+      date: string;
+    };
+  } | null>(null);
+  const [isRestoringDirectly, setIsRestoringDirectly] = useState(false);
   
   // Excel Multi-sheet state
   const [excelSheets, setExcelSheets] = useState<{ name: string; rowCount: number }[]>([]);
@@ -127,6 +145,34 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
       } else if (sourceType === 'json') {
         const text = await file.text();
         setJsonRawText(text);
+        try {
+          const parsed = JSON.parse(text.replace(/^\uFEFF/, '').trim());
+          if (JsonImporter.isGymOsBackup(parsed)) {
+            const sCount = Array.isArray(parsed.students) ? parsed.students.length : (Array.isArray(parsed.data?.students) ? parsed.data.students.length : (Array.isArray(parsed.data?.gym_os_students) ? parsed.data.gym_os_students.length : 0));
+            const pCount = Array.isArray(parsed.payments) ? parsed.payments.length : (Array.isArray(parsed.data?.payments) ? parsed.data.payments.length : 0);
+            const pkgCount = Array.isArray(parsed.packages) ? parsed.packages.length : (Array.isArray(parsed.data?.packages) ? parsed.data.packages.length : 0);
+            const mCount = Array.isArray(parsed.memberships) ? parsed.memberships.length : (Array.isArray(parsed.data?.memberships) ? parsed.data.memberships.length : 0);
+            const cCount = Array.isArray(parsed.charges) ? parsed.charges.length : (Array.isArray(parsed.data?.charges) ? parsed.data.charges.length : 0);
+
+            setDetectedNativeBackup({
+              isNative: true,
+              rawJson: text,
+              summary: {
+                members: sCount,
+                payments: pCount,
+                packages: pkgCount,
+                memberships: mCount,
+                charges: cCount,
+                version: String(parsed.schemaVersion || parsed.gym_os_backup_version || 'V3'),
+                date: parsed.exportedAt || 'هم‌اکنون'
+              }
+            });
+          } else {
+            setDetectedNativeBackup(null);
+          }
+        } catch {
+          setDetectedNativeBackup(null);
+        }
         const result = JsonImporter.parse(text, file.name, jsonPath);
         onDataParsed(result, file);
       } else if (sourceType === 'sql') {
@@ -213,6 +259,20 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
     }
   };
 
+  // Direct restore for native Gym OS backup
+  const handleExecuteDirectRestore = async () => {
+    if (!detectedNativeBackup || !onDirectRestore) return;
+    setIsRestoringDirectly(true);
+    setErrorMessage(null);
+    try {
+      await onDirectRestore(detectedNativeBackup.rawJson);
+    } catch (err) {
+      setErrorMessage((err as Error).message || 'خطا در اجرای بازیابی مستقیم');
+    } finally {
+      setIsRestoringDirectly(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fadeIn" id="migration-file-uploader">
       {/* Source header summary */}
@@ -249,6 +309,67 @@ export const FileUploader: React.FC<FileUploaderProps> = ({
           تغییر منبع
         </button>
       </div>
+
+      {/* Native Gym OS Backup Direct Restore Prominent Banner */}
+      {detectedNativeBackup && onDirectRestore && (
+        <div className="p-5 rounded-2xl bg-emerald-950/40 border-2 border-emerald-500/80 shadow-2xl space-y-4 animate-fadeIn">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-inner shrink-0">
+                <Sparkles className="w-6 h-6" />
+              </span>
+              <div>
+                <h4 className="text-sm font-black text-white">پشتیبان رسمی و بومی Gym OS شناسایی شد</h4>
+                <p className="text-xs text-emerald-300/90 leading-relaxed mt-0.5">
+                  این فایل حاوی ساختار کامل داده‌های سامانه است. می‌توانید آن را به صورت مستقیم و بدون نیاز به ورود به ویزارد نگاشت فیلدها بازیابی کنید.
+                </p>
+              </div>
+            </div>
+            <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 self-start">
+              نسخه {detectedNativeBackup.summary.version}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
+            <div className="p-2 rounded-xl glass-subtle border border-emerald-500/30">
+              <span className="block text-emerald-400 font-bold font-mono text-sm">{detectedNativeBackup.summary.members}</span>
+              <span className="text-[10px] text-stone-300">اعضا</span>
+            </div>
+            <div className="p-2 rounded-xl glass-subtle border border-emerald-500/30">
+              <span className="block text-emerald-400 font-bold font-mono text-sm">{detectedNativeBackup.summary.memberships}</span>
+              <span className="text-[10px] text-stone-300">اشتراک‌ها</span>
+            </div>
+            <div className="p-2 rounded-xl glass-subtle border border-emerald-500/30">
+              <span className="block text-emerald-400 font-bold font-mono text-sm">{detectedNativeBackup.summary.packages}</span>
+              <span className="text-[10px] text-stone-300">بسته‌ها</span>
+            </div>
+            <div className="p-2 rounded-xl glass-subtle border border-emerald-500/30">
+              <span className="block text-emerald-400 font-bold font-mono text-sm">{detectedNativeBackup.summary.charges}</span>
+              <span className="text-[10px] text-stone-300">صورت‌حساب‌ها</span>
+            </div>
+            <div className="p-2 rounded-xl glass-subtle border border-emerald-500/30">
+              <span className="block text-emerald-400 font-bold font-mono text-sm">{detectedNativeBackup.summary.payments}</span>
+              <span className="text-[10px] text-stone-300">پرداخت‌ها</span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-emerald-500/30">
+            <span className="text-[11px] text-stone-400">
+              تاریخ پشتیبان: <span className="font-mono text-stone-300">{detectedNativeBackup.summary.date}</span>
+            </span>
+            <button
+              type="button"
+              id="btn-execute-direct-native-restore"
+              disabled={isRestoringDirectly}
+              onClick={handleExecuteDirectRestore}
+              className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-black text-xs transition-all shadow-lg hover:shadow-emerald-500/25 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {isRestoringDirectly ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
+              <span>بازیابی مستقیم دیتابیس (Direct Native Restore)</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Error alert */}
       {errorMessage && (

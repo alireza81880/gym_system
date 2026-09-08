@@ -21,6 +21,12 @@ contextBridge.exposeInMainWorld('gymDesktopApi', {
 
   restoreBackup: (backupPath) => ipcRenderer.invoke('desktop:restoreBackup', backupPath),
 
+  // Licensing & Hardware-bound Activation
+  getLicenseStatus: () => ipcRenderer.invoke('desktop:getLicenseStatus'),
+  activateLicense: (licenseKey) => ipcRenderer.invoke('desktop:activateLicense', licenseKey),
+  recoverLicense: (licenseKey, recoveryCode) => ipcRenderer.invoke('desktop:recoverLicense', licenseKey, recoveryCode),
+  getDeviceFingerprint: () => ipcRenderer.invoke('desktop:getDeviceFingerprint'),
+
   log: (level, message, meta) => ipcRenderer.send('desktop:log', { level, message, meta }),
 
   onBeforeQuit: (callback) => {
