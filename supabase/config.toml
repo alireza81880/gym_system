@@ -1,0 +1,11 @@
+# Supabase Edge Functions Configuration for Gym OS Licensing System
+# Licensing functions are called directly by client hardware before user auth
+
+[functions.activate-license]
+verify_jwt = false
+
+[functions.recover-license]
+verify_jwt = false
+
+[functions.create-license]
+verify_jwt = false

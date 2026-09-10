@@ -1,5 +1,7 @@
 // Supabase Edge Function: activate-license
-// Validates single-use license key, binds to hardware fingerprint, and returns an Ed25519 signed token.
+// Production Gym OS Licensing Engine
+// Validates single-use/multi-device license, binds to hardware fingerprint, and returns an Ed25519 signed token.
+// Strictly runs in Supabase cloud: accesses SUPABASE_SERVICE_ROLE_KEY and ED25519_PRIVATE_KEY secret.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
@@ -8,16 +10,39 @@ import * as crypto from "https://deno.land/std@0.168.0/node/crypto.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 interface ActivationRequest {
+  action?: "activate" | "verify";
   licenseKey: string;
   hardwareFingerprint: string;
   deviceName?: string;
+  expectedFingerprint?: string;
 }
 
 function hashString(str: string): string {
   return crypto.createHash("sha256").update(str.trim().toUpperCase()).digest("hex");
+}
+
+function canonicalizePayload(payload: any): string {
+  if (!payload || typeof payload !== "object") return "";
+  const sortedKeys = Object.keys(payload).sort();
+  const sortedObj: Record<string, any> = {};
+  for (const key of sortedKeys) {
+    sortedObj[key] = payload[key];
+  }
+  return JSON.stringify(sortedObj);
+}
+
+function formatPrivateKey(rawKey: string): string {
+  if (!rawKey) return "";
+  let key = rawKey.trim();
+  // Normalize escaped newlines from environment variable injection
+  if (key.includes("\\n")) {
+    key = key.replace(/\\n/g, "\n");
+  }
+  return key;
 }
 
 serve(async (req: Request) => {
@@ -26,177 +51,195 @@ serve(async (req: Request) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const ed25519PrivateKeyPem = Deno.env.get("ED25519_PRIVATE_KEY")!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const rawPrivateKey = Deno.env.get("ED25519_PRIVATE_KEY");
 
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          code: "SERVER_UNCONFIGURED",
+          error: "Supabase service role configuration is missing.",
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const ed25519PrivateKeyPem = formatPrivateKey(rawPrivateKey || "");
     if (!ed25519PrivateKeyPem) {
       return new Response(
-        JSON.stringify({ error: "Server signing configuration missing" }),
+        JSON.stringify({
+          success: false,
+          code: "SIGNING_CONFIG_MISSING",
+          error: "Server Ed25519 private signing key secret is not configured.",
+        }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const body: ActivationRequest = await req.json();
 
-    const { licenseKey, hardwareFingerprint, deviceName } = body;
-
-    if (!licenseKey || !hardwareFingerprint) {
+    let body: ActivationRequest;
+    try {
+      body = await req.json();
+    } catch {
       return new Response(
-        JSON.stringify({ error: "License key and hardware fingerprint are required" }),
+        JSON.stringify({
+          success: false,
+          code: "INVALID_REQUEST",
+          error: "Invalid JSON request payload.",
+        }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const licenseKeyHash = hashString(licenseKey);
-    const hwHash = hashString(hardwareFingerprint);
+    const { licenseKey, hardwareFingerprint, deviceName, action = "activate" } = body;
 
-    // 1. Fetch license
+    // 1. Validate required inputs
+    if (!licenseKey || typeof licenseKey !== "string" || !licenseKey.trim()) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          code: "INVALID_LICENSE",
+          error: "کد لایسنس الزامی است.",
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!hardwareFingerprint || typeof hardwareFingerprint !== "string" || !hardwareFingerprint.trim()) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          code: "DEVICE_MISMATCH",
+          error: "شناسه سخت‌افزاری معتبر برای ثبت سیستم یافت نشد.",
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const cleanKey = licenseKey.trim().toUpperCase();
+    const cleanHw = hardwareFingerprint.trim();
+    const licenseKeyHash = hashString(cleanKey);
+    const hwHash = hashString(cleanHw);
+
+    // 2. Fetch authoritative license record
     const { data: license, error: licErr } = await supabase
       .from("licenses")
       .select("*")
-      .eq("license_key_hash", licenseKeyHash)
+      .or(`license_key_hash.eq.${licenseKeyHash},license_key.eq.${cleanKey}`)
       .single();
 
     if (licErr || !license) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "کد لایسنس نامعتبر است یا در سامانه یافت نشد.",
           code: "INVALID_LICENSE",
+          error: "کد لایسنس نامعتبر است یا در سامانه یافت نشد.",
         }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    // 3. Status checks: REVOKED_LICENSE
     if (license.status === "REVOKED") {
       return new Response(
         JSON.stringify({
           success: false,
+          code: "REVOKED_LICENSE",
           error: "این لایسنس توسط پشتیبانی غیرفعال (Revoked) شده است.",
-          code: "REVOKED",
         }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    if (license.status === "EXPIRED" || (license.expires_at && new Date(license.expires_at) < new Date())) {
+    // 4. Status checks: EXPIRED_LICENSE
+    const isPastExpiry = Boolean(
+      license.expires_at && new Date(license.expires_at).getTime() <= Date.now()
+    );
+    if (license.status === "EXPIRED" || isPastExpiry) {
+      // Synchronize database status if not already marked expired
+      if (license.status !== "EXPIRED") {
+        await supabase
+          .from("licenses")
+          .update({ status: "EXPIRED" })
+          .eq("id", license.id);
+      }
+
       return new Response(
         JSON.stringify({
           success: false,
+          code: "EXPIRED_LICENSE",
           error: "تاریخ اعتبار این لایسنس به پایان رسیده است.",
-          code: "EXPIRED",
+          expiresAt: license.expires_at,
         }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // 2. Check if already ACTIVE
-    if (license.status === "ACTIVE") {
-      // Find existing activation
-      const { data: activation } = await supabase
-        .from("license_activations")
-        .select("*")
-        .eq("license_id", license.id)
-        .order("activated_at", { ascending: false })
-        .limit(1)
-        .single();
+    const maxDevices = Math.max(1, Number(license.max_devices) || 1);
+    const customerDisplayName = license.customer_name || license.gym_name || "Gym OS";
+    const licenseType = license.license_type || (license.expires_at ? "YEARLY" : "LIFETIME");
 
-      if (activation) {
-        if (activation.hardware_fingerprint_hash === hwHash) {
-          // Idempotent: Same PC re-activating / restoring
-          const payload = {
-            licenseId: license.display_key,
-            gymId: license.id,
-            gymName: license.gym_name || "Gym OS",
-            product: "GymOS-Desktop",
-            plan: license.plan,
-            deviceFingerprint: hardwareFingerprint,
-            activatedAt: activation.activated_at,
-            expiresAt: license.expires_at,
-            tokenVersion: 1,
-            activationType: activation.activation_type || "ONLINE",
-          };
+    // 5. Query active activations bound to this license
+    const { data: existingActivations, error: actListErr } = await supabase
+      .from("license_activations")
+      .select("*")
+      .eq("license_id", license.id)
+      .is("revoked_at", null)
+      .order("activated_at", { ascending: false });
 
-          const dataToSign = Buffer.from(JSON.stringify(payload));
-          const signature = crypto.sign(null, dataToSign, ed25519PrivateKeyPem).toString("base64");
-
-          return new Response(
-            JSON.stringify({
-              success: true,
-              status: "ACTIVE",
-              token: { payload, signature },
-              licenseInfo: {
-                licenseId: license.display_key,
-                gymName: license.gym_name,
-                plan: license.plan,
-                activatedAt: activation.activated_at,
-                expiresAt: license.expires_at,
-              },
-            }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        } else {
-          // Different PC attempting to use an already bound license
-          return new Response(
-            JSON.stringify({
-              success: false,
-              error: "این لایسنس قبلاً بر روی دستگاه دیگری فعال شده است و امکان استفاده مجدد ندارد.",
-              code: "DEVICE_MISMATCH",
-            }),
-            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-      }
+    if (actListErr) {
+      throw new Error("Failed to query license activations: " + actListErr.message);
     }
 
-    // 3. UNUSED: Activate and bind to this hardware
-    if (license.status === "UNUSED") {
-      const now = new Date().toISOString();
+    const activeList = existingActivations || [];
+    const matchedActivation = activeList.find(
+      (a: any) => a.hardware_fingerprint_hash === hwHash
+    );
 
-      // Create activation record
-      const { data: newActivation, error: actErr } = await supabase
-        .from("license_activations")
-        .insert({
-          license_id: license.id,
-          hardware_fingerprint_hash: hwHash,
-          device_name: deviceName || "Windows Workstation",
-          activation_type: "ONLINE",
-          activated_at: now,
-        })
-        .select()
-        .single();
+    // If verification-only requested
+    if (action === "verify" && !matchedActivation) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          code: "DEVICE_MISMATCH",
+          error: "این سیستم با دستگاه‌های ثبت‌شده لایسنس مطابقت ندارد.",
+        }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-      if (actErr || !newActivation) {
-        throw new Error("Failed to record activation: " + actErr?.message);
-      }
-
-      // Update license status to ACTIVE
+    // 6. Case A: Already active on this same hardware => Idempotent Success
+    if (matchedActivation) {
+      // Touch last_seen_at
       await supabase
-        .from("licenses")
-        .update({
-          status: "ACTIVE",
-          activated_at: now,
-          activation_id: newActivation.id,
-        })
-        .eq("id", license.id);
+        .from("license_activations")
+        .update({ last_seen_at: new Date().toISOString() })
+        .eq("id", matchedActivation.id);
 
       const payload = {
-        licenseId: license.display_key,
+        licenseId: license.license_key || license.display_key,
         gymId: license.id,
-        gymName: license.gym_name || "Gym OS",
+        gymName: customerDisplayName,
+        customerName: customerDisplayName,
         product: "GymOS-Desktop",
         plan: license.plan,
-        deviceFingerprint: hardwareFingerprint,
-        activatedAt: now,
+        licenseType: licenseType,
+        durationMonths: license.duration_months !== undefined ? license.duration_months : null,
+        maxDevices: maxDevices,
+        deviceFingerprint: cleanHw,
+        activatedAt: matchedActivation.activated_at,
         expiresAt: license.expires_at,
         tokenVersion: 1,
-        activationType: "ONLINE",
+        activationType: matchedActivation.activation_type || "ONLINE",
       };
 
-      const dataToSign = Buffer.from(JSON.stringify(payload));
-      const signature = crypto.sign(null, dataToSign, ed25519PrivateKeyPem).toString("base64");
+      const canonicalString = canonicalizePayload(payload);
+      const signature = crypto
+        .sign(null, Buffer.from(canonicalString, "utf8"), ed25519PrivateKeyPem)
+        .toString("base64");
 
       return new Response(
         JSON.stringify({
@@ -204,10 +247,14 @@ serve(async (req: Request) => {
           status: "ACTIVE",
           token: { payload, signature },
           licenseInfo: {
-            licenseId: license.display_key,
-            gymName: license.gym_name,
+            licenseId: license.license_key || license.display_key,
+            gymName: customerDisplayName,
+            customerName: customerDisplayName,
             plan: license.plan,
-            activatedAt: now,
+            licenseType: licenseType,
+            durationMonths: license.duration_months,
+            maxDevices: maxDevices,
+            activatedAt: matchedActivation.activated_at,
             expiresAt: license.expires_at,
           },
         }),
@@ -215,17 +262,99 @@ serve(async (req: Request) => {
       );
     }
 
+    // 7. Case B: New hardware attempted, check device limit
+    if (activeList.length >= maxDevices) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          code: "DEVICE_LIMIT_REACHED",
+          error: `سقف مجاز فعالسازی این لایسنس (${maxDevices} دستگاه) تکمیل شده است. برای انتقال به دستگاه جدید از کد بازیابی استفاده کنید.`,
+          maxDevices,
+          activeDevicesCount: activeList.length,
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 8. Case C: New hardware within allowed max_devices limit => Register and Activate
+    const now = new Date().toISOString();
+    const { data: newActivation, error: insertErr } = await supabase
+      .from("license_activations")
+      .insert({
+        license_id: license.id,
+        hardware_fingerprint_hash: hwHash,
+        device_name: deviceName || "Windows Workstation",
+        activation_type: "ONLINE",
+        activated_at: now,
+        last_seen_at: now,
+      })
+      .select()
+      .single();
+
+    if (insertErr || !newActivation) {
+      throw new Error("Failed to record device activation: " + insertErr?.message);
+    }
+
+    // Update license status to ACTIVE if UNUSED
+    if (license.status === "UNUSED") {
+      await supabase
+        .from("licenses")
+        .update({
+          status: "ACTIVE",
+          activated_at: now,
+        })
+        .eq("id", license.id);
+    }
+
+    // 9. Sign token with Ed25519
+    const payload = {
+      licenseId: license.license_key || license.display_key,
+      gymId: license.id,
+      gymName: customerDisplayName,
+      customerName: customerDisplayName,
+      product: "GymOS-Desktop",
+      plan: license.plan,
+      licenseType: licenseType,
+      durationMonths: license.duration_months !== undefined ? license.duration_months : null,
+      maxDevices: maxDevices,
+      deviceFingerprint: cleanHw,
+      activatedAt: now,
+      expiresAt: license.expires_at,
+      tokenVersion: 1,
+      activationType: "ONLINE",
+    };
+
+    const canonicalString = canonicalizePayload(payload);
+    const signature = crypto
+      .sign(null, Buffer.from(canonicalString, "utf8"), ed25519PrivateKeyPem)
+      .toString("base64");
+
     return new Response(
       JSON.stringify({
-        success: false,
-        error: "وضعیت لایسنس نامعتبر است: " + license.status,
-        code: "INVALID_STATUS",
+        success: true,
+        status: "ACTIVE",
+        token: { payload, signature },
+        licenseInfo: {
+          licenseId: license.license_key || license.display_key,
+          gymName: customerDisplayName,
+          customerName: customerDisplayName,
+          plan: license.plan,
+          licenseType: licenseType,
+          durationMonths: license.duration_months,
+          maxDevices: maxDevices,
+          activatedAt: now,
+          expiresAt: license.expires_at,
+        },
       }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: any) {
     return new Response(
-      JSON.stringify({ error: err.message || "Internal server error" }),
+      JSON.stringify({
+        success: false,
+        code: "INTERNAL_ERROR",
+        error: err.message || "Internal server error during activation",
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

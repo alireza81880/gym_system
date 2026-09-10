@@ -18,7 +18,7 @@ const os = require('os');
 const assert = require('assert');
 
 const licenseManager = require('../desktop/licenseManager.cjs');
-const licenseServerMock = require('../desktop/licenseServerMock.cjs');
+const licenseServerMock = require('./licenseServerMock.cjs');
 
 // Temporary isolated storage environment simulating clean Windows %APPDATA%\GymOS
 const testStorageDir = path.join(os.tmpdir(), `gym_os_gate_audit_${Date.now()}`);

@@ -9,6 +9,12 @@
   "files": [
     "dist/**/*",
     "desktop/**/*",
+    "!desktop/**/*.map",
+    "!**/*.pem",
+    "!**/*.key",
+    "!admin/**",
+    "!supabase/**",
+    "!scripts/**",
     "package.json"
   ],
   "extraMetadata": {

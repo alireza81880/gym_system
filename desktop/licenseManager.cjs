@@ -128,7 +128,10 @@ function getMaskedFingerprint(fp) {
  * Path to license storage file
  */
 function getLicenseFilePath(storagePaths) {
-  return path.join(storagePaths.configDir, 'license_activation.json');
+  const configDir = storagePaths && storagePaths.configDir
+    ? storagePaths.configDir
+    : path.join(os.homedir(), '.gymos_desktop', 'config');
+  return path.join(configDir, 'license_activation.json');
 }
 
 /**
@@ -173,6 +176,8 @@ function evaluateToken(token) {
   if (payload.deviceFingerprint !== currentDeviceFp) {
     return {
       status: 'DEVICE_MISMATCH',
+      error: 'DEVICE_MISMATCH',
+      code: 'DEVICE_MISMATCH',
       reason: 'HARDWARE_MISMATCH',
       message: 'این نسخه از نرم‌افزار برای این رایانه ثبت نشده است',
       payload,
@@ -186,6 +191,8 @@ function evaluateToken(token) {
     if (!isNaN(expiryTime) && Date.now() > expiryTime) {
       return {
         status: 'EXPIRED',
+        error: 'EXPIRED_LICENSE',
+        code: 'EXPIRED_LICENSE',
         reason: 'LICENSE_EXPIRED',
         message: 'مدت اعتبار لایسنس شما به پایان رسیده است',
         payload,
@@ -237,7 +244,11 @@ function getLicenseStatus(storagePaths) {
       licenseId: payload.licenseId || null,
       gymId: payload.gymId || null,
       gymName: payload.gymName || null,
+      customerName: payload.customerName || payload.gymName || null,
       plan: payload.plan || null,
+      licenseType: payload.licenseType || (payload.expiresAt ? 'YEARLY' : 'LIFETIME'),
+      durationMonths: payload.durationMonths !== undefined ? payload.durationMonths : null,
+      maxDevices: payload.maxDevices || 1,
       activatedAt: payload.activatedAt || null,
       expiresAt: payload.expiresAt || null,
       deviceBindingStatus: evaluation.deviceBindingStatus || 'UNBOUND',
@@ -266,6 +277,10 @@ function getLicenseStatus(storagePaths) {
  */
 function saveTokenAtomically(storagePaths, token) {
   const licenseFile = getLicenseFilePath(storagePaths);
+  const dir = path.dirname(licenseFile);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
   const tempFile = `${licenseFile}.tmp.${Date.now()}`;
   
   const content = JSON.stringify(token, null, 2);
@@ -288,24 +303,35 @@ async function activateLicense(licenseKey, storagePaths, customServer) {
 
   let server = customServer;
   if (!server) {
-    if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
-      server = require('./supabaseLicenseClient.cjs');
-    } else {
-      server = require('./licenseServerMock.cjs');
-    }
+    server = require('./supabaseLicenseClient.cjs');
   }
 
   const result = await server.processActivation(cleanKey, deviceFingerprint);
 
   if (!result.success) {
+    const error = result.error || 'ACTIVATION_REJECTED';
+    let status = 'UNACTIVATED';
+    if (error === 'DEVICE_LIMIT_REACHED') {
+      status = 'DEVICE_LIMIT_REACHED';
+    } else if (error === 'DEVICE_MISMATCH') {
+      status = 'DEVICE_MISMATCH';
+    } else if (error === 'EXPIRED_LICENSE' || error === 'EXPIRED') {
+      status = 'EXPIRED';
+    } else if (error === 'REVOKED_LICENSE' || error === 'REVOKED') {
+      status = 'REVOKED';
+    } else if (error === 'INVALID_LICENSE') {
+      status = 'UNACTIVATED';
+    }
+
     return {
       success: false,
-      status: result.error === 'DEVICE_MISMATCH' ? 'DEVICE_MISMATCH' :
-              result.error === 'EXPIRED' ? 'EXPIRED' :
-              result.error === 'REVOKED' ? 'REVOKED' : 'UNACTIVATED',
-      error: result.error,
+      status,
+      error,
+      code: error,
       message: result.message,
       boundDeviceMasked: result.boundDeviceMasked,
+      maxDevices: result.maxDevices,
+      activeDevicesCount: result.activeDevicesCount,
     };
   }
 
@@ -432,19 +458,29 @@ async function recoverLicense(licenseKey, recoveryCode, storagePaths, customServ
 
   let server = customServer;
   if (!server) {
-    if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
-      server = require('./supabaseLicenseClient.cjs');
-    } else {
-      server = require('./licenseServerMock.cjs');
-    }
+    server = require('./supabaseLicenseClient.cjs');
   }
 
   const result = await server.processRecovery(cleanKey, cleanCode, deviceFingerprint);
 
   if (!result.success) {
+    const error = result.error || 'RECOVERY_REJECTED';
+    let status = 'RECOVERY_REQUIRED';
+    if (error === 'DEVICE_MISMATCH') {
+      status = 'DEVICE_MISMATCH';
+    } else if (error === 'EXPIRED_LICENSE' || error === 'EXPIRED') {
+      status = 'EXPIRED';
+    } else if (error === 'REVOKED_LICENSE' || error === 'REVOKED') {
+      status = 'REVOKED';
+    } else if (error === 'INVALID_LICENSE') {
+      status = 'UNACTIVATED';
+    }
+
     return {
       success: false,
-      error: result.error,
+      status,
+      error,
+      code: error,
       message: result.message,
     };
   }

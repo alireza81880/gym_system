@@ -123,17 +123,27 @@ export const LicenseActivationScreen: React.FC<LicenseActivationScreenProps> = (
           onActivated(res.licenseInfo!);
         }, 1200);
       } else {
-        if (res.status === 'DEVICE_MISMATCH') {
-          setStatus('DEVICE_MISMATCH');
-          setStatusMessage('این لایسنس قبلاً روی دستگاه دیگری فعال شده');
+        if (res.status === 'DEVICE_LIMIT_REACHED' || res.error === 'DEVICE_LIMIT_REACHED') {
+          setStatus('DEVICE_LIMIT_REACHED');
+          setStatusMessage(res.message || 'سقف مجاز فعالسازی این لایسنس تکمیل شده است. از کد بازیابی برای انتقال به این دستگاه استفاده کنید.');
           setShowRecoveryInput(true);
+        } else if (res.status === 'DEVICE_MISMATCH' || res.error === 'DEVICE_MISMATCH') {
+          setStatus('DEVICE_MISMATCH');
+          setStatusMessage(res.message || 'شناسه سخت‌افزاری با سیستم فعال‌شده مطابقت ندارد');
+          setShowRecoveryInput(true);
+        } else if (res.status === 'EXPIRED' || res.error === 'EXPIRED_LICENSE') {
+          setStatus('EXPIRED');
+          setStatusMessage(res.message || 'تاریخ اعتبار این لایسنس به پایان رسیده است.');
+        } else if (res.status === 'REVOKED' || res.error === 'REVOKED_LICENSE') {
+          setStatus('REVOKED');
+          setStatusMessage(res.message || 'این لایسنس توسط پشتیبانی غیرفعال (Revoked) شده است.');
         } else if (res.status === 'RECOVERY_REQUIRED') {
           setStatus('RECOVERY_REQUIRED');
-          setStatusMessage('فعالسازی نیاز به بازیابی دارد');
+          setStatusMessage(res.message || 'فعالسازی نیاز به بازیابی دارد');
           setShowRecoveryInput(true);
         } else {
           setStatus('UNACTIVATED');
-          setStatusMessage(res.message || 'لایسنس نامعتبر است');
+          setStatusMessage(res.message || 'کد لایسنس نامعتبر است یا در سامانه یافت نشد.');
         }
       }
     } catch (err: unknown) {
@@ -230,11 +240,18 @@ export const LicenseActivationScreen: React.FC<LicenseActivationScreenProps> = (
             <span>فعال شد</span>
           </div>
         );
+      case 'DEVICE_LIMIT_REACHED':
+        return (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold">
+            <AlertCircle className="w-4 h-4" />
+            <span>سقف دستگاه‌های فعال لایسنس تکمیل شده</span>
+          </div>
+        );
       case 'DEVICE_MISMATCH':
         return (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold">
             <AlertCircle className="w-4 h-4" />
-            <span>این لایسنس قبلاً روی دستگاه دیگری فعال شده</span>
+            <span>این لایسنس روی دستگاه دیگری فعال شده</span>
           </div>
         );
       case 'RECOVERY_REQUIRED':

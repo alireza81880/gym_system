@@ -1,8 +1,10 @@
 /**
  * Gym OS - Supabase Remote Licensing Client
  * Invokes remote Supabase Edge Functions with standard HTTPS POST.
- * NEVER uses or requires the service-role key or private signing key.
- * Strictly uses SUPABASE_URL and SUPABASE_ANON_KEY.
+ * 
+ * SECURITY DIRECTIVE:
+ * NEVER uses, imports, or contains the service-role key or private signing key.
+ * Strictly communicates using public SUPABASE_URL and SUPABASE_ANON_KEY only.
  */
 
 const https = require('https');
@@ -26,7 +28,7 @@ function postJson(urlStr, headers, body) {
           'Content-Length': Buffer.byteLength(postData),
           ...headers,
         },
-        timeout: 10000,
+        timeout: 12000,
       };
 
       const req = client.request(options, (res) => {
@@ -65,17 +67,41 @@ function postJson(urlStr, headers, body) {
   });
 }
 
+function getFriendlyErrorMessage(errorCode, serverMessage) {
+  switch (errorCode) {
+    case 'INVALID_LICENSE':
+      return serverMessage || 'کد لایسنس نامعتبر است یا در سامانه یافت نشد.';
+    case 'EXPIRED_LICENSE':
+    case 'EXPIRED':
+      return serverMessage || 'تاریخ اعتبار این لایسنس به پایان رسیده است.';
+    case 'REVOKED_LICENSE':
+    case 'REVOKED':
+      return serverMessage || 'این لایسنس توسط پشتیبانی غیرفعال (Revoked) شده است.';
+    case 'DEVICE_LIMIT_REACHED':
+      return serverMessage || 'سقف مجاز تعداد دستگاه‌های فعال برای این لایسنس تکمیل شده است. برای انتقال به دستگاه جدید از کد بازیابی استفاده کنید.';
+    case 'DEVICE_MISMATCH':
+      return serverMessage || 'شناسه سخت‌افزاری با سیستم فعال‌شده مطابقت ندارد.';
+    case 'INVALID_RECOVERY_CODE':
+      return serverMessage || 'کد بازیابی سخت‌افزار نامعتبر است یا قبلاً استفاده شده است.';
+    default:
+      return serverMessage || 'عملیات اعتبارسنجی لایسنس توسط سرور پذیرفته نشد.';
+  }
+}
+
 /**
  * Executes remote online activation against Supabase Edge Function
  */
 async function processActivation(licenseKey, deviceFingerprint, options = {}) {
-  const supabaseUrl = options.supabaseUrl || process.env.SUPABASE_URL;
-  const anonKey = options.supabaseAnonKey || process.env.SUPABASE_ANON_KEY;
+  const rawUrl = options.supabaseUrl !== undefined ? options.supabaseUrl : process.env.SUPABASE_URL;
+  const rawKey = options.supabaseAnonKey !== undefined ? options.supabaseAnonKey : process.env.SUPABASE_ANON_KEY;
+  const supabaseUrl = typeof rawUrl === 'string' ? rawUrl.trim() : '';
+  const anonKey = typeof rawKey === 'string' ? rawKey.trim() : '';
 
   if (!supabaseUrl || !anonKey) {
     return {
       success: false,
       error: 'SERVER_UNCONFIGURED',
+      code: 'SERVER_UNCONFIGURED',
       message: 'آدرس سرور لایسنس Supabase تنظیم نشده است.',
     };
   }
@@ -97,20 +123,30 @@ async function processActivation(licenseKey, deviceFingerprint, options = {}) {
       return {
         success: true,
         token: response.data.token,
-        message: 'لایسنس با موفقیت فعال و به این سیستم متصل شد',
+        message: response.data.message || 'لایسنس با موفقیت فعال و به این سیستم متصل شد',
         licenseInfo: response.data.licenseInfo,
       };
     }
 
+    const errorCode = response.data.code || (
+      response.statusCode === 404 ? 'INVALID_LICENSE' :
+      response.statusCode === 409 ? 'DEVICE_LIMIT_REACHED' : 'ACTIVATION_REJECTED'
+    );
+
     return {
       success: false,
-      error: response.data.code || 'ACTIVATION_REJECTED',
-      message: response.data.error || 'فعالسازی لایسنس توسط سرور پذیرفته نشد',
+      error: errorCode,
+      code: errorCode,
+      message: getFriendlyErrorMessage(errorCode, response.data.error),
+      maxDevices: response.data.maxDevices,
+      activeDevicesCount: response.data.activeDevicesCount,
+      boundDeviceMasked: response.data.boundDeviceMasked,
     };
   } catch (err) {
     return {
       success: false,
       error: 'NETWORK_ERROR',
+      code: 'NETWORK_ERROR',
       message: 'برقراری ارتباط با سرور لایسنس امکان‌پذیر نیست. اتصال اینترنت خود را بررسی کنید یا از فعالسازی اضطراری آفلاین استفاده نمایید.',
     };
   }
@@ -120,13 +156,16 @@ async function processActivation(licenseKey, deviceFingerprint, options = {}) {
  * Executes remote authorized recovery against Supabase Edge Function
  */
 async function processRecovery(licenseKey, recoveryCode, newHardwareFingerprint, options = {}) {
-  const supabaseUrl = options.supabaseUrl || process.env.SUPABASE_URL;
-  const anonKey = options.supabaseAnonKey || process.env.SUPABASE_ANON_KEY;
+  const rawUrl = options.supabaseUrl !== undefined ? options.supabaseUrl : process.env.SUPABASE_URL;
+  const rawKey = options.supabaseAnonKey !== undefined ? options.supabaseAnonKey : process.env.SUPABASE_ANON_KEY;
+  const supabaseUrl = typeof rawUrl === 'string' ? rawUrl.trim() : '';
+  const anonKey = typeof rawKey === 'string' ? rawKey.trim() : '';
 
   if (!supabaseUrl || !anonKey) {
     return {
       success: false,
       error: 'SERVER_UNCONFIGURED',
+      code: 'SERVER_UNCONFIGURED',
       message: 'آدرس سرور لایسنس Supabase تنظیم نشده است.',
     };
   }
@@ -142,27 +181,36 @@ async function processRecovery(licenseKey, recoveryCode, newHardwareFingerprint,
       licenseKey,
       recoveryCode,
       newHardwareFingerprint,
+      oldHardwareFingerprint: options.oldHardwareFingerprint,
+      deviceName: options.deviceName || 'Migrated Workstation',
     });
 
     if (response.statusCode === 200 && response.data.success) {
       return {
         success: true,
         token: response.data.token,
-        message: 'لایسنس با موفقیت بازیابی و به این سیستم جدید متصل شد',
+        newRecoveryCode: response.data.newRecoveryCode,
+        message: response.data.message || 'لایسنس با موفقیت بازیابی و به این سیستم جدید متصل شد',
         licenseInfo: response.data.licenseInfo,
       };
     }
 
+    const errorCode = response.data.code || (
+      response.statusCode === 404 ? 'INVALID_LICENSE' : 'RECOVERY_REJECTED'
+    );
+
     return {
       success: false,
-      error: response.data.code || 'RECOVERY_REJECTED',
-      message: response.data.error || 'بازیابی لایسنس توسط سرور تأیید نشد',
+      error: errorCode,
+      code: errorCode,
+      message: getFriendlyErrorMessage(errorCode, response.data.error),
     };
   } catch (err) {
     return {
       success: false,
       error: 'NETWORK_ERROR',
-      message: 'خطا در ارتباط با سرور بازیابی. لطفاً اینترنت خود را بررسی نمایید.',
+      code: 'NETWORK_ERROR',
+      message: 'خطا در ارتباط با سرور بازیابی. لطفاً اتصال اینترنت خود را بررسی نمایید.',
     };
   }
 }
@@ -170,4 +218,5 @@ async function processRecovery(licenseKey, recoveryCode, newHardwareFingerprint,
 module.exports = {
   processActivation,
   processRecovery,
+  getFriendlyErrorMessage,
 };

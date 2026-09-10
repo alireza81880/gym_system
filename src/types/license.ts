@@ -8,9 +8,20 @@ export type LicenseStatus =
   | 'ACTIVATING'
   | 'ACTIVE'
   | 'DEVICE_MISMATCH'
+  | 'DEVICE_LIMIT_REACHED'
   | 'EXPIRED'
   | 'REVOKED'
   | 'RECOVERY_REQUIRED';
+
+export type LicenseErrorCode =
+  | 'INVALID_LICENSE'
+  | 'EXPIRED_LICENSE'
+  | 'REVOKED_LICENSE'
+  | 'DEVICE_LIMIT_REACHED'
+  | 'DEVICE_MISMATCH'
+  | 'INVALID_RECOVERY_CODE'
+  | 'NETWORK_ERROR'
+  | 'SERVER_UNCONFIGURED';
 
 export type DeviceBindingStatus =
   | 'BOUND_MATCHED'
@@ -18,12 +29,43 @@ export type DeviceBindingStatus =
   | 'UNBOUND'
   | 'TAMPERED';
 
+export type LicenseType = 'TRIAL' | 'YEARLY' | 'MULTI_YEAR' | 'LIFETIME' | 'CUSTOM';
+
+export interface LicenseRecord {
+  id?: string;
+  license_key: string;
+  customer_name: string;
+  plan: string;
+  duration_months: number | null;
+  license_type: LicenseType;
+  created_at: string;
+  expires_at: string | null;
+  max_devices: number;
+  recovery_code: string;
+  status: 'UNUSED' | 'ACTIVE' | 'REVOKED' | 'EXPIRED';
+  notes?: string;
+}
+
+export interface CreateLicenseInput {
+  customer_name: string;
+  plan?: string;
+  license_type?: LicenseType;
+  duration_months?: number | null;
+  max_devices?: number;
+  custom_license_key?: string;
+  notes?: string;
+}
+
 export interface LicenseInfo {
   status: LicenseStatus;
   licenseId: string | null;
   gymId: string | null;
   gymName: string | null;
+  customerName?: string | null;
   plan: string | null;
+  licenseType?: LicenseType | string | null;
+  durationMonths?: number | null;
+  maxDevices?: number;
   activatedAt: string | null;
   expiresAt: string | null;
   deviceBindingStatus: DeviceBindingStatus;
@@ -40,8 +82,11 @@ export interface LicenseActivationResult {
   message: string;
   licenseInfo?: LicenseInfo;
   error?: string;
+  code?: string;
   boundDeviceMasked?: string;
   newRecoveryCode?: string;
+  maxDevices?: number;
+  activeDevicesCount?: number;
 }
 
 export interface GymDesktopApi {

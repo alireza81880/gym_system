@@ -20,7 +20,7 @@ const os = require('os');
 const assert = require('assert');
 
 const licenseManager = require('../desktop/licenseManager.cjs');
-const licenseServerMock = require('../desktop/licenseServerMock.cjs');
+const licenseServerMock = require('./licenseServerMock.cjs');
 
 // Isolated test storage directory
 const TEST_DIR = path.join(os.tmpdir(), `gymos-license-test-${Date.now()}`);

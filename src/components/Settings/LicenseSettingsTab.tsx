@@ -16,11 +16,15 @@ import {
   CheckCircle2,
   AlertCircle,
   Lock,
+  Shield,
+  Laptop,
 } from 'lucide-react';
 import { licenseService } from '../../services/licenseService';
 import { LicenseInfo } from '../../types/license';
+import { AdminLicensePortal } from './AdminLicensePortal';
 
 export const LicenseSettingsTab: React.FC = () => {
+  const [viewMode, setViewMode] = useState<'client' | 'admin'>('client');
   const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showRebindModal, setShowRebindModal] = useState(false);
@@ -84,8 +88,41 @@ export const LicenseSettingsTab: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Top Banner */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 relative overflow-hidden">
+      {/* Top View Mode Switcher */}
+      <div className="flex items-center justify-between bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800">
+        <div className="flex items-center gap-1.5 w-full sm:w-auto">
+          <button
+            onClick={() => setViewMode('client')}
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              viewMode === 'client'
+                ? 'bg-slate-800 text-white shadow-sm border border-slate-700/60'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Laptop className="w-4 h-4 text-cyan-400" />
+            <span>وضعیت لایسنس این سیستم (کلاینت)</span>
+          </button>
+
+          <button
+            onClick={() => setViewMode('admin')}
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              viewMode === 'admin'
+                ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Key className="w-4 h-4" />
+            <span>مدیریت و صدور لایسنس (Admin Console)</span>
+          </button>
+        </div>
+      </div>
+
+      {viewMode === 'admin' ? (
+        <AdminLicensePortal />
+      ) : (
+        <>
+          {/* Top Banner */}
+          <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 relative overflow-hidden">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${
@@ -270,6 +307,8 @@ export const LicenseSettingsTab: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

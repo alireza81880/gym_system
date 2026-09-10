@@ -56,6 +56,27 @@ function generateLicenseKey(prefix = 'GYM') {
   return `${prefix}-${segment(4)}-${segment(4)}-${segment(4)}-${segment(4)}`;
 }
 
+function calculateExpiry(createdAt, durationMonths) {
+  if (durationMonths === null || durationMonths === undefined || durationMonths <= 0) {
+    return null;
+  }
+  const date = new Date(createdAt);
+  date.setMonth(date.getMonth() + Number(durationMonths));
+  return date.toISOString();
+}
+
+function generateRecoveryCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  function segment(len) {
+    let res = '';
+    for (let i = 0; i < len; i++) {
+      res += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return res;
+  }
+  return `REC-${segment(4)}-${segment(6)}`;
+}
+
 function runCli() {
   const args = process.argv.slice(2);
   const command = args[0];
@@ -64,9 +85,16 @@ function runCli() {
     console.log(`
 Gym OS License Admin CLI
 Usage:
-  node admin/gym-license-admin.cjs create-license [gym_name] [plan]
+  node admin/gym-license-admin.cjs create-license <customer_name> [duration: 1y|2y|3y|trial|lifetime|<months>] [plan] [max_devices]
   node admin/gym-license-admin.cjs generate-offline-package <license_key> <device_fingerprint> [gym_name]
   node admin/gym-license-admin.cjs print-public-key
+
+Examples:
+  node admin/gym-license-admin.cjs create-license "باشگاه اکسیژن" 1y Professional 1
+  node admin/gym-license-admin.cjs create-license "مجموعه ورزشی آزادی" 2y Enterprise 3
+  node admin/gym-license-admin.cjs create-license "باشگاه البرز" trial Starter 1
+  node admin/gym-license-admin.cjs create-license "آکادمی فیتنس" lifetime Enterprise 5
+  node admin/gym-license-admin.cjs create-license "باشگاه سپهر" 6 Professional 2
     `);
     process.exit(0);
   }
@@ -80,21 +108,99 @@ Usage:
   }
 
   if (command === 'create-license') {
-    const gymName = args[1] || 'باشگاه مرکزی';
-    const plan = args[2] || 'Enterprise';
+    const customerName = args[1] || 'باشگاه مرکزی';
+    const durationArg = (args[2] || '1y').toLowerCase();
+    const plan = args[3] || 'Professional';
+    const maxDevices = parseInt(args[4], 10) || 1;
+
+    let durationMonths = 12;
+    let licenseType = 'YEARLY';
+
+    if (durationArg === 'lifetime' || durationArg === '0') {
+      durationMonths = null;
+      licenseType = 'LIFETIME';
+    } else if (durationArg === 'trial') {
+      durationMonths = 1;
+      licenseType = 'TRIAL';
+    } else if (durationArg === '1y' || durationArg === '12' || durationArg === '1year') {
+      durationMonths = 12;
+      licenseType = 'YEARLY';
+    } else if (durationArg === '2y' || durationArg === '24' || durationArg === '2years') {
+      durationMonths = 24;
+      licenseType = 'MULTI_YEAR';
+    } else if (durationArg === '3y' || durationArg === '36' || durationArg === '3years') {
+      durationMonths = 36;
+      licenseType = 'MULTI_YEAR';
+    } else {
+      const parsed = parseInt(durationArg, 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        durationMonths = parsed;
+        licenseType = 'CUSTOM';
+      }
+    }
+
+    const now = new Date();
+    const createdAt = now.toISOString();
+    const expiresAt = calculateExpiry(now, durationMonths);
     const licenseKey = generateLicenseKey();
     const licenseKeyHash = hashString(licenseKey);
+    const recoveryCode = generateRecoveryCode();
+    const recoveryCodeHash = hashString(recoveryCode);
+    const status = 'UNUSED';
 
     console.log('======================================================');
-    console.log('NEW GYM OS LICENSE CREATED (SHOW ONLY ONCE)');
+    console.log('GYM OS AUTHORITATIVE LICENSE CREATED');
     console.log('======================================================');
-    console.log(`Raw License Key : ${licenseKey}`);
-    console.log(`Gym Name        : ${gymName}`);
-    console.log(`Plan            : ${plan}`);
-    console.log(`Key SHA-256 Hash: ${licenseKeyHash}`);
+    console.log(`Customer / Gym Name  : ${customerName}`);
+    console.log(`License Key          : ${licenseKey}`);
+    console.log(`Plan / Edition       : ${plan}`);
+    console.log(`License Type         : ${licenseType}`);
+    console.log(`Duration (Months)    : ${durationMonths !== null ? durationMonths + ' months' : 'Perpetual / Lifetime'}`);
+    console.log(`Created At           : ${createdAt}`);
+    console.log(`Expires At           : ${expiresAt || 'Never (Lifetime)'}`);
+    console.log(`Max Devices          : ${maxDevices}`);
+    console.log(`Recovery Code        : ${recoveryCode}`);
+    console.log(`Initial Status       : ${status}`);
     console.log('======================================================');
-    console.log('\nSQL Insert for Supabase (or insert via Dashboard):');
-    console.log(`INSERT INTO public.licenses (license_key_hash, display_key, status, gym_name, plan) VALUES ('${licenseKeyHash}', '${licenseKey}', 'UNUSED', '${gymName}', '${plan}');`);
+    console.log(`Key SHA-256 Hash     : ${licenseKeyHash}`);
+    console.log(`Recovery SHA-256 Hash: ${recoveryCodeHash}`);
+    console.log('======================================================');
+
+    console.log('\n--- SQL Insert for Supabase Database ---');
+    const sqlExpires = expiresAt ? `'${expiresAt}'` : 'NULL';
+    const sqlDur = durationMonths !== null ? durationMonths : 'NULL';
+    console.log(`INSERT INTO public.licenses (
+  license_key_hash,
+  license_key,
+  display_key,
+  customer_name,
+  gym_name,
+  plan,
+  duration_months,
+  license_type,
+  max_devices,
+  recovery_code,
+  recovery_code_hash,
+  status,
+  created_at,
+  expires_at
+) VALUES (
+  '${licenseKeyHash}',
+  '${licenseKey}',
+  '${licenseKey}',
+  '${customerName.replace(/'/g, "''")}',
+  '${customerName.replace(/'/g, "''")}',
+  '${plan}',
+  ${sqlDur},
+  '${licenseType}',
+  ${maxDevices},
+  '${recoveryCode}',
+  '${recoveryCodeHash}',
+  '${status}',
+  '${createdAt}',
+  ${sqlExpires}
+);`);
+    console.log('----------------------------------------\n');
     process.exit(0);
   }
 
