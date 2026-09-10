@@ -16,6 +16,11 @@ import {
   Lock,
   ArrowRight,
   Sparkles,
+  WifiOff,
+  Globe,
+  FileCode,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { licenseService } from '../../services/licenseService';
 import { LicenseInfo, LicenseStatus } from '../../types/license';
@@ -29,14 +34,18 @@ export const LicenseActivationScreen: React.FC<LicenseActivationScreenProps> = (
   onActivated,
   initialInfo,
 }) => {
+  const [activationMode, setActivationMode] = useState<'ONLINE' | 'OFFLINE'>('ONLINE');
   const [licenseKey, setLicenseKey] = useState('');
   const [recoveryCode, setRecoveryCode] = useState('');
+  const [offlinePackageText, setOfflinePackageText] = useState('');
   const [status, setStatus] = useState<LicenseStatus>(initialInfo?.status || 'UNACTIVATED');
   const [statusMessage, setStatusMessage] = useState<string>(initialInfo?.message || '');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showRecoveryInput, setShowRecoveryInput] = useState(false);
   const [currentInfo, setCurrentInfo] = useState<LicenseInfo | null>(initialInfo || null);
   const [deviceFingerprint, setDeviceFingerprint] = useState<string>('در حال محاسبه...');
+  const [rawFingerprint, setRawFingerprint] = useState<string>('');
+  const [copiedFp, setCopiedFp] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -50,9 +59,20 @@ export const LicenseActivationScreen: React.FC<LicenseActivationScreenProps> = (
       if (info.message) setStatusMessage(info.message);
       if (info.deviceFingerprintMasked) {
         setDeviceFingerprint(info.deviceFingerprintMasked);
+      }
+      
+      if (window.gymDesktopApi?.getRawDeviceFingerprint) {
+        const raw = await window.gymDesktopApi.getRawDeviceFingerprint();
+        if (isMounted) {
+          setRawFingerprint(raw);
+          if (!info.deviceFingerprintMasked) setDeviceFingerprint(raw);
+        }
       } else if (window.gymDesktopApi?.getDeviceFingerprint) {
         const fp = await window.gymDesktopApi.getDeviceFingerprint();
-        if (isMounted) setDeviceFingerprint(fp);
+        if (isMounted) {
+          setDeviceFingerprint(fp);
+          setRawFingerprint(fp);
+        }
       }
 
       if (info.status === 'DEVICE_MISMATCH' || info.status === 'RECOVERY_REQUIRED') {
@@ -69,6 +89,15 @@ export const LicenseActivationScreen: React.FC<LicenseActivationScreenProps> = (
       isMounted = false;
     };
   }, [onActivated]);
+
+  const copyFingerprint = () => {
+    const textToCopy = rawFingerprint || deviceFingerprint;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(textToCopy);
+      setCopiedFp(true);
+      setTimeout(() => setCopiedFp(false), 2000);
+    }
+  };
 
   const handleActivate = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -111,6 +140,41 @@ export const LicenseActivationScreen: React.FC<LicenseActivationScreenProps> = (
       setIsProcessing(false);
       setStatus('UNACTIVATED');
       const msg = err instanceof Error ? err.message : 'خطا در ارتباط با سامانه فعالسازی';
+      setStatusMessage(msg);
+    }
+  };
+
+  const handleOfflineActivate = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!offlinePackageText.trim()) {
+      setStatusMessage('لطفاً پکیج فعالسازی آفلاین (کد یا فایل JSON) را وارد نمایید');
+      return;
+    }
+
+    setIsProcessing(true);
+    setStatus('ACTIVATING');
+    setStatusMessage('در حال اعتبارسنجی رمزنگاری Ed25519 و تطبیق سخت‌افزاری...');
+
+    try {
+      const res = await licenseService.activateOfflinePackage(offlinePackageText.trim());
+      setIsProcessing(false);
+      setStatus(res.status);
+
+      if (res.success && res.licenseInfo) {
+        setStatus('ACTIVE');
+        setStatusMessage('فعالسازی آفلاین با موفقیت انجام شد');
+        setCurrentInfo(res.licenseInfo);
+        setTimeout(() => {
+          onActivated(res.licenseInfo!);
+        }, 1200);
+      } else {
+        setStatus('UNACTIVATED');
+        setStatusMessage(res.message || 'پکیج فعالسازی نامعتبر است');
+      }
+    } catch (err: unknown) {
+      setIsProcessing(false);
+      setStatus('UNACTIVATED');
+      const msg = err instanceof Error ? err.message : 'خطا در فعالسازی آفلاین';
       setStatusMessage(msg);
     }
   };
@@ -233,6 +297,36 @@ export const LicenseActivationScreen: React.FC<LicenseActivationScreenProps> = (
           {renderStatusBadge()}
         </div>
 
+        {/* Mode Selector Tabs (Online vs Offline Package) */}
+        {status !== 'ACTIVE' && (
+          <div className="flex items-center p-1 bg-slate-950/70 border border-slate-800 rounded-2xl mb-6">
+            <button
+              type="button"
+              onClick={() => setActivationMode('ONLINE')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activationMode === 'ONLINE'
+                  ? 'bg-slate-800 text-white shadow-sm border border-slate-700/60'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Globe className="w-4 h-4 text-emerald-400" />
+              <span>فعالسازی آنلاین (پیش‌فرض)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActivationMode('OFFLINE')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activationMode === 'OFFLINE'
+                  ? 'bg-slate-800 text-white shadow-sm border border-slate-700/60'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <WifiOff className="w-4 h-4 text-cyan-400" />
+              <span>پکیج اضطراری آفلاین</span>
+            </button>
+          </div>
+        )}
+
         {statusMessage && status !== 'ACTIVE' && (
           <div className={`mb-6 p-3.5 rounded-2xl text-xs sm:text-sm border flex items-start gap-2.5 ${
             status === 'DEVICE_MISMATCH' || status === 'RECOVERY_REQUIRED'
@@ -248,122 +342,208 @@ export const LicenseActivationScreen: React.FC<LicenseActivationScreenProps> = (
           </div>
         )}
 
-        {/* Form Controls */}
-        <form onSubmit={showRecoveryInput ? handleRecover : handleActivate} className="space-y-4">
-          
-          {/* License Key Input Field */}
-          <div>
-            <label className="block text-xs font-bold text-slate-300 mb-2">
-              کلید لایسنس (License Key)
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={licenseKey}
-                onChange={(e) => setLicenseKey(e.target.value.toUpperCase())}
-                placeholder="مثال: GYM-2026-001"
-                disabled={isProcessing || status === 'ACTIVE'}
-                className="w-full bg-slate-950/80 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-2xl px-4 py-3.5 text-sm text-white font-mono placeholder:text-slate-600 outline-none transition-all pl-11"
-                dir="ltr"
-              />
-              <Key className="w-5 h-5 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
-          </div>
-
-          {/* Recovery Code Input Field (Shown on Device Mismatch or toggle) */}
-          {showRecoveryInput && (
-            <div className="pt-2 animate-fadeIn">
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-bold text-amber-400">
-                  کد یکبارمصرف بازیابی لایسنس (Recovery Code)
-                </label>
-                <span className="text-[11px] text-slate-500">ارائه‌شده توسط پشتیبانی نرم‌افزار</span>
-              </div>
+        {activationMode === 'ONLINE' ? (
+          /* Online Activation Form */
+          <form onSubmit={showRecoveryInput ? handleRecover : handleActivate} className="space-y-4">
+            
+            {/* License Key Input Field */}
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-2">
+                کلید لایسنس (License Key)
+              </label>
               <div className="relative">
                 <input
                   type="text"
-                  value={recoveryCode}
-                  onChange={(e) => setRecoveryCode(e.target.value.toUpperCase())}
-                  placeholder="REC-XXXXXX-XXXXXX"
+                  value={licenseKey}
+                  onChange={(e) => setLicenseKey(e.target.value.toUpperCase())}
+                  placeholder="مثال: GYM-2026-001"
                   disabled={isProcessing || status === 'ACTIVE'}
-                  className="w-full bg-slate-950/80 border border-amber-500/40 focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20 rounded-2xl px-4 py-3.5 text-sm text-white font-mono placeholder:text-slate-600 outline-none transition-all pl-11"
+                  className="w-full bg-slate-950/80 border border-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-2xl px-4 py-3.5 text-sm text-white font-mono placeholder:text-slate-600 outline-none transition-all pl-11"
                   dir="ltr"
                 />
-                <Lock className="w-5 h-5 text-amber-500/60 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Key className="w-5 h-5 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               </div>
             </div>
-          )}
 
-          {/* Device Fingerprint Indicator */}
-          <div className="pt-1 flex items-center justify-between text-xs text-slate-400 bg-slate-950/40 px-3.5 py-2.5 rounded-xl border border-slate-800/80">
-            <span className="flex items-center gap-1.5">
-              <Cpu className="w-4 h-4 text-emerald-400" />
-              <span>شناسه سخت‌افزار این رایانه:</span>
-            </span>
-            <span className="font-mono text-slate-300 font-bold" dir="ltr">
-              {deviceFingerprint}
-            </span>
-          </div>
+            {/* Recovery Code Input Field (Shown on Device Mismatch or toggle) */}
+            {showRecoveryInput && (
+              <div className="pt-2 animate-fadeIn">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-bold text-amber-400">
+                    کد یکبارمصرف بازیابی لایسنس (Recovery Code)
+                  </label>
+                  <span className="text-[11px] text-slate-500">ارائه‌شده توسط پشتیبانی نرم‌افزار</span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={recoveryCode}
+                    onChange={(e) => setRecoveryCode(e.target.value.toUpperCase())}
+                    placeholder="REC-XXXXXX-XXXXXX"
+                    disabled={isProcessing || status === 'ACTIVE'}
+                    className="w-full bg-slate-950/80 border border-amber-500/40 focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20 rounded-2xl px-4 py-3.5 text-sm text-white font-mono placeholder:text-slate-600 outline-none transition-all pl-11"
+                    dir="ltr"
+                  />
+                  <Lock className="w-5 h-5 text-amber-500/60 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+              </div>
+            )}
 
-          {/* Submit Action Buttons */}
-          <div className="pt-3">
-            {status === 'ACTIVE' ? (
-              <button
-                type="button"
-                onClick={() => currentInfo && onActivated(currentInfo)}
-                className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-3.5 px-4 rounded-2xl transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <span>ورود به سامانه Gym OS</span>
-                <ArrowRight className="w-5 h-5 rotate-180" />
-              </button>
-            ) : showRecoveryInput ? (
-              <div className="space-y-2">
+            {/* Device Fingerprint Indicator */}
+            <div className="pt-1 flex items-center justify-between text-xs text-slate-400 bg-slate-950/40 px-3.5 py-2.5 rounded-xl border border-slate-800/80">
+              <span className="flex items-center gap-1.5">
+                <Cpu className="w-4 h-4 text-emerald-400" />
+                <span>شناسه سخت‌افزار این رایانه:</span>
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-slate-300 font-bold" dir="ltr">
+                  {deviceFingerprint}
+                </span>
+                <button
+                  type="button"
+                  onClick={copyFingerprint}
+                  title="کپی شناسه سخت‌افزار"
+                  className="text-slate-500 hover:text-emerald-400 p-1 rounded transition-colors"
+                >
+                  {copiedFp ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Submit Action Buttons */}
+            <div className="pt-3">
+              {status === 'ACTIVE' ? (
+                <button
+                  type="button"
+                  onClick={() => currentInfo && onActivated(currentInfo)}
+                  className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-3.5 px-4 rounded-2xl transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <span>ورود به سامانه Gym OS</span>
+                  <ArrowRight className="w-5 h-5 rotate-180" />
+                </button>
+              ) : showRecoveryInput ? (
+                <div className="space-y-2">
+                  <button
+                    type="submit"
+                    disabled={isProcessing || !licenseKey.trim() || !recoveryCode.trim()}
+                    className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold py-3.5 px-4 rounded-2xl transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <RefreshCw className="w-5 h-5 animate-spin" />
+                        <span>در حال بازیابی و اتصال...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck className="w-5 h-5" />
+                        <span>بازیابی و اتصال لایسنس به این رایانه</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowRecoveryInput(false)}
+                    className="w-full text-xs text-slate-400 hover:text-white py-2 text-center transition-colors cursor-pointer"
+                  >
+                    بازگشت به فعالسازی عادی
+                  </button>
+                </div>
+              ) : (
                 <button
                   type="submit"
-                  disabled={isProcessing || !licenseKey.trim() || !recoveryCode.trim()}
-                  className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold py-3.5 px-4 rounded-2xl transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer"
+                  disabled={isProcessing || !licenseKey.trim()}
+                  className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold py-3.5 px-4 rounded-2xl transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {isProcessing ? (
                     <>
                       <RefreshCw className="w-5 h-5 animate-spin" />
-                      <span>در حال بازیابی و اتصال...</span>
+                      <span>در حال بررسی...</span>
                     </>
                   ) : (
                     <>
-                      <ShieldCheck className="w-5 h-5" />
-                      <span>بازیابی و اتصال لایسنس به این رایانه</span>
+                      <Sparkles className="w-5 h-5" />
+                      <span>فعالسازی نرم‌افزار</span>
                     </>
                   )}
                 </button>
+              )}
+            </div>
+          </form>
+        ) : (
+          /* Offline Emergency Package Activation Form */
+          <form onSubmit={handleOfflineActivate} className="space-y-4">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-bold text-cyan-300">
+                  محتوای پکیج فعالسازی اضطراری آفلاین (JSON یا Base64)
+                </label>
+                <span className="text-[11px] text-slate-400">تولیدشده توسط ابزار مدیر Gym OS</span>
+              </div>
+              <textarea
+                value={offlinePackageText}
+                onChange={(e) => setOfflinePackageText(e.target.value)}
+                placeholder="پکیج متنی JSON امضا شده حاوی payload و signature را در این بخش الصاق کنید..."
+                rows={5}
+                disabled={isProcessing || status === 'ACTIVE'}
+                className="w-full bg-slate-950/80 border border-slate-700 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 rounded-2xl p-3.5 text-xs text-white font-mono placeholder:text-slate-600 outline-none transition-all leading-relaxed"
+                dir="ltr"
+              />
+            </div>
+
+            {/* Hardware Fingerprint Copy Assistant */}
+            <div className="p-3 bg-cyan-950/20 border border-cyan-800/40 rounded-xl text-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-300 flex items-center gap-1.5">
+                  <Cpu className="w-4 h-4 text-cyan-400" />
+                  <span>شناسه سخت‌افزار مورد نیاز برای مدیر:</span>
+                </span>
                 <button
                   type="button"
-                  onClick={() => setShowRecoveryInput(false)}
-                  className="w-full text-xs text-slate-400 hover:text-white py-2 text-center transition-colors cursor-pointer"
+                  onClick={copyFingerprint}
+                  className="flex items-center gap-1 text-cyan-400 hover:text-cyan-300 font-bold bg-cyan-950/60 px-2 py-1 rounded border border-cyan-800/60 transition-colors"
                 >
-                  بازگشت به فعالسازی عادی
+                  {copiedFp ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>کپی شد</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>کپی کامل</span>
+                    </>
+                  )}
                 </button>
               </div>
-            ) : (
+              <div className="font-mono text-[11px] text-slate-400 break-all bg-slate-950/60 p-2 rounded border border-slate-800" dir="ltr">
+                {rawFingerprint || deviceFingerprint}
+              </div>
+              <p className="text-[11px] text-slate-400 leading-normal">
+                این شناسه را به مدیر سیستم ارسال نمایید تا پکیج فعالسازی آفلاین اختصاصی همین رایانه را تولید کند.
+              </p>
+            </div>
+
+            <div className="pt-2">
               <button
                 type="submit"
-                disabled={isProcessing || !licenseKey.trim()}
-                className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold py-3.5 px-4 rounded-2xl transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer"
+                disabled={isProcessing || !offlinePackageText.trim()}
+                className="w-full bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold py-3.5 px-4 rounded-2xl transition-all shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 cursor-pointer"
               >
                 {isProcessing ? (
                   <>
                     <RefreshCw className="w-5 h-5 animate-spin" />
-                    <span>در حال بررسی...</span>
+                    <span>در حال بررسی رمزنگاری...</span>
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-5 h-5" />
-                    <span>فعالسازی نرم‌افزار</span>
+                    <ShieldCheck className="w-5 h-5" />
+                    <span>تأیید و اعمال پکیج آفلاین</span>
                   </>
                 )}
               </button>
-            )}
-          </div>
-        </form>
+            </div>
+          </form>
+        )}
 
         {/* Bottom Help / Toggle Recovery */}
         {!showRecoveryInput && status !== 'ACTIVE' && (

@@ -55,8 +55,10 @@ export interface GymDesktopApi {
   restoreBackup?: (backupPath: string) => Promise<{ success: boolean; message?: string }>;
   getLicenseStatus?: () => Promise<LicenseInfo>;
   activateLicense?: (licenseKey: string) => Promise<LicenseActivationResult>;
+  activateOfflinePackage?: (packageData: unknown) => Promise<LicenseActivationResult>;
   recoverLicense?: (licenseKey: string, recoveryCode: string) => Promise<LicenseActivationResult>;
   getDeviceFingerprint?: () => Promise<string>;
+  getRawDeviceFingerprint?: () => Promise<string>;
   log?: (level: string, message: string, meta?: unknown) => void;
   onBeforeQuit?: (callback: () => void) => void;
 }

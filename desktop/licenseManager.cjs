@@ -274,7 +274,9 @@ function saveTokenAtomically(storagePaths, token) {
 }
 
 /**
- * Activates license via server authority and stores signed token locally
+ * Activates license via server authority and stores signed token locally.
+ * If Supabase configuration is present in environment, connects to Supabase Edge Functions.
+ * Falls back to local/mock transport if customServer is passed or in testing mode.
  */
 async function activateLicense(licenseKey, storagePaths, customServer) {
   const cleanKey = (licenseKey || '').trim().toUpperCase();
@@ -284,8 +286,15 @@ async function activateLicense(licenseKey, storagePaths, customServer) {
 
   const deviceFingerprint = getDeviceFingerprint();
 
-  // In production or mock environment, obtain token from authority
-  const server = customServer || require('./licenseServerMock.cjs');
+  let server = customServer;
+  if (!server) {
+    if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
+      server = require('./supabaseLicenseClient.cjs');
+    } else {
+      server = require('./licenseServerMock.cjs');
+    }
+  }
+
   const result = await server.processActivation(cleanKey, deviceFingerprint);
 
   if (!result.success) {
@@ -323,6 +332,92 @@ async function activateLicense(licenseKey, storagePaths, customServer) {
 }
 
 /**
+ * Activates license using an Administrator-signed Offline Activation Package.
+ * Enables activation during total internet outages or air-gapped gym environments.
+ * Strictly verifies Ed25519 signature, expiration, and hardware fingerprint binding.
+ */
+function activateOfflinePackage(rawPackageData, storagePaths) {
+  if (!rawPackageData) {
+    return { success: false, error: 'EMPTY_PACKAGE', message: 'پکیج فعالسازی آفلاین خالی است' };
+  }
+
+  let pkgObj;
+  try {
+    let str = typeof rawPackageData === 'string' ? rawPackageData.trim() : JSON.stringify(rawPackageData);
+    if (!str.startsWith('{') && !str.startsWith('[')) {
+      // Decode Base64 package string
+      str = Buffer.from(str, 'base64').toString('utf8');
+    }
+    pkgObj = JSON.parse(str);
+  } catch (err) {
+    return {
+      success: false,
+      error: 'INVALID_ACTIVATION_PACKAGE',
+      message: 'فرمت پکیج فعالسازی آفلاین نامعتبر است',
+    };
+  }
+
+  // Validate package structure
+  if (!pkgObj || typeof pkgObj !== 'object' || !pkgObj.payload || !pkgObj.signature) {
+    return {
+      success: false,
+      error: 'INVALID_ACTIVATION_PACKAGE',
+      message: 'ساختار پکیج فعالسازی ناقص است',
+    };
+  }
+
+  const token = {
+    payload: pkgObj.payload,
+    signature: pkgObj.signature,
+  };
+
+  // 1. Verify Ed25519 signature against embedded client public key
+  if (!verifyTokenSignature(token)) {
+    return {
+      success: false,
+      error: 'INVALID_ACTIVATION_PACKAGE',
+      message: 'امضای دیجیتال پکیج آفلاین نامعتبر است',
+    };
+  }
+
+  const payload = token.payload;
+  const currentFp = getDeviceFingerprint();
+
+  // 2. Hardware Binding: Package MUST match this machine
+  if (payload.deviceFingerprint !== currentFp) {
+    return {
+      success: false,
+      error: 'DEVICE_MISMATCH',
+      message: 'این پکیج فعالسازی برای شناسه سخت‌افزاری دستگاه دیگری صادر شده است',
+      boundDeviceMasked: getMaskedFingerprint(payload.deviceFingerprint),
+    };
+  }
+
+  // 3. Expiration Check
+  if (payload.expiresAt) {
+    const expiryTime = Date.parse(payload.expiresAt);
+    if (!isNaN(expiryTime) && Date.now() > expiryTime) {
+      return {
+        success: false,
+        error: 'EXPIRED',
+        message: 'تاریخ اعتبار پکیج فعالسازی آفلاین منقضی شده است',
+      };
+    }
+  }
+
+  // 4. Save token atomically to local disk
+  saveTokenAtomically(storagePaths, token);
+
+  const finalStatus = getLicenseStatus(storagePaths);
+  return {
+    success: true,
+    status: finalStatus.status,
+    message: 'فعالسازی اضطراری آفلاین با موفقیت انجام شد و لایسنس به این سیستم متصل گردید',
+    licenseInfo: finalStatus,
+  };
+}
+
+/**
  * Performs authorized recovery and rebinds license to this machine
  */
 async function recoverLicense(licenseKey, recoveryCode, storagePaths, customServer) {
@@ -334,7 +429,16 @@ async function recoverLicense(licenseKey, recoveryCode, storagePaths, customServ
   }
 
   const deviceFingerprint = getDeviceFingerprint();
-  const server = customServer || require('./licenseServerMock.cjs');
+
+  let server = customServer;
+  if (!server) {
+    if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
+      server = require('./supabaseLicenseClient.cjs');
+    } else {
+      server = require('./licenseServerMock.cjs');
+    }
+  }
+
   const result = await server.processRecovery(cleanKey, cleanCode, deviceFingerprint);
 
   if (!result.success) {
@@ -389,7 +493,9 @@ module.exports = {
   verifyTokenSignature,
   evaluateToken,
   activateLicense,
+  activateOfflinePackage,
   recoverLicense,
   clearActivation,
   saveTokenAtomically,
 };
+

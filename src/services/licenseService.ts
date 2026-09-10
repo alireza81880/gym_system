@@ -176,6 +176,84 @@ class LicenseService {
   }
 
   /**
+   * Activates Gym OS using an emergency offline package
+   */
+  public async activateOfflinePackage(packageData: unknown): Promise<LicenseActivationResult> {
+    if (this.isDesktop() && window.gymDesktopApi?.activateOfflinePackage) {
+      try {
+        const result = await window.gymDesktopApi.activateOfflinePackage(packageData);
+
+        AuditService.logEvent({
+          action: result.success ? 'LICENSE_ACTIVATION_SUCCESS' : 'LICENSE_ACTIVATION_FAILED',
+          category: 'security',
+          entityType: 'setting',
+          entityId: 'OFFLINE_PACKAGE',
+          description: result.success
+            ? 'فعالسازی موفقیت‌آمیز با پکیج اضطراری آفلاین'
+            : `تلاش ناموفق برای فعالسازی با پکیج آفلاین: ${result.message}`,
+          result: result.success ? 'success' : 'failure',
+          metadata: {
+            activationType: 'OFFLINE_EMERGENCY',
+            status: result.status,
+            error: result.error,
+          },
+        });
+
+        return result;
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'خطای سیستمی در فعالسازی آفلاین';
+        return {
+          success: false,
+          status: 'UNACTIVATED',
+          error: 'SYSTEM_ERROR',
+          message,
+        };
+      }
+    }
+
+    // Web simulation fallback for testing offline activation packages
+    try {
+      const activatedInfo: LicenseInfo = {
+        status: 'ACTIVE',
+        licenseId: 'GYM-OFFLINE-EMERGENCY',
+        gymId: 'gym-offline-web',
+        gymName: 'باشگاه مرکزی (فعالسازی اضطراری)',
+        plan: 'Enterprise',
+        activatedAt: new Date().toISOString(),
+        expiresAt: null,
+        deviceBindingStatus: 'BOUND_MATCHED',
+        tokenVersion: 1,
+        deviceFingerprintMasked: 'FP-OFFLINE-SIM',
+        isOfflineValid: true,
+      };
+      localStorage.setItem(WEB_STORAGE_KEY, JSON.stringify(activatedInfo));
+
+      AuditService.logEvent({
+        action: 'LICENSE_ACTIVATION_SUCCESS',
+        category: 'security',
+        entityType: 'setting',
+        entityId: 'OFFLINE_PACKAGE',
+        description: 'فعالسازی آفلاین موفقیت‌آمیز (حالت شبیه‌سازی وب)',
+        result: 'success',
+      });
+
+      return {
+        success: true,
+        status: 'ACTIVE',
+        message: 'فعالسازی اضطراری آفلاین با موفقیت انجام شد',
+        licenseInfo: activatedInfo,
+      };
+    } catch {
+      return {
+        success: false,
+        status: 'UNACTIVATED',
+        error: 'INVALID_PACKAGE',
+        message: 'پکیج فعالسازی آفلاین نامعتبر است',
+      };
+    }
+  }
+
+  /**
    * Recovers a license previously bound to another device using a one-time recovery code
    */
   public async recoverLicense(licenseKey: string, recoveryCode: string): Promise<LicenseActivationResult> {

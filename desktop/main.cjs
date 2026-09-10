@@ -311,6 +311,17 @@ function setupIpcHandlers() {
     return result;
   });
 
+  ipcMain.handle('desktop:activateOfflinePackage', async (event, packageData) => {
+    logToFile('info', 'Attempting emergency offline package activation');
+    const result = licenseManager.activateOfflinePackage(packageData, paths);
+    logToFile(result.success ? 'info' : 'warn', 'Offline package activation finished', {
+      success: result.success,
+      status: result.status,
+      error: result.error,
+    });
+    return result;
+  });
+
   ipcMain.handle('desktop:recoverLicense', async (event, licenseKey, recoveryCode) => {
     logToFile('info', 'Attempting authorized license recovery', {
       licenseKey: licenseKey ? `${licenseKey.slice(0, 4)}***` : null,
@@ -327,6 +338,10 @@ function setupIpcHandlers() {
 
   ipcMain.handle('desktop:getDeviceFingerprint', async () => {
     return licenseManager.getMaskedFingerprint();
+  });
+
+  ipcMain.handle('desktop:getRawDeviceFingerprint', async () => {
+    return licenseManager.getDeviceFingerprint();
   });
 }
 
