@@ -98,6 +98,10 @@ export const AdminLicensePortal: React.FC = () => {
   };
 
   useEffect(() => {
+    loadLicenses();
+  }, []);
+
+  useEffect(() => {
     if (subTab === 'list') {
       loadLicenses();
     }
@@ -220,6 +224,23 @@ export const AdminLicensePortal: React.FC = () => {
 
   return (
     <div className="space-y-6" dir="rtl">
+      {/* Admin Console Header */}
+      <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 relative overflow-hidden">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center border bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shrink-0">
+            <Key className="w-6 h-6 stroke-[2.5]" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-white">
+              کنسول مدیریت لایسنس
+            </h3>
+            <p className="text-xs text-slate-400 mt-1">
+              صدور، بررسی، مدیریت و ابطال لایسنس‌های Gym OS
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Subtab navigation */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-4">
         <div className="flex items-center gap-3">

@@ -260,29 +260,31 @@ export const LicenseSettingsTab: React.FC<LicenseSettingsTabProps> = ({ onLicens
     <div className="space-y-6" dir="rtl">
       {/* Top View Mode Switcher */}
       <div className="flex items-center justify-between bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800">
-        <div className="flex items-center gap-1.5 w-full sm:w-auto">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <button
+            type="button"
             onClick={() => setViewMode('client')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               viewMode === 'client'
-                ? 'bg-slate-800 text-white shadow-sm border border-slate-700/60'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-slate-800 text-white shadow-sm border border-slate-700/80'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
             }`}
           >
             <Laptop className="w-4 h-4 text-cyan-400" />
-            <span>مدیریت لایسنس این سیستم (کلاینت)</span>
+            <span>مدیریت لایسنس این سیستم</span>
           </button>
 
           <button
+            type="button"
             onClick={() => setViewMode('admin')}
-            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               viewMode === 'admin'
-                ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20 font-extrabold'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
             }`}
           >
             <Key className="w-4 h-4" />
-            <span>مدیریت و صدور لایسنس (Admin Console)</span>
+            <span>مدیریت و صدور لایسنس</span>
           </button>
         </div>
       </div>
