@@ -37,8 +37,13 @@ import { InstallationWizard } from '../Setup/InstallationWizard';
 import { MigrationCenter } from '../Migration/MigrationCenter';
 import { LocalDatabase } from '../../services/database/localDatabase';
 import { StoragePathService } from '../../services/database/storagePathService';
+import { LicenseInfo } from '../../types/license';
 
-export const SettingsView: React.FC = () => {
+interface SettingsViewProps {
+  onLicenseChanged?: (info: LicenseInfo | null) => void;
+}
+
+export const SettingsView: React.FC<SettingsViewProps> = ({ onLicenseChanged }) => {
   const { 
     resetToEmptyProduction,
     exportAllDataAsJson, 
@@ -1273,7 +1278,7 @@ export const SettingsView: React.FC = () => {
       {/* ---------------------------------------------------- */}
       {activeTab === 'license' && (
         <div className="space-y-6">
-          <LicenseSettingsTab />
+          <LicenseSettingsTab onLicenseChanged={onLicenseChanged} />
         </div>
       )}
 

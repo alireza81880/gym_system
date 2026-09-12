@@ -255,7 +255,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ licenseInfo, onLicenseChanged }
 
             {activeTab === 'diagnostics' && <DiagnosticsView />}
 
-            {activeTab === 'settings' && <SettingsView />}
+            {activeTab === 'settings' && <SettingsView onLicenseChanged={onLicenseChanged} />}
           </main>
 
           {/* Compact In-Content Footer */}

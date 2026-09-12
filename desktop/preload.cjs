@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('gymDesktopApi', {
   // Licensing & Hardware-bound Activation
   getLicenseStatus: () => ipcRenderer.invoke('desktop:getLicenseStatus'),
   activateLicense: (licenseKey) => ipcRenderer.invoke('desktop:activateLicense', licenseKey),
+  deactivateLicense: () => ipcRenderer.invoke('desktop:deactivateLicense'),
   activateOfflinePackage: (packageData) => ipcRenderer.invoke('desktop:activateOfflinePackage', packageData),
   recoverLicense: (licenseKey, recoveryCode) => ipcRenderer.invoke('desktop:recoverLicense', licenseKey, recoveryCode),
   getDeviceFingerprint: () => ipcRenderer.invoke('desktop:getDeviceFingerprint'),

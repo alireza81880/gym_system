@@ -43,6 +43,7 @@ export interface LicenseRecord {
   max_devices: number;
   recovery_code: string;
   status: 'UNUSED' | 'ACTIVE' | 'REVOKED' | 'EXPIRED';
+  active_devices_count?: number;
   notes?: string;
 }
 
@@ -100,6 +101,7 @@ export interface GymDesktopApi {
   restoreBackup?: (backupPath: string) => Promise<{ success: boolean; message?: string }>;
   getLicenseStatus?: () => Promise<LicenseInfo>;
   activateLicense?: (licenseKey: string) => Promise<LicenseActivationResult>;
+  deactivateLicense?: () => Promise<{ success: boolean; message?: string }>;
   activateOfflinePackage?: (packageData: unknown) => Promise<LicenseActivationResult>;
   recoverLicense?: (licenseKey: string, recoveryCode: string) => Promise<LicenseActivationResult>;
   getDeviceFingerprint?: () => Promise<string>;

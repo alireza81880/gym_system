@@ -114,7 +114,11 @@ serve(async (req: Request) => {
           created_at,
           activated_at,
           expires_at,
-          notes
+          notes,
+          license_activations (
+            id,
+            revoked_at
+          )
         `)
         .order("created_at", { ascending: false })
         .limit(100);
@@ -123,22 +127,28 @@ serve(async (req: Request) => {
         throw new Error("Failed to list licenses: " + listErr.message);
       }
 
-      // Format clean list
-      const formatted = (licenses || []).map((lic: any) => ({
-        id: lic.id,
-        license_key: lic.license_key || lic.display_key,
-        customer_name: lic.customer_name || lic.gym_name || "نامشخص",
-        plan: lic.plan || "Professional",
-        license_type: lic.license_type || (lic.expires_at ? "YEARLY" : "LIFETIME"),
-        duration_months: lic.duration_months !== undefined ? lic.duration_months : null,
-        max_devices: lic.max_devices || 1,
-        recovery_code: lic.recovery_code || "---",
-        status: lic.status,
-        created_at: lic.created_at,
-        activated_at: lic.activated_at,
-        expires_at: lic.expires_at,
-        notes: lic.notes,
-      }));
+      // Format clean list with active device counts
+      const formatted = (licenses || []).map((lic: any) => {
+        const activations = Array.isArray(lic.license_activations) ? lic.license_activations : [];
+        const activeDevicesCount = activations.filter((a: any) => !a.revoked_at).length;
+
+        return {
+          id: lic.id,
+          license_key: lic.license_key || lic.display_key,
+          customer_name: lic.customer_name || lic.gym_name || "نامشخص",
+          plan: lic.plan || "Professional",
+          license_type: lic.license_type || (lic.expires_at ? "YEARLY" : "LIFETIME"),
+          duration_months: lic.duration_months !== undefined ? lic.duration_months : null,
+          max_devices: lic.max_devices || 1,
+          active_devices_count: activeDevicesCount,
+          recovery_code: lic.recovery_code || "---",
+          status: lic.status,
+          created_at: lic.created_at,
+          activated_at: lic.activated_at,
+          expires_at: lic.expires_at,
+          notes: lic.notes,
+        };
+      });
 
       return new Response(
         JSON.stringify({ success: true, licenses: formatted }),
@@ -146,7 +156,7 @@ serve(async (req: Request) => {
       );
     }
 
-    // 2. REVOKE LICENSE
+    // 2. REVOKE LICENSE (Soft-status update only; never physically deletes row or history)
     if (action === "revoke") {
       const targetKey = (body.license_key || "").trim().toUpperCase();
       if (!targetKey) {
@@ -160,7 +170,7 @@ serve(async (req: Request) => {
       const { error: revErr } = await supabase
         .from("licenses")
         .update({ status: "REVOKED" })
-        .eq("license_key_hash", keyHash);
+        .or(`license_key_hash.eq.${keyHash},license_key.eq.${targetKey}`);
 
       if (revErr) {
         throw new Error("Failed to revoke license: " + revErr.message);
@@ -168,6 +178,45 @@ serve(async (req: Request) => {
 
       return new Response(
         JSON.stringify({ success: true, message: `لایسنس ${targetKey} با موفقیت غیرفعال (Revoked) شد.` }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 2B. RESTORE / UNREVOKE LICENSE (Admin capability to reverse accidental revocation)
+    if (action === "unrevoke" || action === "restore") {
+      const targetKey = (body.license_key || "").trim().toUpperCase();
+      if (!targetKey) {
+        return new Response(
+          JSON.stringify({ error: "license_key is required to restore" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const keyHash = hashString(targetKey);
+      // Determine restored status based on whether it was ever activated
+      const { data: licRecord } = await supabase
+        .from("licenses")
+        .select("activated_at")
+        .or(`license_key_hash.eq.${keyHash},license_key.eq.${targetKey}`)
+        .single();
+
+      const restoredStatus = licRecord?.activated_at ? "ACTIVE" : "UNUSED";
+
+      const { error: restErr } = await supabase
+        .from("licenses")
+        .update({ status: restoredStatus })
+        .or(`license_key_hash.eq.${keyHash},license_key.eq.${targetKey}`);
+
+      if (restErr) {
+        throw new Error("Failed to restore license: " + restErr.message);
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          status: restoredStatus,
+          message: `لایسنس ${targetKey} با موفقیت به وضعیت ${restoredStatus === "ACTIVE" ? "فعال" : "استفاده‌نشده"} بازگردانی شد.`,
+        }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

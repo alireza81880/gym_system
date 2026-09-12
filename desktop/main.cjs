@@ -311,6 +311,27 @@ function setupIpcHandlers() {
     return result;
   });
 
+  ipcMain.handle('desktop:deactivateLicense', async () => {
+    logToFile('info', 'Local license deactivation requested from desktop client');
+    try {
+      // Strictly removes local token file only; preserves SQLite db, members, backups, etc.
+      const success = licenseManager.clearActivation(paths);
+      logToFile('info', 'Local license deactivation finished', { success });
+      return {
+        success,
+        message: success
+          ? 'لایسنس این رایانه به صورت محلی با موفقیت حذف شد.'
+          : 'خطا در حذف فایل فعالسازی محلی.',
+      };
+    } catch (err) {
+      logToFile('error', 'Exception during local license deactivation', { error: err.message });
+      return {
+        success: false,
+        message: err.message || 'خطای غیرمنتظره در حذف لایسنس محلی',
+      };
+    }
+  });
+
   ipcMain.handle('desktop:activateOfflinePackage', async (event, packageData) => {
     logToFile('info', 'Attempting emergency offline package activation');
     const result = licenseManager.activateOfflinePackage(packageData, paths);

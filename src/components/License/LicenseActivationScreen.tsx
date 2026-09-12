@@ -230,28 +230,28 @@ export const LicenseActivationScreen: React.FC<LicenseActivationScreenProps> = (
         return (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold">
             <RefreshCw className="w-4 h-4 animate-spin" />
-            <span>در حال بررسی</span>
+            <span>در حال بررسی لایسنس...</span>
           </div>
         );
       case 'ACTIVE':
         return (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
             <CheckCircle2 className="w-4 h-4" />
-            <span>فعال شد</span>
+            <span>لایسنس فعال است</span>
           </div>
         );
       case 'DEVICE_LIMIT_REACHED':
         return (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold">
             <AlertCircle className="w-4 h-4" />
-            <span>سقف دستگاه‌های فعال لایسنس تکمیل شده</span>
+            <span>سقف مجاز دستگاه‌ها تکمیل شده است</span>
           </div>
         );
       case 'DEVICE_MISMATCH':
         return (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-semibold">
             <AlertCircle className="w-4 h-4" />
-            <span>این لایسنس روی دستگاه دیگری فعال شده</span>
+            <span>عدم تطابق شناسه سخت‌افزار (نیاز به بازیابی)</span>
           </div>
         );
       case 'RECOVERY_REQUIRED':
@@ -265,14 +265,14 @@ export const LicenseActivationScreen: React.FC<LicenseActivationScreenProps> = (
         return (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold">
             <AlertCircle className="w-4 h-4" />
-            <span>لایسنس منقضی شده است</span>
+            <span>لایسنس منقضی شده</span>
           </div>
         );
       case 'REVOKED':
         return (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold">
             <Lock className="w-4 h-4" />
-            <span>لایسنس ابطال شده است</span>
+            <span>این لایسنس توسط مدیریت لغو شده</span>
           </div>
         );
       case 'UNACTIVATED':
@@ -280,7 +280,7 @@ export const LicenseActivationScreen: React.FC<LicenseActivationScreenProps> = (
         return (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-800/60 border border-slate-700 text-slate-400 text-xs font-semibold">
             <Key className="w-4 h-4" />
-            <span>{statusMessage ? 'لایسنس نامعتبر است' : 'آماده فعالسازی'}</span>
+            <span>{statusMessage ? statusMessage : 'لایسنس غیرفعال است'}</span>
           </div>
         );
     }

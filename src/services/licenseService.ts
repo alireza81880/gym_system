@@ -626,6 +626,46 @@ class LicenseService {
   }
 
   /**
+   * Deactivates the local computer by removing ONLY the local activation token file.
+   * Invariant: Does NOT delete SQLite database, member data, packages, payments, or backups.
+   * Invariant: Does NOT revoke the server license key.
+   */
+  public async deactivateLicense(): Promise<{ success: boolean; message?: string }> {
+    if (this.isDesktop() && window.gymDesktopApi?.deactivateLicense) {
+      try {
+        const result = await window.gymDesktopApi.deactivateLicense();
+        AuditService.logEvent({
+          action: 'LICENSE_DEACTIVATION_LOCAL',
+          category: 'security',
+          entityType: 'setting',
+          description: result.success
+            ? 'حذف موفقیت‌آمیز فعالسازی محلی از این سیستم (پایگاه‌داده و اعضا کاملاً حفظ شدند)'
+            : `خطا در حذف فعالسازی محلی: ${result.message}`,
+          result: result.success ? 'success' : 'failure',
+        });
+        return result;
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'خطای ارتباط با هسته کلاینت دسکتاپ';
+        return { success: false, message: msg };
+      }
+    }
+
+    // Web simulation fallback
+    this.resetWebLicense();
+    AuditService.logEvent({
+      action: 'LICENSE_DEACTIVATION_LOCAL',
+      category: 'security',
+      entityType: 'setting',
+      description: 'حذف توکن لایسنس محلی در محیط وب',
+      result: 'success',
+    });
+    return {
+      success: true,
+      message: 'لایسنس محلی این رایانه با موفقیت حذف شد.',
+    };
+  }
+
+  /**
    * Revokes a license
    */
   public async revokeLicense(
@@ -651,6 +691,14 @@ class LicenseService {
         const data = await res.json();
         if (data.success) {
           await this.updateLocalLicenseStatus(cleanKey, 'REVOKED');
+          AuditService.logEvent({
+            action: 'LICENSE_REVOKED',
+            category: 'security',
+            entityType: 'setting',
+            entityId: cleanKey,
+            description: `ابطال سروری لایسنس ${cleanKey}`,
+            result: 'success',
+          });
           return { success: true, message: data.message || 'لایسنس با موفقیت ابطال شد.' };
         }
         return { success: false, error: data.error || 'خطا در ابطال لایسنس' };
@@ -661,7 +709,70 @@ class LicenseService {
     }
 
     await this.updateLocalLicenseStatus(cleanKey, 'REVOKED');
+    AuditService.logEvent({
+      action: 'LICENSE_REVOKED',
+      category: 'security',
+      entityType: 'setting',
+      entityId: cleanKey,
+      description: `ابطال لایسنس محلی ${cleanKey}`,
+      result: 'success',
+    });
     return { success: true, message: 'لایسنس در سامانه محلی ابطال گردید.' };
+  }
+
+  /**
+   * Restores a previously revoked license back to ACTIVE or UNUSED
+   */
+  public async restoreLicense(
+    licenseKey: string,
+    config?: { supabaseUrl?: string; supabaseAnonKey?: string }
+  ): Promise<{ success: boolean; message?: string; error?: string }> {
+    const cleanKey = licenseKey.trim().toUpperCase();
+    const url = config?.supabaseUrl?.trim();
+    const anonKey = config?.supabaseAnonKey?.trim();
+
+    if (url && anonKey) {
+      try {
+        const endpoint = `${url.replace(/\/+$/, '')}/functions/v1/create-license`;
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: anonKey,
+            Authorization: `Bearer ${anonKey}`,
+          },
+          body: JSON.stringify({ action: 'restore', license_key: cleanKey }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          await this.updateLocalLicenseStatus(cleanKey, data.status || 'ACTIVE');
+          AuditService.logEvent({
+            action: 'LICENSE_RESTORED',
+            category: 'security',
+            entityType: 'setting',
+            entityId: cleanKey,
+            description: `بازگردانی لایسنس ابطال‌شده ${cleanKey}`,
+            result: 'success',
+          });
+          return { success: true, message: data.message || 'لایسنس با موفقیت بازگردانی شد.' };
+        }
+        return { success: false, error: data.error || 'خطا در بازگردانی لایسنس' };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'خطای ارتباط با سرور';
+        return { success: false, error: msg };
+      }
+    }
+
+    await this.updateLocalLicenseStatus(cleanKey, 'ACTIVE');
+    AuditService.logEvent({
+      action: 'LICENSE_RESTORED',
+      category: 'security',
+      entityType: 'setting',
+      entityId: cleanKey,
+      description: `بازگردانی لایسنس محلی ${cleanKey}`,
+      result: 'success',
+    });
+    return { success: true, message: 'لایسنس در سامانه محلی بازگردانی گردید.' };
   }
 
   private async updateLocalLicenseStatus(

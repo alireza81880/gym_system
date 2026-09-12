@@ -1,6 +1,6 @@
 /**
  * Gym OS - Admin License Management Portal
- * Allows administrators to manually create, inspect, and revoke licenses.
+ * Allows administrators to manually create, inspect, search, filter, and revoke/restore licenses.
  * Strictly adheres to security rules: never exposes service_role or Ed25519 private keys.
  */
 
@@ -21,7 +21,10 @@ import {
   Ban,
   Calendar,
   Sparkles,
-  ExternalLink,
+  Info,
+  RotateCcw,
+  Eye,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { licenseService } from '../../services/licenseService';
 import { LicenseRecord, LicenseType } from '../../types/license';
@@ -31,7 +34,7 @@ export const AdminLicensePortal: React.FC = () => {
   // Navigation subtabs
   const [subTab, setSubTab] = useState<'create' | 'list'>('create');
 
-  // Form states
+  // Form states for manual license creation
   const [customerName, setCustomerName] = useState('');
   const [plan, setPlan] = useState('Professional');
   const [licenseType, setLicenseType] = useState<LicenseType>('YEARLY');
@@ -52,8 +55,17 @@ export const AdminLicensePortal: React.FC = () => {
   const [isLoadingList, setIsLoadingList] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'UNUSED' | 'ACTIVE' | 'REVOKED' | 'EXPIRED'>('ALL');
-  const [selectedLicenseForReceipt, setSelectedLicenseForReceipt] = useState<LicenseRecord | null>(null);
+
+  // Details Modal state
+  const [selectedLicense, setSelectedLicense] = useState<LicenseRecord | null>(null);
   const [receiptCopied, setReceiptCopied] = useState(false);
+
+  // Revocation Confirmation Modal state
+  const [licenseToRevoke, setLicenseToRevoke] = useState<LicenseRecord | null>(null);
+  const [isRevoking, setIsRevoking] = useState(false);
+
+  // Restore/Unrevoke state
+  const [isRestoring, setIsRestoring] = useState(false);
 
   // Determine current active durationMonths
   const currentDurationMonths: number | null = useMemo(() => {
@@ -152,25 +164,55 @@ export const AdminLicensePortal: React.FC = () => {
     setTimeout(() => setCopiedField(null), 2000);
   };
 
-  const handleRevoke = async (licenseKey: string) => {
-    if (!window.confirm(`آیا از باطل کردن لایسنس ${licenseKey} اطمینان دارید؟`)) return;
+  // Revoke Action with confirmation modal
+  const handleConfirmRevoke = async () => {
+    if (!licenseToRevoke) return;
+    setIsRevoking(true);
     try {
-      const res = await licenseService.revokeLicense(licenseKey);
+      const res = await licenseService.revokeLicense(licenseToRevoke.license_key);
       if (res.success) {
-        loadLicenses();
+        setLicenseToRevoke(null);
+        if (selectedLicense?.license_key === licenseToRevoke.license_key) {
+          setSelectedLicense({ ...selectedLicense, status: 'REVOKED' });
+        }
+        await loadLicenses();
       } else {
         alert(res.error || 'خطا در ابطال لایسنس');
       }
     } catch {
       alert('خطای سیستمی');
+    } finally {
+      setIsRevoking(false);
+    }
+  };
+
+  // Restore Action
+  const handleRestore = async (licenseKey: string) => {
+    setIsRestoring(true);
+    try {
+      const res = await licenseService.restoreLicense(licenseKey);
+      if (res.success) {
+        if (selectedLicense?.license_key === licenseKey) {
+          setSelectedLicense({ ...selectedLicense, status: 'ACTIVE' });
+        }
+        await loadLicenses();
+      } else {
+        alert(res.error || 'خطا در بازگردانی لایسنس');
+      }
+    } catch {
+      alert('خطای سیستمی');
+    } finally {
+      setIsRestoring(false);
     }
   };
 
   const filteredLicenses = useMemo(() => {
     return licenses.filter((lic) => {
+      const q = searchQuery.toLowerCase();
       const matchesSearch =
-        (lic.customer_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (lic.license_key || '').toLowerCase().includes(searchQuery.toLowerCase());
+        (lic.customer_name || '').toLowerCase().includes(q) ||
+        (lic.license_key || '').toLowerCase().includes(q) ||
+        (lic.plan || '').toLowerCase().includes(q);
       const matchesStatus = statusFilter === 'ALL' || lic.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
@@ -217,7 +259,7 @@ export const AdminLicensePortal: React.FC = () => {
                 <span>اطلاعات صدور لایسنس</span>
               </h3>
               <p className="text-xs text-slate-400 mt-1">
-                تولید شناسنامه لایسنس با محاسبه خودکار انقضا، کد بازیابی و تنظیمات اختصاصی.
+                تولید شناسنامه لایسنس با محاسبه خودکار انقضا، کد بازیابی و ثبت در سامانه مرکزی.
               </p>
             </div>
 
@@ -348,59 +390,74 @@ export const AdminLicensePortal: React.FC = () => {
                       min={1}
                       max={120}
                       value={customMonths}
-                      onChange={(e) => setCustomMonths(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="w-24 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-sm font-bold text-white text-center focus:outline-none focus:border-amber-400"
+                      onChange={(e) => setCustomMonths(parseInt(e.target.value) || 1)}
+                      className="w-24 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1 text-sm text-white font-mono text-center focus:outline-none focus:border-amber-400"
                     />
-                    <span className="text-xs text-slate-400">ماه (محاسبه دقیق انقضا از امروز)</span>
+                    <span className="text-xs text-slate-400">ماه (محاسبه انقضا از امروز)</span>
                   </div>
                 )}
               </div>
 
-              {/* Max Devices & Custom Key in 2 columns */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                    تعداد مجاز دستگاه‌ها (max_devices)
-                  </label>
-                  <select
+              {/* Max Devices */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1.5 flex items-center justify-between">
+                  <span>سقف تعداد دستگاه‌های مجاز (Max Devices)</span>
+                  <span className="text-emerald-400 font-mono">{maxDevices} سیستم</span>
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min={1}
+                    max={10}
                     value={maxDevices}
                     onChange={(e) => setMaxDevices(parseInt(e.target.value))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs font-bold text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
-                  >
-                    <option value={1}>۱ رایانه (تک‌کاربره اختصاصی)</option>
-                    <option value={2}>۲ رایانه (پذیرش + مدیریت)</option>
-                    <option value={3}>۳ رایانه (شبکه داخلی ۳ کلاینت)</option>
-                    <option value={5}>۵ رایانه (سازمانی متوسط)</option>
-                    <option value={10}>۱۰ رایانه (مجموعه بزرگ چند سالنه)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                    کلید سفارشی لایسنس (اختیاری)
-                  </label>
-                  <input
-                    type="text"
-                    value={customKey}
-                    onChange={(e) => setCustomKey(e.target.value.toUpperCase())}
-                    placeholder="خودکار تولید می‌شود (مثال: GYM-XXXX-...)"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
-                    dir="ltr"
+                    className="flex-1 accent-emerald-500 cursor-pointer"
                   />
+                  <div className="flex gap-1.5">
+                    {[1, 2, 3, 5, 10].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setMaxDevices(num)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          maxDevices === num
+                            ? 'bg-emerald-500 text-slate-950'
+                            : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
+                        }`}
+                      >
+                        {num}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+              </div>
+
+              {/* Optional Custom License Key */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                  کلید لایسنس سفارشی (اختیاری)
+                </label>
+                <input
+                  type="text"
+                  value={customKey}
+                  onChange={(e) => setCustomKey(e.target.value.toUpperCase())}
+                  placeholder="خالی بگذارید تا به صورت خودکار تولید شود (GYM-XXXX-XXXX...)"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs font-mono text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                  dir="ltr"
+                />
               </div>
 
               {/* Notes */}
               <div>
                 <label className="block text-xs font-bold text-slate-300 mb-1.5">
-                  یادداشت و شماره فاکتور (اختیاری)
+                  یادداشت پشتیبانی / شماره فاکتور (اختیاری)
                 </label>
-                <input
-                  type="text"
+                <textarea
+                  rows={2}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="مثال: قرارداد سالانه شماره ۱۴۰۵/۸۲ - پرداخت نقدی"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
+                  placeholder="توضیحات مربوط به قرارداد، تخفیف، پشتیبان یا شماره پیگیری..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500"
                 />
               </div>
 
@@ -413,125 +470,111 @@ export const AdminLicensePortal: React.FC = () => {
 
               <button
                 type="submit"
-                disabled={isSubmitting || !customerName.trim()}
-                className="w-full py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-emerald-500/20"
+                disabled={isSubmitting}
+                className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-emerald-500/20"
               >
                 {isSubmitting ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>در حال صدور و ثبت در پایگاه داده...</span>
+                    <span>در حال صدور لایسنس...</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4" />
-                    <span>صدور نهایی لایسنس</span>
+                    <span>تولید و ثبت نهایی لایسنس</span>
                   </>
                 )}
               </button>
             </form>
           </div>
 
-          {/* Real-time Calculation & Preview Card */}
+          {/* Live Preview & Created Result Card */}
           <div className="lg:col-span-5 space-y-4">
-            {/* Live Expiry Preview Box */}
-            <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-5 space-y-4">
+            {/* Live Calculation Box */}
+            <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-5 space-y-4">
               <h4 className="text-xs font-bold text-slate-300 flex items-center gap-2">
                 <Clock className="w-4 h-4 text-cyan-400" />
-                <span>محاسبه خودکار تاریخ انقضا (Auto Calculated)</span>
+                <span>محاسبه خودکار تاریخ و وضعیت لایسنس</span>
               </h4>
 
-              <div className="space-y-3 bg-slate-950/80 rounded-2xl p-4 border border-slate-800/80 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">تاریخ صدور (created_at):</span>
-                  <span className="text-white font-bold">{formatPersianDate(new Date().toISOString())}</span>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">مدت اعتبار (duration):</span>
-                  <span className="text-emerald-400 font-bold">
+              <div className="space-y-2.5 text-xs">
+                <div className="flex justify-between items-center py-2 border-b border-slate-800/80">
+                  <span className="text-slate-400">مدت اعتبار:</span>
+                  <span className="font-bold text-white">
                     {getDurationLabel(licenseType, currentDurationMonths)}
                   </span>
                 </div>
 
-                <div className="h-px bg-slate-800" />
+                <div className="flex justify-between items-center py-2 border-b border-slate-800/80">
+                  <span className="text-slate-400">تاریخ صدور:</span>
+                  <span className="font-mono text-slate-300">{formatPersianDate(new Date().toISOString())}</span>
+                </div>
 
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">تاریخ انقضا (expires_at):</span>
-                  <span className="text-purple-400 font-bold">
+                <div className="flex justify-between items-center py-2 border-b border-slate-800/80">
+                  <span className="text-slate-400">تاریخ انقضای محاسبه‌شده:</span>
+                  <span className={`font-mono font-bold ${calculatedExpiry ? 'text-emerald-400' : 'text-purple-400'}`}>
                     {calculatedExpiry ? formatPersianDate(calculatedExpiry) : 'مادام‌العمر (بدون انقضا)'}
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">تعداد مجاز رایانه:</span>
-                  <span className="text-cyan-400 font-bold">{maxDevices} دستگاه</span>
+                <div className="flex justify-between items-center py-2 border-b border-slate-800/80">
+                  <span className="text-slate-400">سقف دستگاه‌ها:</span>
+                  <span className="font-bold text-cyan-400">{maxDevices} رایانه همزمان</span>
                 </div>
               </div>
             </div>
 
-            {/* Created License Result Showcase */}
+            {/* Created License Result Card */}
             {createdLicense && (
-              <div className="bg-emerald-950/30 border border-emerald-500/40 rounded-3xl p-5 space-y-4 animate-in fade-in duration-300">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
-                    <CheckCircle2 className="w-5 h-5" />
-                    <span>لایسنس با موفقیت صادر گردید</span>
-                  </div>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    {createdLicense.status}
-                  </span>
+              <div className="bg-emerald-950/20 border-2 border-emerald-500/50 rounded-3xl p-5 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                <div className="flex items-center gap-2.5 text-emerald-400 font-bold text-sm">
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span>لایسنس با موفقیت صادر گردید!</span>
                 </div>
 
-                {/* License Key Card */}
-                <div className="bg-slate-950 rounded-2xl p-3.5 border border-slate-800 space-y-1">
-                  <span className="text-[10px] text-slate-400 block font-medium">کلید لایسنس (ارسال به مشتری):</span>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-mono font-bold text-emerald-300 select-all" dir="ltr">
-                      {createdLicense.license_key}
-                    </span>
-                    <button
-                      onClick={() => handleCopy(createdLicense.license_key, 'key')}
-                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all cursor-pointer"
-                      title="کپی کلید لایسنس"
-                    >
-                      {copiedField === 'key' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                    </button>
+                <div className="space-y-3 bg-slate-950/90 p-4 rounded-2xl border border-emerald-500/30">
+                  <div>
+                    <span className="text-[11px] text-slate-400 block font-medium">کلید لایسنس جهت تحویل به مشتری:</span>
+                    <div className="flex items-center justify-between gap-2 mt-1">
+                      <span className="text-sm font-mono font-bold text-emerald-400 select-all" dir="ltr">
+                        {createdLicense.license_key}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(createdLicense.license_key, 'createdKey')}
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white"
+                        title="کپی کلید لایسنس"
+                      >
+                        {copiedField === 'createdKey' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
                   </div>
-                </div>
 
-                {/* Recovery Code Card */}
-                <div className="bg-slate-950 rounded-2xl p-3.5 border border-slate-800 space-y-1">
-                  <span className="text-[10px] text-amber-400 block font-medium">کد بازیابی سخت‌افزار (محرمانه):</span>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-mono font-bold text-amber-300 select-all" dir="ltr">
-                      {createdLicense.recovery_code}
-                    </span>
-                    <button
-                      onClick={() => handleCopy(createdLicense.recovery_code, 'recovery')}
-                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all cursor-pointer"
-                      title="کپی کد بازیابی"
-                    >
-                      {copiedField === 'recovery' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                    </button>
+                  <div className="pt-2 border-t border-slate-800">
+                    <span className="text-[11px] text-slate-400 block font-medium">کد بازیابی سخت‌افزار (Recovery Code):</span>
+                    <div className="flex items-center justify-between gap-2 mt-1">
+                      <span className="text-xs font-mono font-bold text-amber-400 select-all" dir="ltr">
+                        {createdLicense.recovery_code}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(createdLicense.recovery_code, 'createdRec')}
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white"
+                        title="کپی کد بازیابی"
+                      >
+                        {copiedField === 'createdRec' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                {/* Copy Full Receipt Button */}
                 <button
-                  onClick={() => handleCopy(generateLicenseReceipt(createdLicense), 'receipt')}
-                  className="w-full py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  type="button"
+                  onClick={() => setSelectedLicense(createdLicense)}
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
                 >
-                  {copiedField === 'receipt' ? (
-                    <>
-                      <Check className="w-4 h-4 text-emerald-400" />
-                      <span>متن شناسنامه و رسید کپی شد</span>
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="w-4 h-4 text-slate-300" />
-                      <span>کپی شناسنامه رسمی جهت ارسال به خریدار</span>
-                    </>
-                  )}
+                  <FileText className="w-4 h-4 text-emerald-400" />
+                  <span>مشاهده شناسنامه و اطلاعات کامل</span>
                 </button>
               </div>
             )}
@@ -546,10 +589,10 @@ export const AdminLicensePortal: React.FC = () => {
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Key className="w-5 h-5 text-emerald-400" />
-                <span>بانک لایسنس‌های مدیریت شده</span>
+                <span>فهرست لایسنس‌های ثبت‌شده</span>
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                مشاهده وضعیت، زمان انقضا، تعداد دستگاه و ابطال لایسنس‌های مشتریان.
+                مشاهده وضعیت، زمان انقضا، تعداد دستگاه‌های فعال و مدیریت لایسنس‌های مشتریان.
               </p>
             </div>
 
@@ -616,6 +659,7 @@ export const AdminLicensePortal: React.FC = () => {
               {filteredLicenses.map((lic) => {
                 const isLifetime = !lic.expires_at;
                 const isExpired = lic.expires_at && new Date(lic.expires_at).getTime() < Date.now();
+                const activeCount = lic.active_devices_count ?? (lic.status === 'ACTIVE' ? 1 : 0);
 
                 return (
                   <div
@@ -636,14 +680,17 @@ export const AdminLicensePortal: React.FC = () => {
                               ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
                               : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
                           }`}>
-                            {lic.status === 'ACTIVE' ? 'فعال' : lic.status === 'UNUSED' ? 'استفاده‌نشده' : lic.status}
+                            {lic.status === 'ACTIVE' ? 'فعال' : lic.status === 'UNUSED' ? 'استفاده‌نشده' : lic.status === 'REVOKED' ? 'باطل‌شده' : 'منقضی'}
                           </span>
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300">
-                            {lic.plan}
+                            طرح {lic.plan}
                           </span>
+                          {/* Active / Max devices */}
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-cyan-300 flex items-center gap-1">
                             <Laptop className="w-3 h-3" />
-                            <span>{lic.max_devices} دستگاه</span>
+                            <span>
+                              {activeCount} از {lic.max_devices} دستگاه فعال
+                            </span>
                           </span>
                         </div>
 
@@ -674,12 +721,13 @@ export const AdminLicensePortal: React.FC = () => {
                       {/* Actions */}
                       <div className="flex items-center gap-2 self-end lg:self-center">
                         <button
-                          onClick={() => setSelectedLicenseForReceipt(lic)}
+                          onClick={() => setSelectedLicense(lic)}
                           className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer"
-                          title="مشاهده و کپی شناسنامه"
+                          title="مشاهده مشخصات کامل"
                         >
-                          <FileText className="w-4 h-4" />
+                          <Eye className="w-4 h-4" />
                         </button>
+
                         <button
                           onClick={() => handleCopy(lic.license_key, `row-${lic.license_key}`)}
                           className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer"
@@ -691,13 +739,23 @@ export const AdminLicensePortal: React.FC = () => {
                             <Copy className="w-4 h-4" />
                           )}
                         </button>
-                        {lic.status !== 'REVOKED' && (
+
+                        {lic.status !== 'REVOKED' ? (
                           <button
-                            onClick={() => handleRevoke(lic.license_key)}
+                            onClick={() => setLicenseToRevoke(lic)}
                             className="p-2 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-all cursor-pointer"
-                            title="ابطال لایسنس"
+                            title="ابطال لایسنس (Revoke)"
                           >
                             <Ban className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleRestore(lic.license_key)}
+                            disabled={isRestoring}
+                            className="p-2 rounded-xl bg-slate-800 hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-400 transition-all cursor-pointer"
+                            title="بازگردانی لایسنس (Unrevoke)"
+                          >
+                            <RotateCcw className="w-4 h-4" />
                           </button>
                         )}
                       </div>
@@ -710,31 +768,107 @@ export const AdminLicensePortal: React.FC = () => {
         </div>
       )}
 
-      {/* Official Receipt Modal */}
-      {selectedLicenseForReceipt && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" dir="rtl">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4">
+      {/* Structured Details Modal */}
+      {selectedLicense && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-xl w-full shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <h4 className="text-base font-bold text-white flex items-center gap-2">
                 <FileText className="w-5 h-5 text-emerald-400" />
-                <span>شناسنامه رسمی لایسنس</span>
+                <span>مشخصات و شناسنامه کامل لایسنس</span>
               </h4>
               <button
-                onClick={() => setSelectedLicenseForReceipt(null)}
-                className="text-slate-400 hover:text-white text-xs font-bold"
+                onClick={() => setSelectedLicense(null)}
+                className="text-slate-400 hover:text-white text-xs font-bold p-1"
               >
                 بستن
               </button>
             </div>
 
-            <pre className="bg-slate-950 p-4 rounded-2xl border border-slate-800 text-xs font-mono text-slate-300 whitespace-pre-wrap leading-relaxed select-all">
-              {generateLicenseReceipt(selectedLicenseForReceipt)}
-            </pre>
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <span className="text-slate-400 block text-[11px]">خریدار / باشگاه:</span>
+                <span className="text-white font-bold block mt-1">{selectedLicense.customer_name}</span>
+              </div>
+
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <span className="text-slate-400 block text-[11px]">طرح:</span>
+                <span className="text-emerald-400 font-bold block mt-1">Gym OS — {selectedLicense.plan}</span>
+              </div>
+
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 col-span-2">
+                <span className="text-slate-400 block text-[11px]">کلید لایسنس (License Key):</span>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-white font-mono font-bold select-all" dir="ltr">{selectedLicense.license_key}</span>
+                  <button
+                    onClick={() => handleCopy(selectedLicense.license_key, 'modalKey')}
+                    className="text-slate-400 hover:text-white"
+                  >
+                    {copiedField === 'modalKey' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 col-span-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 block text-[11px]">کد یکبارمصرف بازیابی (Recovery Code):</span>
+                  <span className="text-[10px] text-amber-400 font-semibold">محرمانه — جهت تعویض قطعه یا سیستم</span>
+                </div>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-amber-400 font-mono font-bold select-all" dir="ltr">{selectedLicense.recovery_code}</span>
+                  <button
+                    onClick={() => handleCopy(selectedLicense.recovery_code, 'modalRec')}
+                    className="text-slate-400 hover:text-white"
+                  >
+                    {copiedField === 'modalRec' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <span className="text-slate-400 block text-[11px]">سقف دستگاه‌ها:</span>
+                <span className="text-white font-bold block mt-1">{selectedLicense.max_devices} رایانه</span>
+              </div>
+
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <span className="text-slate-400 block text-[11px]">دستگاه‌های فعال:</span>
+                <span className="text-cyan-400 font-bold block mt-1">
+                  {selectedLicense.active_devices_count ?? (selectedLicense.status === 'ACTIVE' ? 1 : 0)} دستگاه
+                </span>
+              </div>
+
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <span className="text-slate-400 block text-[11px]">تاریخ صدور:</span>
+                <span className="text-slate-300 font-mono block mt-1">{formatPersianDate(selectedLicense.created_at)}</span>
+              </div>
+
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                <span className="text-slate-400 block text-[11px]">تاریخ انقضا:</span>
+                <span className="text-slate-300 font-mono block mt-1">
+                  {selectedLicense.expires_at ? formatPersianDate(selectedLicense.expires_at) : 'مادام‌العمر'}
+                </span>
+              </div>
+
+              {selectedLicense.notes && (
+                <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 col-span-2">
+                  <span className="text-slate-400 block text-[11px]">یادداشت:</span>
+                  <span className="text-slate-300 block mt-1 text-xs">{selectedLicense.notes}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Receipt text preview */}
+            <div>
+              <span className="text-[11px] text-slate-400 block mb-1">متن آماده تحویل به مشتری (شناسنامه چاپی):</span>
+              <pre className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-300 whitespace-pre-wrap leading-relaxed max-h-36 overflow-y-auto select-all">
+                {generateLicenseReceipt(selectedLicense)}
+              </pre>
+            </div>
 
             <div className="flex gap-2 pt-2">
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(generateLicenseReceipt(selectedLicenseForReceipt));
+                  navigator.clipboard.writeText(generateLicenseReceipt(selectedLicense));
                   setReceiptCopied(true);
                   setTimeout(() => setReceiptCopied(false), 2000);
                 }}
@@ -748,15 +882,98 @@ export const AdminLicensePortal: React.FC = () => {
                 ) : (
                   <>
                     <Copy className="w-4 h-4" />
-                    <span>کپی کل متن شناسنامه</span>
+                    <span>کپی کل متن شناسنامه مشتری</span>
                   </>
                 )}
               </button>
+
+              {selectedLicense.status !== 'REVOKED' ? (
+                <button
+                  onClick={() => {
+                    setLicenseToRevoke(selectedLicense);
+                  }}
+                  className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Ban className="w-4 h-4" />
+                  <span>ابطال لایسنس</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleRestore(selectedLicense.license_key)}
+                  disabled={isRestoring}
+                  className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>بازگردانی لایسنس</span>
+                </button>
+              )}
+
               <button
-                onClick={() => setSelectedLicenseForReceipt(null)}
+                onClick={() => setSelectedLicense(null)}
                 className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-2.5 px-4 rounded-xl text-xs transition-all cursor-pointer"
               >
                 بستن
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for Server Revocation */}
+      {licenseToRevoke && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" dir="rtl">
+          <div className="bg-slate-900 border border-rose-500/30 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
+              <Ban className="w-6 h-6" />
+            </div>
+
+            <div>
+              <h4 className="text-base font-bold text-white">
+                تایید ابطال سروری لایسنس (Revoke)
+              </h4>
+              <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+                آیا از ابطال کامل لایسنس متعلق به <strong className="text-white">{licenseToRevoke.customer_name}</strong> اطمینان دارید؟
+              </p>
+            </div>
+
+            <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 text-xs font-mono text-rose-400 select-all" dir="ltr">
+              {licenseToRevoke.license_key}
+            </div>
+
+            <div className="bg-rose-950/20 border border-rose-500/20 rounded-2xl p-3 text-xs text-rose-300 space-y-1">
+              <span className="font-bold block">اثرات این عملیات:</span>
+              <p className="text-[11px] text-slate-400">
+                وضعیت لایسنس در پایگاه داده سرور به REVOKED تغییر می‌کند و کلاینت‌ها خطای REVOKED_LICENSE دریافت می‌کنند. رکوردها و لاگ‌های فعالسازی حذف فیزیکی نخواهند شد و امکان بازگردانی در آینده وجود دارد.
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                disabled={isRevoking}
+                onClick={handleConfirmRevoke}
+                className="flex-1 bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-rose-600/20"
+              >
+                {isRevoking ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>در حال ابطال در سرور...</span>
+                  </>
+                ) : (
+                  <>
+                    <Ban className="w-4 h-4" />
+                    <span>بله، لایسنس ابطال شود</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                disabled={isRevoking}
+                onClick={() => setLicenseToRevoke(null)}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-2.5 px-4 rounded-xl text-xs transition-all cursor-pointer"
+              >
+                انصراف
               </button>
             </div>
           </div>
