@@ -232,9 +232,108 @@ function getLicenseRecord(licenseId) {
   return licenseDatabase.get(licenseId);
 }
 
+function revokeLicense(licenseId) {
+  const cleanId = (licenseId || '').trim().toUpperCase();
+  const record = licenseDatabase.get(cleanId);
+  if (record) {
+    record.status = 'REVOKED';
+  }
+}
+
+function expireLicense(licenseId) {
+  const cleanId = (licenseId || '').trim().toUpperCase();
+  const record = licenseDatabase.get(cleanId);
+  if (record) {
+    record.status = 'EXPIRED';
+    record.expiresAt = new Date(Date.now() - 86400000).toISOString();
+  }
+}
+
+function setLicenseStatus(licenseId, status) {
+  const cleanId = (licenseId || '').trim().toUpperCase();
+  const record = licenseDatabase.get(cleanId);
+  if (record) {
+    record.status = status;
+  }
+}
+
+/**
+ * Authoritatively verifies license status in mock database for tests.
+ */
+async function checkLicenseStatus(licenseId, deviceFingerprint) {
+  if (!licenseId || typeof licenseId !== 'string') {
+    return {
+      success: false,
+      status: 'UNACTIVATED',
+      error: 'INVALID_LICENSE_ID',
+      code: 'INVALID_LICENSE',
+      isNetworkError: false,
+      message: 'شناسه لایسنس ارسال نشده یا نامعتبر است',
+    };
+  }
+
+  const cleanId = licenseId.trim().toUpperCase();
+  const record = licenseDatabase.get(cleanId);
+
+  if (!record) {
+    return {
+      success: false,
+      status: 'UNACTIVATED',
+      error: 'LICENSE_NOT_FOUND',
+      code: 'INVALID_LICENSE',
+      isNetworkError: false,
+      message: 'لایسنس وارد شده در پایگاه داده سرور یافت نشد',
+    };
+  }
+
+  if (record.status === 'REVOKED') {
+    return {
+      success: false,
+      status: 'REVOKED',
+      error: 'REVOKED_LICENSE',
+      code: 'REVOKED_LICENSE',
+      isNetworkError: false,
+      message: 'لایسنس این نرم‌افزار توسط مدیریت لغو شده است.',
+    };
+  }
+
+  if (record.status === 'EXPIRED' || (record.expiresAt && Date.now() > Date.parse(record.expiresAt))) {
+    return {
+      success: false,
+      status: 'EXPIRED',
+      error: 'EXPIRED_LICENSE',
+      code: 'EXPIRED_LICENSE',
+      isNetworkError: false,
+      message: 'اعتبار لایسنس این نرم‌افزار به پایان رسیده است.',
+    };
+  }
+
+  if (record.deviceBinding && record.deviceBinding !== deviceFingerprint) {
+    return {
+      success: false,
+      status: 'DEVICE_MISMATCH',
+      error: 'DEVICE_MISMATCH',
+      code: 'DEVICE_MISMATCH',
+      isNetworkError: false,
+      message: 'این سیستم با دستگاه‌های ثبت‌شده لایسنس مطابقت ندارد.',
+    };
+  }
+
+  return {
+    success: true,
+    status: 'ACTIVE',
+    record,
+    message: 'لایسنس معتبر و فعال است',
+  };
+}
+
 module.exports = {
   processActivation,
   processRecovery,
+  checkLicenseStatus,
+  revokeLicense,
+  expireLicense,
+  setLicenseStatus,
   resetMockDatabase,
   getLicenseRecord,
   canonicalizePayload,

@@ -209,8 +209,19 @@ function evaluateToken(token) {
   };
 }
 
+// In-memory tracking of authoritative remote revocation or expiration for current session
+let sessionRevocationStatus = null; // 'REVOKED' | 'EXPIRED' | null
+let sessionRevocationReason = null;
+let sessionRevocationMessage = null;
+
+function resetSessionRevocationStatus() {
+  sessionRevocationStatus = null;
+  sessionRevocationReason = null;
+  sessionRevocationMessage = null;
+}
+
 /**
- * Reads and validates current installation license status
+ * Reads and validates current installation license status from local disk token
  */
 function getLicenseStatus(storagePaths) {
   const licenseFile = getLicenseFilePath(storagePaths);
@@ -239,7 +250,7 @@ function getLicenseStatus(storagePaths) {
 
     const payload = evaluation.payload || (token && token.payload) || {};
 
-    return {
+    const baseStatus = {
       status: evaluation.status,
       licenseId: payload.licenseId || null,
       gymId: payload.gymId || null,
@@ -258,6 +269,29 @@ function getLicenseStatus(storagePaths) {
       reason: evaluation.reason,
       message: evaluation.message,
     };
+
+    // If authoritative server status in this runtime session was found to be REVOKED or EXPIRED
+    if (sessionRevocationStatus === 'REVOKED') {
+      return {
+        ...baseStatus,
+        status: 'REVOKED',
+        isOfflineValid: false,
+        reason: sessionRevocationReason || 'SERVER_REVOKED',
+        message: sessionRevocationMessage || 'لایسنس این نرم‌افزار توسط مدیریت لغو شده است.',
+      };
+    }
+
+    if (sessionRevocationStatus === 'EXPIRED') {
+      return {
+        ...baseStatus,
+        status: 'EXPIRED',
+        isOfflineValid: false,
+        reason: sessionRevocationReason || 'SERVER_EXPIRED',
+        message: sessionRevocationMessage || 'اعتبار لایسنس این نرم‌افزار به پایان رسیده است.',
+      };
+    }
+
+    return baseStatus;
   } catch (err) {
     return {
       status: 'RECOVERY_REQUIRED',
@@ -347,6 +381,7 @@ async function activateLicense(licenseKey, storagePaths, customServer) {
 
   // Save token atomically
   saveTokenAtomically(storagePaths, result.token);
+  resetSessionRevocationStatus();
 
   const finalStatus = getLicenseStatus(storagePaths);
   return {
@@ -495,6 +530,7 @@ async function recoverLicense(licenseKey, recoveryCode, storagePaths, customServ
 
   // Save token atomically
   saveTokenAtomically(storagePaths, result.token);
+  resetSessionRevocationStatus();
 
   const finalStatus = getLicenseStatus(storagePaths);
   return {
@@ -507,9 +543,12 @@ async function recoverLicense(licenseKey, recoveryCode, storagePaths, customServ
 }
 
 /**
- * Removes local activation token (e.g. for re-activation or uninstallation)
+ * Removes local activation token (e.g. for re-activation or uninstallation).
+ * Crucial invariant: strictly deletes license_activation.json; preserves SQLite database,
+ * members, subscriptions, payments, and backups.
  */
 function clearActivation(storagePaths) {
+  resetSessionRevocationStatus();
   const licenseFile = getLicenseFilePath(storagePaths);
   try {
     if (fs.existsSync(licenseFile)) {
@@ -521,11 +560,168 @@ function clearActivation(storagePaths) {
   }
 }
 
+/**
+ * Startup License Validation:
+ * 1. Checks and verifies local Ed25519 token offline.
+ * 2. If locally valid and internet is available, checks authoritative status from Supabase.
+ * 3. If server status is REVOKED: blocks entry, sets session status to REVOKED, and shows clear message.
+ * 4. If server status is EXPIRED: blocks entry, sets session status to EXPIRED.
+ * 5. If server status is ACTIVE: confirms active status and allows normal dashboard entry.
+ * 6. If internet is completely unavailable (offline / network timeout): applies Offline Grace Policy,
+ *    allowing normal entry based on valid local Ed25519 token.
+ */
+async function validateStartupLicense(storagePaths, customServer, options = {}) {
+  // Step 1: Read and cryptographically verify local token from disk first
+  const previousRevocation = sessionRevocationStatus;
+  sessionRevocationStatus = null;
+  const localStatus = getLicenseStatus(storagePaths);
+  sessionRevocationStatus = previousRevocation;
+
+  // If local token is already invalid (unactivated, hardware mismatch, locally expired, tampered)
+  if (localStatus.status !== 'ACTIVE') {
+    return localStatus;
+  }
+
+  // Explicit offline-only check option
+  if (options.skipOnlineCheck) {
+    return localStatus;
+  }
+
+  // Step 2: Query authoritative status from server
+  let server = customServer;
+  if (!server) {
+    try {
+      server = require('./supabaseLicenseClient.cjs');
+    } catch (e) {
+      server = null;
+    }
+  }
+
+  if (!server) {
+    return localStatus;
+  }
+
+  const currentFp = getDeviceFingerprint();
+
+  try {
+    let checkResult;
+    if (typeof server.checkLicenseStatus === 'function') {
+      checkResult = await server.checkLicenseStatus(localStatus.licenseId, currentFp, {
+        timeout: options.timeout || 4000,
+        ...options,
+      });
+    } else if (typeof server.processActivation === 'function') {
+      checkResult = await server.processActivation(localStatus.licenseId, currentFp, options);
+    } else {
+      return localStatus;
+    }
+
+    // Step 3: Authoritative REVOKED check
+    if (
+      checkResult.status === 'REVOKED' ||
+      checkResult.error === 'REVOKED' ||
+      checkResult.error === 'REVOKED_LICENSE' ||
+      checkResult.code === 'REVOKED_LICENSE'
+    ) {
+      sessionRevocationStatus = 'REVOKED';
+      sessionRevocationReason = 'SERVER_REVOKED';
+      sessionRevocationMessage = 'لایسنس این نرم‌افزار توسط مدیریت لغو شده است.';
+      return {
+        ...localStatus,
+        status: 'REVOKED',
+        isOfflineValid: false,
+        reason: 'SERVER_REVOKED',
+        message: sessionRevocationMessage,
+      };
+    }
+
+    // Step 4: Authoritative EXPIRED check
+    if (
+      checkResult.status === 'EXPIRED' ||
+      checkResult.error === 'EXPIRED' ||
+      checkResult.error === 'EXPIRED_LICENSE' ||
+      checkResult.code === 'EXPIRED_LICENSE'
+    ) {
+      sessionRevocationStatus = 'EXPIRED';
+      sessionRevocationReason = 'SERVER_EXPIRED';
+      sessionRevocationMessage = 'اعتبار لایسنس این نرم‌افزار به پایان رسیده است.';
+      return {
+        ...localStatus,
+        status: 'EXPIRED',
+        isOfflineValid: false,
+        reason: 'SERVER_EXPIRED',
+        message: sessionRevocationMessage,
+      };
+    }
+
+    // Step 5: Authoritative ACTIVE confirmation
+    if (checkResult.success || checkResult.status === 'ACTIVE') {
+      resetSessionRevocationStatus();
+
+      // If server returned an updated signed token, save it atomically
+      if (checkResult.token && verifyTokenSignature(checkResult.token)) {
+        try {
+          saveTokenAtomically(storagePaths, checkResult.token);
+        } catch (e) {
+          // ignore save error
+        }
+      }
+
+      return {
+        ...localStatus,
+        status: 'ACTIVE',
+        isOfflineValid: true,
+        message: 'لایسنس معتبر و فعال است',
+      };
+    }
+
+    // Step 6: Network error / Offline grace policy
+    if (checkResult.isNetworkError) {
+      // Server unreachable, internet disconnected, or network timeout.
+      // Apply offline grace policy: local Ed25519 token was validated successfully!
+      resetSessionRevocationStatus();
+      return {
+        ...localStatus,
+        status: 'ACTIVE',
+        isOfflineValid: true,
+        offlineGraceApplied: true,
+        message: 'عدم دسترسی به سرور لایسنس؛ ورود بر اساس اعتبارسنجی آفلاین توکن انجام شد.',
+      };
+    }
+
+    // Step 7: Device mismatch or unactivated
+    if (checkResult.status === 'DEVICE_MISMATCH' || checkResult.error === 'DEVICE_MISMATCH') {
+      return {
+        ...localStatus,
+        status: 'DEVICE_MISMATCH',
+        deviceBindingStatus: 'MISMATCH',
+        isOfflineValid: false,
+        message: checkResult.message || 'این سیستم با دستگاه‌های ثبت‌شده لایسنس مطابقت ندارد.',
+      };
+    }
+
+    // Fallback if unexpected error code but not offline
+    return localStatus;
+  } catch (err) {
+    // Unexpected exception or network failure -> Fallback to offline grace
+    resetSessionRevocationStatus();
+    return {
+      ...localStatus,
+      status: 'ACTIVE',
+      isOfflineValid: true,
+      offlineGraceApplied: true,
+      message: 'عدم دسترسی به سرور لایسنس؛ ورود بر اساس اعتبارسنجی آفلاین توکن انجام شد.',
+    };
+  }
+}
+
 module.exports = {
   LICENSING_PUBLIC_KEY,
   getDeviceFingerprint,
   getMaskedFingerprint,
   getLicenseStatus,
+  validateStartupLicense,
+  resetSessionRevocationStatus,
   verifyTokenSignature,
   evaluateToken,
   activateLicense,

@@ -85,9 +85,9 @@ function logToFile(level, message, meta) {
   }
 }
 
-function createWindow() {
+async function createWindow() {
   const paths = getStoragePaths();
-  const initialLicense = licenseManager.getLicenseStatus(paths);
+  const initialLicense = await licenseManager.validateStartupLicense(paths);
   logToFile('info', 'Creating main application window', { 
     version: app.getVersion(), 
     licenseStatus: initialLicense.status,
@@ -294,9 +294,16 @@ function setupIpcHandlers() {
   });
 
   // Licensing & Hardware-bound Activation Handlers
-  ipcMain.handle('desktop:getLicenseStatus', async () => {
-    const status = licenseManager.getLicenseStatus(paths);
+  ipcMain.handle('desktop:getLicenseStatus', async (event, options) => {
+    // Check authoritative server status or offline token
+    const status = await licenseManager.validateStartupLicense(paths, null, options);
     logToFile('info', 'Queried license status', { status: status.status, licenseId: status.licenseId });
+    return status;
+  });
+
+  ipcMain.handle('desktop:validateStartupLicense', async (event, options) => {
+    const status = await licenseManager.validateStartupLicense(paths, null, options);
+    logToFile('info', 'Validated startup license', { status: status.status, licenseId: status.licenseId });
     return status;
   });
 

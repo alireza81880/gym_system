@@ -22,7 +22,8 @@ contextBridge.exposeInMainWorld('gymDesktopApi', {
   restoreBackup: (backupPath) => ipcRenderer.invoke('desktop:restoreBackup', backupPath),
 
   // Licensing & Hardware-bound Activation
-  getLicenseStatus: () => ipcRenderer.invoke('desktop:getLicenseStatus'),
+  getLicenseStatus: (options) => ipcRenderer.invoke('desktop:getLicenseStatus', options),
+  validateStartupLicense: (options) => ipcRenderer.invoke('desktop:validateStartupLicense', options),
   activateLicense: (licenseKey) => ipcRenderer.invoke('desktop:activateLicense', licenseKey),
   deactivateLicense: () => ipcRenderer.invoke('desktop:deactivateLicense'),
   activateOfflinePackage: (packageData) => ipcRenderer.invoke('desktop:activateOfflinePackage', packageData),

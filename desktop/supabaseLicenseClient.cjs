@@ -10,7 +10,7 @@
 const https = require('https');
 const http = require('http');
 
-function postJson(urlStr, headers, body) {
+function postJson(urlStr, headers, body, timeoutMs = 12000) {
   return new Promise((resolve, reject) => {
     try {
       const url = new URL(urlStr);
@@ -28,7 +28,7 @@ function postJson(urlStr, headers, body) {
           'Content-Length': Buffer.byteLength(postData),
           ...headers,
         },
-        timeout: 12000,
+        timeout: timeoutMs,
       };
 
       const req = client.request(options, (res) => {
@@ -73,10 +73,10 @@ function getFriendlyErrorMessage(errorCode, serverMessage) {
       return serverMessage || 'کد لایسنس نامعتبر است یا در سامانه یافت نشد.';
     case 'EXPIRED_LICENSE':
     case 'EXPIRED':
-      return serverMessage || 'تاریخ اعتبار این لایسنس به پایان رسیده است.';
+      return serverMessage || 'اعتبار لایسنس این نرم‌افزار به پایان رسیده است.';
     case 'REVOKED_LICENSE':
     case 'REVOKED':
-      return serverMessage || 'این لایسنس توسط پشتیبانی غیرفعال (Revoked) شده است.';
+      return serverMessage || 'لایسنس این نرم‌افزار توسط مدیریت لغو شده است.';
     case 'DEVICE_LIMIT_REACHED':
       return serverMessage || 'سقف مجاز تعداد دستگاه‌های فعال برای این لایسنس تکمیل شده است. برای انتقال به دستگاه جدید از کد بازیابی استفاده کنید.';
     case 'DEVICE_MISMATCH':
@@ -85,6 +85,124 @@ function getFriendlyErrorMessage(errorCode, serverMessage) {
       return serverMessage || 'کد بازیابی سخت‌افزار نامعتبر است یا قبلاً استفاده شده است.';
     default:
       return serverMessage || 'عملیات اعتبارسنجی لایسنس توسط سرور پذیرفته نشد.';
+  }
+}
+
+/**
+ * Authoritatively verifies current license status against Supabase Edge Function.
+ * Uses a short timeout (e.g. 4000ms) for startup validation to avoid freezing during network degradation.
+ * Distinguishes network unavailability (offline fallback) from authoritative REVOKED/EXPIRED status.
+ */
+async function checkLicenseStatus(licenseKey, deviceFingerprint, options = {}) {
+  const rawUrl = options.supabaseUrl !== undefined ? options.supabaseUrl : process.env.SUPABASE_URL;
+  const rawKey = options.supabaseAnonKey !== undefined ? options.supabaseAnonKey : process.env.SUPABASE_ANON_KEY;
+  const supabaseUrl = typeof rawUrl === 'string' ? rawUrl.trim() : '';
+  const anonKey = typeof rawKey === 'string' ? rawKey.trim() : '';
+  const timeoutMs = typeof options.timeout === 'number' ? options.timeout : 4000;
+
+  if (!supabaseUrl || !anonKey) {
+    return {
+      success: false,
+      status: 'OFFLINE_FALLBACK',
+      isNetworkError: true,
+      error: 'SERVER_UNCONFIGURED',
+      code: 'SERVER_UNCONFIGURED',
+      message: 'آدرس سرور لایسنس Supabase تنظیم نشده است.',
+    };
+  }
+
+  const endpoint = `${supabaseUrl.replace(/\/+$/, '')}/functions/v1/activate-license`;
+  const headers = {
+    'apikey': anonKey,
+    'Authorization': `Bearer ${anonKey}`,
+  };
+
+  try {
+    const response = await postJson(endpoint, headers, {
+      licenseKey,
+      hardwareFingerprint: deviceFingerprint,
+      action: 'verify',
+    }, timeoutMs);
+
+    const resData = response.data || {};
+    const errorCode = resData.code || resData.error;
+
+    // 1. Authoritative REVOKED check
+    if (
+      errorCode === 'REVOKED_LICENSE' ||
+      errorCode === 'REVOKED' ||
+      resData.status === 'REVOKED' ||
+      (typeof resData.error === 'string' && (resData.error.includes('Revoked') || resData.error.includes('لغو')))
+    ) {
+      return {
+        success: false,
+        status: 'REVOKED',
+        error: 'REVOKED_LICENSE',
+        code: 'REVOKED_LICENSE',
+        isNetworkError: false,
+        message: 'لایسنس این نرم‌افزار توسط مدیریت لغو شده است.',
+      };
+    }
+
+    // 2. Authoritative EXPIRED check
+    if (
+      errorCode === 'EXPIRED_LICENSE' ||
+      errorCode === 'EXPIRED' ||
+      resData.status === 'EXPIRED' ||
+      (typeof resData.error === 'string' && (resData.error.includes('منقضی') || resData.error.includes('پایان')))
+    ) {
+      return {
+        success: false,
+        status: 'EXPIRED',
+        error: 'EXPIRED_LICENSE',
+        code: 'EXPIRED_LICENSE',
+        isNetworkError: false,
+        message: 'اعتبار لایسنس این نرم‌افزار به پایان رسیده است.',
+      };
+    }
+
+    // 3. Authoritative ACTIVE confirmation
+    if (response.statusCode === 200 && (resData.success || resData.status === 'ACTIVE')) {
+      return {
+        success: true,
+        status: 'ACTIVE',
+        token: resData.token,
+        licenseInfo: resData.licenseInfo,
+        message: 'لایسنس معتبر و فعال است',
+      };
+    }
+
+    // 4. Device Mismatch check
+    if (errorCode === 'DEVICE_MISMATCH') {
+      return {
+        success: false,
+        status: 'DEVICE_MISMATCH',
+        error: 'DEVICE_MISMATCH',
+        code: 'DEVICE_MISMATCH',
+        isNetworkError: false,
+        message: resData.error || 'این سیستم با دستگاه‌های ثبت‌شده لایسنس مطابقت ندارد.',
+      };
+    }
+
+    // Other authoritative rejection from server
+    return {
+      success: false,
+      status: 'UNACTIVATED',
+      error: errorCode || 'INVALID_LICENSE',
+      code: errorCode || 'INVALID_LICENSE',
+      isNetworkError: false,
+      message: getFriendlyErrorMessage(errorCode, resData.error),
+    };
+  } catch (err) {
+    // Network timeout, connection refused, DNS resolution error, or offline
+    return {
+      success: false,
+      status: 'OFFLINE_FALLBACK',
+      isNetworkError: true,
+      error: err && err.message === 'NETWORK_TIMEOUT' ? 'NETWORK_TIMEOUT' : 'NETWORK_ERROR',
+      code: 'NETWORK_ERROR',
+      message: 'عدم دسترسی به سرور لایسنس (حالت آفلاین)',
+    };
   }
 }
 
@@ -216,6 +334,7 @@ async function processRecovery(licenseKey, recoveryCode, newHardwareFingerprint,
 }
 
 module.exports = {
+  checkLicenseStatus,
   processActivation,
   processRecovery,
   getFriendlyErrorMessage,
