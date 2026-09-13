@@ -399,31 +399,91 @@ async function activateLicense(licenseKey, storagePaths, customServer) {
  */
 function activateOfflinePackage(rawPackageData, storagePaths) {
   if (!rawPackageData) {
-    return { success: false, error: 'EMPTY_PACKAGE', message: 'پکیج فعالسازی آفلاین خالی است' };
+    return {
+      success: false,
+      status: 'UNACTIVATED',
+      error: 'EMPTY_PACKAGE',
+      message: 'پکیج فعالسازی آفلاین خالی است. لطفاً کد Base64، متن JSON یا فایل دانلود شده را وارد کنید.',
+    };
   }
 
   let pkgObj;
   try {
     let str = typeof rawPackageData === 'string' ? rawPackageData.trim() : JSON.stringify(rawPackageData);
-    if (!str.startsWith('{') && !str.startsWith('[')) {
-      // Decode Base64 package string
-      str = Buffer.from(str, 'base64').toString('utf8');
+
+    // If string is wrapped in quotes or escaped JSON
+    if (str.startsWith('"') && str.endsWith('"')) {
+      try {
+        str = JSON.parse(str);
+      } catch {
+        // ignore
+      }
     }
+
+    if (!str.startsWith('{') && !str.startsWith('[')) {
+      // Decode Base64 package string (strip any whitespace or newlines)
+      const sanitizedBase64 = str.replace(/\s+/g, '');
+      const decoded = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
+      if (decoded.startsWith('{') || decoded.startsWith('[')) {
+        str = decoded;
+      }
+    }
+
     pkgObj = JSON.parse(str);
   } catch (err) {
     return {
       success: false,
-      error: 'INVALID_ACTIVATION_PACKAGE',
-      message: 'فرمت پکیج فعالسازی آفلاین نامعتبر است',
+      status: 'UNACTIVATED',
+      error: 'PARSE_ERROR',
+      message: 'فرمت داده‌های ورودی پکیج نامعتبر است (قادر به تحلیل JSON یا Base64 نبود).',
     };
   }
 
+  // Auto-unwrap if admin console full response object was pasted (e.g. { success: true, package: { ... } })
+  if (pkgObj && typeof pkgObj === 'object') {
+    if (pkgObj.package && typeof pkgObj.package === 'object') {
+      pkgObj = pkgObj.package;
+    } else if (pkgObj.packageJson && typeof pkgObj.packageJson === 'string') {
+      try {
+        pkgObj = JSON.parse(pkgObj.packageJson);
+      } catch {
+        // ignore
+      }
+    } else if (pkgObj.packageBase64 && typeof pkgObj.packageBase64 === 'string') {
+      try {
+        const decoded = Buffer.from(pkgObj.packageBase64.trim(), 'base64').toString('utf8');
+        pkgObj = JSON.parse(decoded);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
   // Validate package structure
-  if (!pkgObj || typeof pkgObj !== 'object' || !pkgObj.payload || !pkgObj.signature) {
+  if (!pkgObj || typeof pkgObj !== 'object') {
     return {
       success: false,
-      error: 'INVALID_ACTIVATION_PACKAGE',
-      message: 'ساختار پکیج فعالسازی ناقص است',
+      status: 'UNACTIVATED',
+      error: 'MALFORMED_PACKAGE',
+      message: 'ساختار پکیج نامعتبر یا شیء خالی است.',
+    };
+  }
+
+  if (!pkgObj.payload) {
+    return {
+      success: false,
+      status: 'UNACTIVATED',
+      error: 'MISSING_PAYLOAD',
+      message: 'بخش اطلاعات اصلی (payload) در پکیج یافت نشد.',
+    };
+  }
+
+  if (!pkgObj.signature) {
+    return {
+      success: false,
+      status: 'UNACTIVATED',
+      error: 'MISSING_SIGNATURE',
+      message: 'امضای دیجیتال معتبر سرور (signature) در پکیج یافت نشد.',
     };
   }
 
@@ -436,8 +496,9 @@ function activateOfflinePackage(rawPackageData, storagePaths) {
   if (!verifyTokenSignature(token)) {
     return {
       success: false,
-      error: 'INVALID_ACTIVATION_PACKAGE',
-      message: 'امضای دیجیتال پکیج آفلاین نامعتبر است',
+      status: 'UNACTIVATED',
+      error: 'INVALID_SIGNATURE',
+      message: 'امضای دیجیتال Ed25519 پکیج با کلید عمومی رسمی Gym OS مطابقت ندارد و مخدوش است.',
     };
   }
 
@@ -448,8 +509,9 @@ function activateOfflinePackage(rawPackageData, storagePaths) {
   if (payload.deviceFingerprint !== currentFp) {
     return {
       success: false,
-      error: 'DEVICE_MISMATCH',
-      message: 'این پکیج فعالسازی برای شناسه سخت‌افزاری دستگاه دیگری صادر شده است',
+      status: 'DEVICE_MISMATCH',
+      error: 'HARDWARE_MISMATCH',
+      message: 'این پکیج برای شناسه سخت‌افزاری دستگاه دیگری صادر شده است و روی این رایانه قابل اعمال نیست.',
       boundDeviceMasked: getMaskedFingerprint(payload.deviceFingerprint),
     };
   }
@@ -460,8 +522,9 @@ function activateOfflinePackage(rawPackageData, storagePaths) {
     if (!isNaN(expiryTime) && Date.now() > expiryTime) {
       return {
         success: false,
-        error: 'EXPIRED',
-        message: 'تاریخ اعتبار پکیج فعالسازی آفلاین منقضی شده است',
+        status: 'EXPIRED',
+        error: 'EXPIRED_PACKAGE',
+        message: 'تاریخ اعتبار تعیین‌شده برای این پکیج منقضی شده است.',
       };
     }
   }

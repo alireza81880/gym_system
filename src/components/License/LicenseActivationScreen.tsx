@@ -3,7 +3,7 @@
  * Production Persian license verification, hardware binding, and recovery gateway.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ShieldCheck,
   ShieldAlert,
@@ -21,6 +21,7 @@ import {
   FileCode,
   Copy,
   Check,
+  Upload,
 } from 'lucide-react';
 import { licenseService } from '../../services/licenseService';
 import { LicenseInfo, LicenseStatus } from '../../types/license';
@@ -46,6 +47,8 @@ export const LicenseActivationScreen: React.FC<LicenseActivationScreenProps> = (
   const [deviceFingerprint, setDeviceFingerprint] = useState<string>('در حال محاسبه...');
   const [rawFingerprint, setRawFingerprint] = useState<string>('');
   const [copiedFp, setCopiedFp] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -152,6 +155,27 @@ export const LicenseActivationScreen: React.FC<LicenseActivationScreenProps> = (
       const msg = err instanceof Error ? err.message : 'خطا در ارتباط با سامانه فعالسازی';
       setStatusMessage(msg);
     }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadedFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        setOfflinePackageText(content.trim());
+        setStatusMessage(`فایل «${file.name}» با موفقیت بارگذاری شد.`);
+      }
+    };
+    reader.onerror = () => {
+      setStatusMessage('خطا در خواندن فایل انتخاب‌شده');
+    };
+    reader.readAsText(file);
+    // Reset file input so user can re-select the same file if needed
+    e.target.value = '';
   };
 
   const handleOfflineActivate = async (e?: React.FormEvent) => {
@@ -494,12 +518,50 @@ export const LicenseActivationScreen: React.FC<LicenseActivationScreenProps> = (
                 <label className="block text-xs font-bold text-cyan-300">
                   محتوای پکیج فعالسازی اضطراری آفلاین (JSON یا Base64)
                 </label>
-                <span className="text-[11px] text-slate-400">تولیدشده توسط ابزار مدیر Gym OS</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileSelect}
+                    accept=".json,application/json,text/plain"
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isProcessing || status === 'ACTIVE'}
+                    className="flex items-center gap-1.5 text-xs text-cyan-400 hover:text-cyan-300 bg-cyan-950/60 hover:bg-cyan-900/60 px-2.5 py-1 rounded-lg border border-cyan-800/60 transition-colors cursor-pointer"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>آپلود فایل JSON</span>
+                  </button>
+                  <span className="text-[11px] text-slate-400 hidden sm:inline">تولیدشده توسط مدیر Gym OS</span>
+                </div>
               </div>
+
+              {uploadedFileName && (
+                <div className="mb-2 flex items-center justify-between text-xs bg-cyan-950/40 border border-cyan-800/50 rounded-lg px-3 py-1.5 text-cyan-300">
+                  <span className="flex items-center gap-1.5">
+                    <FileCode className="w-4 h-4 text-cyan-400" />
+                    <span>فایل انتخاب‌شده: <strong className="text-white font-mono">{uploadedFileName}</strong></span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUploadedFileName('');
+                      setOfflinePackageText('');
+                    }}
+                    className="text-slate-400 hover:text-rose-400 text-xs transition-colors"
+                  >
+                    حذف
+                  </button>
+                </div>
+              )}
+
               <textarea
                 value={offlinePackageText}
                 onChange={(e) => setOfflinePackageText(e.target.value)}
-                placeholder="پکیج متنی JSON امضا شده حاوی payload و signature را در این بخش الصاق کنید..."
+                placeholder="پکیج متنی JSON امضا شده حاوی payload و signature را در این بخش الصاق کنید یا فایل JSON را آپلود نمایید..."
                 rows={5}
                 disabled={isProcessing || status === 'ACTIVE'}
                 className="w-full bg-slate-950/80 border border-slate-700 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 rounded-2xl p-3.5 text-xs text-white font-mono placeholder:text-slate-600 outline-none transition-all leading-relaxed"
