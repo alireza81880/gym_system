@@ -581,6 +581,23 @@ export const LicenseActivationScreen: React.FC<LicenseActivationScreenProps> = (
           پس از فعالسازی اولیه، سامانه به صورت کاملاً آفلاین و بدون نیاز به اینترنت فعالیت خواهد نمود.
         </div>
 
+        {/* Admin Console Route Link */}
+        <div className="mt-4 pt-3 border-t border-slate-900 text-center">
+          <button
+            type="button"
+            onClick={() => {
+              const url = new URL(window.location.href);
+              url.searchParams.set('route', 'admin-license');
+              window.history.pushState(null, '', url.pathname + (url.search ? url.search : ''));
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            }}
+            className="text-[11px] text-slate-600 hover:text-slate-400 transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+          >
+            <Lock className="w-3 h-3" />
+            <span>کنسول مدیریت و صدور لایسنس (ورود مدیران سیستم)</span>
+          </button>
+        </div>
+
       </div>
     </div>
   );

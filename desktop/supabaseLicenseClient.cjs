@@ -10,6 +10,44 @@
 const https = require('https');
 const http = require('http');
 
+// Load built-in desktop configuration (SUPABASE_URL and publishable SUPABASE_ANON_KEY only)
+let defaultConfig = { SUPABASE_URL: '', SUPABASE_ANON_KEY: '' };
+try {
+  defaultConfig = require('./licenseConfig.cjs');
+} catch (err) {
+  // Graceful fallback if licenseConfig.cjs is not found
+  defaultConfig = { SUPABASE_URL: '', SUPABASE_ANON_KEY: '' };
+}
+
+/**
+ * Resolves Supabase connection configuration with priority:
+ * 1. Explicit options passed to call
+ * 2. Optional process.env override (if set by developer/admin)
+ * 3. Built-in desktop internal configuration (desktop/licenseConfig.cjs)
+ */
+function resolveSupabaseConfig(options = {}) {
+  // If options explicitly provide a supabaseUrl (even empty), respect it; otherwise check process.env, then internal config
+  let url;
+  if (options.supabaseUrl !== undefined && options.supabaseUrl !== null) {
+    url = String(options.supabaseUrl).trim();
+  } else if (process.env.SUPABASE_URL && process.env.SUPABASE_URL.trim() !== '') {
+    url = process.env.SUPABASE_URL.trim();
+  } else {
+    url = (defaultConfig.SUPABASE_URL || '').trim();
+  }
+
+  let anonKey;
+  if (options.supabaseAnonKey !== undefined && options.supabaseAnonKey !== null) {
+    anonKey = String(options.supabaseAnonKey).trim();
+  } else if (process.env.SUPABASE_ANON_KEY && process.env.SUPABASE_ANON_KEY.trim() !== '') {
+    anonKey = process.env.SUPABASE_ANON_KEY.trim();
+  } else {
+    anonKey = (defaultConfig.SUPABASE_ANON_KEY || '').trim();
+  }
+
+  return { supabaseUrl: url, anonKey };
+}
+
 function postJson(urlStr, headers, body, timeoutMs = 12000) {
   return new Promise((resolve, reject) => {
     try {
@@ -94,10 +132,7 @@ function getFriendlyErrorMessage(errorCode, serverMessage) {
  * Distinguishes network unavailability (offline fallback) from authoritative REVOKED/EXPIRED status.
  */
 async function checkLicenseStatus(licenseKey, deviceFingerprint, options = {}) {
-  const rawUrl = options.supabaseUrl !== undefined ? options.supabaseUrl : process.env.SUPABASE_URL;
-  const rawKey = options.supabaseAnonKey !== undefined ? options.supabaseAnonKey : process.env.SUPABASE_ANON_KEY;
-  const supabaseUrl = typeof rawUrl === 'string' ? rawUrl.trim() : '';
-  const anonKey = typeof rawKey === 'string' ? rawKey.trim() : '';
+  const { supabaseUrl, anonKey } = resolveSupabaseConfig(options);
   const timeoutMs = typeof options.timeout === 'number' ? options.timeout : 4000;
 
   if (!supabaseUrl || !anonKey) {
@@ -210,10 +245,7 @@ async function checkLicenseStatus(licenseKey, deviceFingerprint, options = {}) {
  * Executes remote online activation against Supabase Edge Function
  */
 async function processActivation(licenseKey, deviceFingerprint, options = {}) {
-  const rawUrl = options.supabaseUrl !== undefined ? options.supabaseUrl : process.env.SUPABASE_URL;
-  const rawKey = options.supabaseAnonKey !== undefined ? options.supabaseAnonKey : process.env.SUPABASE_ANON_KEY;
-  const supabaseUrl = typeof rawUrl === 'string' ? rawUrl.trim() : '';
-  const anonKey = typeof rawKey === 'string' ? rawKey.trim() : '';
+  const { supabaseUrl, anonKey } = resolveSupabaseConfig(options);
 
   if (!supabaseUrl || !anonKey) {
     return {
@@ -274,10 +306,7 @@ async function processActivation(licenseKey, deviceFingerprint, options = {}) {
  * Executes remote authorized recovery against Supabase Edge Function
  */
 async function processRecovery(licenseKey, recoveryCode, newHardwareFingerprint, options = {}) {
-  const rawUrl = options.supabaseUrl !== undefined ? options.supabaseUrl : process.env.SUPABASE_URL;
-  const rawKey = options.supabaseAnonKey !== undefined ? options.supabaseAnonKey : process.env.SUPABASE_ANON_KEY;
-  const supabaseUrl = typeof rawUrl === 'string' ? rawUrl.trim() : '';
-  const anonKey = typeof rawKey === 'string' ? rawKey.trim() : '';
+  const { supabaseUrl, anonKey } = resolveSupabaseConfig(options);
 
   if (!supabaseUrl || !anonKey) {
     return {
@@ -334,6 +363,7 @@ async function processRecovery(licenseKey, recoveryCode, newHardwareFingerprint,
 }
 
 module.exports = {
+  resolveSupabaseConfig,
   checkLicenseStatus,
   processActivation,
   processRecovery,

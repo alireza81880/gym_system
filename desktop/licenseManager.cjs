@@ -468,6 +468,7 @@ function activateOfflinePackage(rawPackageData, storagePaths) {
 
   // 4. Save token atomically to local disk
   saveTokenAtomically(storagePaths, token);
+  resetSessionRevocationStatus();
 
   const finalStatus = getLicenseStatus(storagePaths);
   return {

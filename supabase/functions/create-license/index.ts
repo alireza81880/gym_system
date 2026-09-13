@@ -1,6 +1,7 @@
 // Supabase Edge Function: create-license
 // Authoritative creation, duration calculation, and signing gateway for Gym OS licenses.
 // Strictly runs in Supabase cloud environment with access to service_role and Ed25519 signing key.
+// Protected by real Supabase Auth JWT and server-enforced super_admin role verification.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
@@ -13,7 +14,7 @@ const corsHeaders = {
 };
 
 interface CreateLicensePayload {
-  action?: "create" | "list" | "revoke";
+  action?: "create" | "list" | "revoke" | "unrevoke" | "restore" | "generate_offline_package" | "renew_offline";
   customer_name?: string;
   plan?: string;
   license_type?: "TRIAL" | "YEARLY" | "MULTI_YEAR" | "LIFETIME" | "CUSTOM";
@@ -22,6 +23,30 @@ interface CreateLicensePayload {
   custom_license_key?: string;
   notes?: string;
   license_key?: string;
+  hardware_fingerprint?: string;
+  start_date?: string;
+  expires_at?: string | null;
+  is_recovery?: boolean;
+  recovery_code?: string;
+}
+
+function canonicalizePayload(payload: Record<string, any>): string {
+  if (!payload || typeof payload !== "object") return "";
+  const sortedKeys = Object.keys(payload).sort();
+  const sortedObj: Record<string, any> = {};
+  for (const key of sortedKeys) {
+    sortedObj[key] = payload[key];
+  }
+  return JSON.stringify(sortedObj);
+}
+
+function formatPrivateKey(rawKey: string): string {
+  if (!rawKey) return "";
+  let key = rawKey.trim();
+  if (key.includes("\\n")) {
+    key = key.replace(/\\n/g, "\n");
+  }
+  return key;
 }
 
 function hashString(str: string): string {
@@ -66,6 +91,59 @@ function calculateExpiry(createdDate: Date, durationMonths: number | null): stri
   return expiry.toISOString();
 }
 
+/**
+ * Server-Enforced Authentication & RBAC Verification
+ * Verifies Supabase Auth JWT and ensures caller has 'super_admin' role.
+ */
+async function verifySuperAdmin(req: Request, supabase: any): Promise<{ authorized: boolean; userId?: string; email?: string; error?: string }> {
+  const authHeader = req.headers.get("Authorization") || req.headers.get("authorization");
+  if (!authHeader) {
+    return { authorized: false, error: "Missing Authorization header. Authentication required." };
+  }
+
+  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (!token) {
+    return { authorized: false, error: "Malformed Authorization header token." };
+  }
+
+  // 1. Verify token with Supabase Auth
+  const { data: userData, error: userError } = await supabase.auth.getUser(token);
+  if (userError || !userData?.user) {
+    return { authorized: false, error: `Invalid or expired authentication token: ${userError?.message || "User not found"}` };
+  }
+
+  const user = userData.user;
+
+  // 2. Check metadata first (app_metadata or user_metadata)
+  const appRole = user.app_metadata?.role;
+  const userRole = user.user_metadata?.role;
+  if (appRole === "super_admin" || userRole === "super_admin") {
+    return { authorized: true, userId: user.id, email: user.email };
+  }
+
+  // 3. Check public.profiles table
+  try {
+    const { data: profile, error: profileErr } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (!profileErr && profile && profile.role === "super_admin") {
+      return { authorized: true, userId: user.id, email: user.email };
+    }
+  } catch (err) {
+    console.error("Profile lookup error:", err);
+  }
+
+  return {
+    authorized: false,
+    userId: user.id,
+    email: user.email,
+    error: "Forbidden: Super Admin privileges (role=super_admin) required for license administration.",
+  };
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -84,6 +162,24 @@ serve(async (req: Request) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // =========================================================================
+    // MANDATORY SERVER-SIDE AUTHORIZATION: Only super_admin is allowed
+    // =========================================================================
+    const authCheck = await verifySuperAdmin(req, supabase);
+    if (!authCheck.authorized) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: authCheck.error || "Unauthorized",
+          code: "UNAUTHORIZED_SUPER_ADMIN",
+        }),
+        {
+          status: authCheck.error?.startsWith("Forbidden") ? 403 : 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     let body: CreateLicensePayload = {};
     if (req.method === "POST") {
       try {
@@ -96,6 +192,7 @@ serve(async (req: Request) => {
     const action = body.action || (req.method === "GET" ? "list" : "create");
 
     // 1. LIST LICENSES
+    // Security Fix: Do NOT leak plain recovery_code in list action
     if (action === "list") {
       const { data: licenses, error: listErr } = await supabase
         .from("licenses")
@@ -109,7 +206,6 @@ serve(async (req: Request) => {
           license_type,
           duration_months,
           max_devices,
-          recovery_code,
           status,
           created_at,
           activated_at,
@@ -127,7 +223,7 @@ serve(async (req: Request) => {
         throw new Error("Failed to list licenses: " + listErr.message);
       }
 
-      // Format clean list with active device counts
+      // Format clean list with active device counts, NEVER returning plain recovery codes
       const formatted = (licenses || []).map((lic: any) => {
         const activations = Array.isArray(lic.license_activations) ? lic.license_activations : [];
         const activeDevicesCount = activations.filter((a: any) => !a.revoked_at).length;
@@ -141,7 +237,7 @@ serve(async (req: Request) => {
           duration_months: lic.duration_months !== undefined ? lic.duration_months : null,
           max_devices: lic.max_devices || 1,
           active_devices_count: activeDevicesCount,
-          recovery_code: lic.recovery_code || "---",
+          recovery_code: "PROTECTED", // Security hardening: Do not leak recovery code in list
           status: lic.status,
           created_at: lic.created_at,
           activated_at: lic.activated_at,
@@ -177,7 +273,7 @@ serve(async (req: Request) => {
       }
 
       return new Response(
-        JSON.stringify({ success: true, message: `لایسنس ${targetKey} با موفقیت غیرفعال (Revoked) شد.` }),
+        JSON.stringify({ success: true, message: `لایسنس ${targetKey} با موفقیت توسط راهبر ارشد غیرفعال (Revoked) شد.` }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -221,6 +317,103 @@ serve(async (req: Request) => {
       );
     }
 
+    // 2C. GENERATE SIGNED OFFLINE ACTIVATION / RENEWAL PACKAGE
+    if (action === "generate_offline_package" || action === "renew_offline") {
+      const targetKey = (body.license_key || "").trim().toUpperCase();
+      const hardwareFingerprint = (body.hardware_fingerprint || "").trim();
+      if (!targetKey || !hardwareFingerprint) {
+        return new Response(
+          JSON.stringify({ success: false, error: "license_key و hardware_fingerprint الزامی هستند." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const keyHash = hashString(targetKey);
+      const { data: licRecord, error: fetchErr } = await supabase
+        .from("licenses")
+        .select("*")
+        .or(`license_key_hash.eq.${keyHash},license_key.eq.${targetKey}`)
+        .single();
+
+      if (fetchErr || !licRecord) {
+        return new Response(
+          JSON.stringify({ success: false, error: "لایسنس مورد نظر در سامانه یافت نشد." }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const now = body.start_date || new Date().toISOString();
+      let expiresAt = body.expires_at !== undefined ? body.expires_at : licRecord.expires_at;
+      if (body.duration_months && Number(body.duration_months) > 0) {
+        expiresAt = calculateExpiry(new Date(now), Number(body.duration_months));
+      }
+
+      // Update authoritative license status in cloud database
+      await supabase
+        .from("licenses")
+        .update({
+          status: "ACTIVE",
+          activated_at: licRecord.activated_at || now,
+          expires_at: expiresAt,
+        })
+        .eq("id", licRecord.id);
+
+      const customerDisplayName = licRecord.customer_name || licRecord.gym_name || "باشگاه ورزشی";
+
+      const payload = {
+        licenseId: licRecord.license_key || licRecord.display_key,
+        gymId: licRecord.id,
+        gymName: customerDisplayName,
+        customerName: customerDisplayName,
+        product: "GymOS-Desktop",
+        plan: licRecord.plan || "Professional",
+        licenseType: licRecord.license_type || (expiresAt ? "YEARLY" : "LIFETIME"),
+        durationMonths: body.duration_months !== undefined ? body.duration_months : licRecord.duration_months,
+        maxDevices: licRecord.max_devices || 1,
+        deviceFingerprint: hardwareFingerprint,
+        activatedAt: now,
+        expiresAt: expiresAt,
+        tokenVersion: 1,
+        activationType: "OFFLINE_PACKAGE",
+      };
+
+      const rawPrivateKey = Deno.env.get("ED25519_PRIVATE_KEY");
+      const ed25519PrivateKeyPem = formatPrivateKey(rawPrivateKey || "");
+      if (!ed25519PrivateKeyPem) {
+        return new Response(
+          JSON.stringify({ success: false, error: "کلید خصوصی امضای سرور (ED25519_PRIVATE_KEY) تنظیم نشده است." }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const canonicalString = canonicalizePayload(payload);
+      const signature = crypto
+        .sign(null, Buffer.from(canonicalString, "utf8"), ed25519PrivateKeyPem)
+        .toString("base64");
+
+      const pkgObj = {
+        version: 1,
+        packageType: "OFFLINE_ACTIVATION",
+        createdAt: new Date().toISOString(),
+        payload,
+        signature,
+      };
+
+      const packageJson = JSON.stringify(pkgObj, null, 2);
+      const packageBase64 = Buffer.from(JSON.stringify(pkgObj)).toString("base64");
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "بسته فعالسازی و تمدید آفلاین با موفقیت تولید شد.",
+          package: pkgObj,
+          packageJson,
+          packageBase64,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // 3. CREATE LICENSE MANUALLY
     const customerName = (body.customer_name || "").trim();
     if (!customerName) {
@@ -241,11 +434,11 @@ serve(async (req: Request) => {
     if (licenseType === "LIFETIME") {
       durationMonths = null;
     } else if (licenseType === "TRIAL") {
-      durationMonths = body.duration_months && body.duration_months > 0 ? body.duration_months : 1; // 1 month trial
+      durationMonths = body.duration_months && body.duration_months > 0 ? body.duration_months : 1;
     } else if (licenseType === "YEARLY") {
-      durationMonths = 12; // 1 year = 12 months
+      durationMonths = 12;
     } else if (licenseType === "MULTI_YEAR") {
-      durationMonths = body.duration_months && body.duration_months > 0 ? body.duration_months : 24; // 24 or 36 months
+      durationMonths = body.duration_months && body.duration_months > 0 ? body.duration_months : 24;
     } else {
       // CUSTOM or explicit duration_months
       if (body.duration_months === null || body.duration_months === undefined || body.duration_months <= 0) {
@@ -313,7 +506,7 @@ serve(async (req: Request) => {
       created_at: createdAt,
       expires_at: expiresAt,
       max_devices: maxDevices,
-      recovery_code: recoveryCode,
+      recovery_code: recoveryCode, // Only returned on initial creation to super_admin
       status: "UNUSED",
       notes: body.notes || null,
     };

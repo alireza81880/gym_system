@@ -30,6 +30,7 @@ import { CommandPaletteModal } from './components/Modals/CommandPaletteModal';
 import { EmergencyMasterUnlockModal } from './components/Modals/EmergencyMasterUnlockModal';
 import { OnboardingWizardModal } from './components/Modals/OnboardingWizardModal';
 import { LicenseActivationScreen } from './components/License/LicenseActivationScreen';
+import { AdminLicenseConsoleScreen } from './components/License/AdminLicenseConsoleScreen';
 import { licenseService } from './services/licenseService';
 import { LicenseInfo } from './types/license';
 
@@ -310,6 +311,50 @@ export function App() {
   const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
   const [isLicenseChecking, setIsLicenseChecking] = useState<boolean>(true);
 
+  const getAdminRouteFromUrl = (): string => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('route') === 'admin-license' || params.get('admin') === 'license') {
+        return 'admin-license';
+      }
+      if (window.location.hash === '#admin-license') {
+        return 'admin-license';
+      }
+    } catch {
+      // Ignore URL parsing errors
+    }
+    return '';
+  };
+
+  const [currentRoute, setCurrentRoute] = useState<string>(getAdminRouteFromUrl);
+
+  useEffect(() => {
+    const handleUrlChange = () => {
+      setCurrentRoute(getAdminRouteFromUrl());
+    };
+    window.addEventListener('popstate', handleUrlChange);
+    window.addEventListener('hashchange', handleUrlChange);
+    return () => {
+      window.removeEventListener('popstate', handleUrlChange);
+      window.removeEventListener('hashchange', handleUrlChange);
+    };
+  }, []);
+
+  const handleExitAdmin = useCallback(() => {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('route');
+      url.searchParams.delete('admin');
+      if (window.location.hash === '#admin-license') {
+        window.location.hash = '';
+      }
+      window.history.pushState(null, '', url.pathname + (url.search ? url.search : ''));
+    } catch {
+      // Fallback
+    }
+    setCurrentRoute('');
+  }, []);
+
   const checkLicense = useCallback(async () => {
     try {
       const info = await licenseService.getLicenseStatus();
@@ -337,6 +382,15 @@ export function App() {
   useEffect(() => {
     checkLicense();
   }, [checkLicense]);
+
+  // 0. Dedicated Admin License Console Screen
+  if (currentRoute === 'admin-license') {
+    return (
+      <AdminLicenseConsoleScreen
+        onExit={handleExitAdmin}
+      />
+    );
+  }
 
   // 1. Hardware License Verification Gate
   if (isLicenseChecking) {

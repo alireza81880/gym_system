@@ -25,6 +25,9 @@ import {
   RotateCcw,
   Eye,
   SlidersHorizontal,
+  WifiOff,
+  Download,
+  ExternalLink,
 } from 'lucide-react';
 import { licenseService } from '../../services/licenseService';
 import { LicenseRecord, LicenseType } from '../../types/license';
@@ -32,7 +35,7 @@ import { calculateLicenseExpiry, formatPersianDate, getDurationLabel, generateLi
 
 export const AdminLicensePortal: React.FC = () => {
   // Navigation subtabs
-  const [subTab, setSubTab] = useState<'create' | 'list'>('create');
+  const [subTab, setSubTab] = useState<'list' | 'create' | 'offline_renew'>('list');
 
   // Form states for manual license creation
   const [customerName, setCustomerName] = useState('');
@@ -66,6 +69,24 @@ export const AdminLicensePortal: React.FC = () => {
 
   // Restore/Unrevoke state
   const [isRestoring, setIsRestoring] = useState(false);
+
+  // Offline Renewal & Emergency Package Generation state
+  const [renewLicenseKey, setRenewLicenseKey] = useState('');
+  const [renewHardwareFingerprint, setRenewHardwareFingerprint] = useState('');
+  const [renewStartDate, setRenewStartDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [renewDurationPreset, setRenewDurationPreset] = useState<'1' | '12' | '24' | '36' | 'custom' | 'lifetime'>('12');
+  const [renewCustomMonths, setRenewCustomMonths] = useState<number>(12);
+  const [renewIsRecovery, setRenewIsRecovery] = useState(false);
+  const [renewRecoveryCode, setRenewRecoveryCode] = useState('');
+  const [isGeneratingPackage, setIsGeneratingPackage] = useState(false);
+  const [packageError, setPackageError] = useState<string | null>(null);
+  const [generatedPackageResult, setGeneratedPackageResult] = useState<{
+    package: any;
+    packageJson: string;
+    packageBase64: string;
+    message: string;
+  } | null>(null);
+  const [copiedPackageField, setCopiedPackageField] = useState<'base64' | 'json' | null>(null);
 
   // Determine current active durationMonths
   const currentDurationMonths: number | null = useMemo(() => {
@@ -210,6 +231,81 @@ export const AdminLicensePortal: React.FC = () => {
     }
   };
 
+  const handleGenerateOfflinePackage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPackageError(null);
+    setGeneratedPackageResult(null);
+
+    const cleanKey = renewLicenseKey.trim().toUpperCase();
+    const cleanHw = renewHardwareFingerprint.trim();
+
+    if (!cleanKey) {
+      setPackageError('لطفاً شناسه لایسنس را انتخاب یا وارد نمایید.');
+      return;
+    }
+    if (!cleanHw) {
+      setPackageError('شناسه سخت‌افزاری دستگاه مقصد الزامی است.');
+      return;
+    }
+
+    let months: number | null = 12;
+    if (renewDurationPreset === 'lifetime') months = null;
+    else if (renewDurationPreset === '1') months = 1;
+    else if (renewDurationPreset === '12') months = 12;
+    else if (renewDurationPreset === '24') months = 24;
+    else if (renewDurationPreset === '36') months = 36;
+    else if (renewDurationPreset === 'custom') months = Math.max(1, renewCustomMonths || 1);
+
+    const startDateIso = renewStartDate ? new Date(renewStartDate).toISOString() : new Date().toISOString();
+    const expiresAt = calculateLicenseExpiry(new Date(startDateIso), months);
+
+    setIsGeneratingPackage(true);
+    try {
+      const res = await licenseService.generateOfflinePackage({
+        licenseKey: cleanKey,
+        hardwareFingerprint: cleanHw,
+        startDate: startDateIso,
+        expiresAt,
+        durationMonths: months,
+        isRecovery: renewIsRecovery,
+        recoveryCode: renewIsRecovery ? renewRecoveryCode.trim() : undefined,
+      });
+
+      if (res.success && res.packageBase64) {
+        setGeneratedPackageResult({
+          package: res.package,
+          packageJson: res.packageJson || JSON.stringify(res.package, null, 2),
+          packageBase64: res.packageBase64,
+          message: res.message || 'بسته فعالسازی آفلاین با موفقیت تولید و امضا شد.',
+        });
+        await loadLicenses();
+      } else {
+        setPackageError(res.error || 'خطا در تولید بسته آفلاین');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'خطای غیرمنتظره در تولید بسته';
+      setPackageError(msg);
+    } finally {
+      setIsGeneratingPackage(false);
+    }
+  };
+
+  const handleDownloadPackage = (filename: string, text: string) => {
+    try {
+      const blob = new Blob([text], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('خطا در دانلود فایل');
+    }
+  };
+
   const filteredLicenses = useMemo(() => {
     return licenses.filter((lic) => {
       const q = searchQuery.toLowerCase();
@@ -235,18 +331,29 @@ export const AdminLicensePortal: React.FC = () => {
               کنسول مدیریت لایسنس
             </h3>
             <p className="text-xs text-slate-400 mt-1">
-              صدور، بررسی، مدیریت و ابطال لایسنس‌های Gym OS
+              صدور، بررسی، مدیریت، ابطال و تمدید اضطراری آفلاین لایسنس‌های Gym OS
             </p>
           </div>
         </div>
       </div>
 
       {/* Subtab navigation */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+      <div className="flex items-center justify-between border-b border-slate-800 pb-4 overflow-x-auto">
         <div className="flex items-center gap-3">
           <button
+            onClick={() => setSubTab('list')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              subTab === 'list'
+                ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20'
+                : 'bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Key className="w-4 h-4" />
+            <span>فهرست لایسنس‌های صادر شده ({licenses.length})</span>
+          </button>
+          <button
             onClick={() => setSubTab('create')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
               subTab === 'create'
                 ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20'
                 : 'bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800'
@@ -256,15 +363,15 @@ export const AdminLicensePortal: React.FC = () => {
             <span>صدور دستی لایسنس جدید</span>
           </button>
           <button
-            onClick={() => setSubTab('list')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              subTab === 'list'
-                ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20'
+            onClick={() => setSubTab('offline_renew')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+              subTab === 'offline_renew'
+                ? 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20 font-black'
                 : 'bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
-            <Key className="w-4 h-4" />
-            <span>فهرست لایسنس‌های صادر شده ({licenses.length})</span>
+            <WifiOff className="w-4 h-4" />
+            <span>تمدید آفلاین و صدور پکیج اضطراری</span>
           </button>
         </div>
       </div>
@@ -761,6 +868,17 @@ export const AdminLicensePortal: React.FC = () => {
                           )}
                         </button>
 
+                        <button
+                          onClick={() => {
+                            setRenewLicenseKey(lic.license_key);
+                            setSubTab('offline_renew');
+                          }}
+                          className="p-2 rounded-xl bg-slate-800 hover:bg-cyan-500/20 text-slate-400 hover:text-cyan-400 transition-all cursor-pointer"
+                          title="تمدید و صدور بسته اضطراری آفلاین"
+                        >
+                          <WifiOff className="w-4 h-4" />
+                        </button>
+
                         {lic.status !== 'REVOKED' ? (
                           <button
                             onClick={() => setLicenseToRevoke(lic)}
@@ -786,6 +904,275 @@ export const AdminLicensePortal: React.FC = () => {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* OFFLINE RENEWAL / EMERGENCY PACKAGE GENERATION TAB */}
+      {subTab === 'offline_renew' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Renewal Form */}
+          <div className="lg:col-span-7 bg-slate-900/50 border border-slate-800 rounded-3xl p-6 space-y-5">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <WifiOff className="w-5 h-5 text-cyan-400" />
+                <span>تمدید و صدور بسته اضطراری آفلاین</span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                تولید بسته آفلاین امضاشده با کلید رمزنگاری سرور (Ed25519) برای سیستم‌های فاقد اینترنت یا تمدید دوره‌ای.
+              </p>
+            </div>
+
+            <form onSubmit={handleGenerateOfflinePackage} className="space-y-4">
+              {packageError && (
+                <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-xs text-rose-400 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>{packageError}</span>
+                </div>
+              )}
+
+              {/* License Selection or Input */}
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1.5">
+                  لایسنس هدف: <span className="text-rose-400">*</span>
+                </label>
+                {licenses.length > 0 ? (
+                  <div className="space-y-2">
+                    <select
+                      value={renewLicenseKey}
+                      onChange={(e) => setRenewLicenseKey(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+                    >
+                      <option value="">-- انتخاب از لیست لایسنس‌های صادر شده --</option>
+                      {licenses.map((lic) => (
+                        <option key={lic.id || lic.license_key} value={lic.license_key}>
+                          {lic.customer_name} — {lic.license_key} ({lic.status})
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      placeholder="یا وارد کردن مستقیم شناسه لایسنس (GYM-...)"
+                      value={renewLicenseKey}
+                      onChange={(e) => setRenewLicenseKey(e.target.value.toUpperCase())}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-xs font-mono text-cyan-400 focus:outline-none focus:border-cyan-500"
+                      dir="ltr"
+                    />
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    required
+                    placeholder="GYM-XXXX-XXXX-XXXX"
+                    value={renewLicenseKey}
+                    onChange={(e) => setRenewLicenseKey(e.target.value.toUpperCase())}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3.5 text-xs font-mono text-cyan-400 focus:outline-none focus:border-cyan-500"
+                    dir="ltr"
+                  />
+                )}
+              </div>
+
+              {/* Target Hardware Fingerprint */}
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1.5">
+                  شناسه سخت‌افزاری دستگاه مقصد (Hardware Fingerprint): <span className="text-rose-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثال: HW-a1b2c3d4... یا رشته ۶۴ کاراکتری سخت‌افزار"
+                  value={renewHardwareFingerprint}
+                  onChange={(e) => setRenewHardwareFingerprint(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-500"
+                  dir="ltr"
+                />
+                <span className="text-[11px] text-slate-500 block mt-1">
+                  مشتری این کد را از زبانه «پکیج اضطراری آفلاین» در رایانه مقصد کپی کرده و به شما اعلام می‌کند.
+                </span>
+              </div>
+
+              {/* Start Date & Duration */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1.5">
+                    تاریخ شروع فعالسازی / تمدید:
+                  </label>
+                  <input
+                    type="date"
+                    value={renewStartDate}
+                    onChange={(e) => setRenewStartDate(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1.5">
+                    مدت تمدید:
+                  </label>
+                  <select
+                    value={renewDurationPreset}
+                    onChange={(e) => setRenewDurationPreset(e.target.value as any)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-cyan-500"
+                  >
+                    <option value="1">۱ ماه (آزمایشی / تمدید ماهانه)</option>
+                    <option value="12">۱۲ ماه (۱ سال استاندارد)</option>
+                    <option value="24">۲۴ ماه (۲ سال)</option>
+                    <option value="36">۳۶ ماه (۳ سال)</option>
+                    <option value="custom">سفارشی (تعداد ماه دلخواه)</option>
+                    <option value="lifetime">مادام‌العمر (بدون تاریخ انقضا)</option>
+                  </select>
+                </div>
+              </div>
+
+              {renewDurationPreset === 'custom' && (
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1.5">
+                    تعداد ماه سفارشی:
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="120"
+                    value={renewCustomMonths}
+                    onChange={(e) => setRenewCustomMonths(parseInt(e.target.value) || 1)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+              )}
+
+              {/* Hardware Rebind / Recovery Toggle */}
+              <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 space-y-3">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={renewIsRecovery}
+                    onChange={(e) => setRenewIsRecovery(e.target.checked)}
+                    className="rounded text-cyan-500 focus:ring-cyan-500 w-4 h-4 bg-slate-900 border-slate-700"
+                  />
+                  <span className="text-xs font-bold text-slate-200">
+                    اتصال به دستگاه جدید / بازیابی سخت‌افزار (Rebind)
+                  </span>
+                </label>
+
+                {renewIsRecovery && (
+                  <div className="pt-2 border-t border-slate-800/80">
+                    <label className="text-[11px] font-bold text-slate-400 block mb-1">
+                      کد بازیابی سخت‌افزار (اختیاری):
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="REC-XXXX-XXXXXX"
+                      value={renewRecoveryCode}
+                      onChange={(e) => setRenewRecoveryCode(e.target.value.toUpperCase())}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl py-2 px-3 text-xs font-mono text-amber-400 focus:outline-none"
+                      dir="ltr"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={isGeneratingPackage}
+                className="w-full bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-950 font-extrabold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-cyan-500/20"
+              >
+                {isGeneratingPackage ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>در حال تولید و امضای دیجیتال بسته سروری...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    <span>تولید و امضای بسته اضطراری آفلاین</span>
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+
+          {/* Generated Package Output Card */}
+          <div className="lg:col-span-5 space-y-4">
+            {generatedPackageResult ? (
+              <div className="bg-cyan-950/20 border-2 border-cyan-500/50 rounded-3xl p-5 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                <div className="flex items-center gap-2.5 text-cyan-400 font-bold text-sm">
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span>بسته اضطراری با موفقیت تولید و امضا شد!</span>
+                </div>
+
+                <div className="bg-slate-950/90 p-4 rounded-2xl border border-cyan-500/30 space-y-3">
+                  <div>
+                    <span className="text-[11px] text-slate-400 block font-medium">لایسنس:</span>
+                    <span className="text-xs font-mono font-bold text-white block mt-0.5" dir="ltr">
+                      {renewLicenseKey}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-[11px] text-slate-400 block font-medium">سخت‌افزار متصل:</span>
+                    <span className="text-[11px] font-mono text-cyan-300 block truncate mt-0.5" dir="ltr">
+                      {renewHardwareFingerprint}
+                    </span>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-400 font-medium">کد پکیج Base64:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(generatedPackageResult.packageBase64);
+                        setCopiedPackageField('base64');
+                        setTimeout(() => setCopiedPackageField(null), 2000);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      {copiedPackageField === 'base64' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedPackageField === 'base64' ? 'کپی شد' : 'کپی کد Base64'}</span>
+                    </button>
+                  </div>
+
+                  <div className="max-h-24 overflow-y-auto bg-slate-900 p-2.5 rounded-xl border border-slate-800 text-[10px] font-mono text-slate-400 break-all select-all">
+                    {generatedPackageResult.packageBase64}
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadPackage(`gymos_license_${renewLicenseKey}.json`, generatedPackageResult.packageJson)}
+                      className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>دانلود فایل JSON پکیج</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Instructions for customer */}
+                <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-3.5 text-xs text-slate-300 space-y-2">
+                  <span className="font-bold text-cyan-400 block flex items-center gap-1.5">
+                    <Info className="w-4 h-4" />
+                    <span>راهنمای تحویل به مشتری:</span>
+                  </span>
+                  <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-400 leading-relaxed">
+                    <li>کد Base64 یا فایل دانلودشده را از طریق فلش یا پیام‌رسان به مشتری تحویل دهید.</li>
+                    <li>مشتری در برنامه دسکتاپ رایانه خود، وارد تب «پکیج اضطراری آفلاین» می‌شود.</li>
+                    <li>محتوای پکیج را Paste کرده و دکمه «اعمال بسته و فعالسازی» را می‌زند.</li>
+                  </ol>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-6 space-y-4 text-center">
+                <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center mx-auto">
+                  <WifiOff className="w-6 h-6" />
+                </div>
+                <h4 className="text-sm font-bold text-white">
+                  تمدید بدون نیاز به اتصال دسکتاپ مشتری به اینترنت
+                </h4>
+                <p className="text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">
+                  با وارد کردن شناسه سخت‌افزاری دستگاه و کلید لایسنس، بسته رمزنگاری‌شده معتبری تولید می‌شود که به صورت کاملاً آفلاین روی سیستم مشتری فعال خواهد شد.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -928,6 +1315,19 @@ export const AdminLicensePortal: React.FC = () => {
                   <span>بازگردانی لایسنس</span>
                 </button>
               )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setRenewLicenseKey(selectedLicense.license_key);
+                  setSubTab('offline_renew');
+                  setSelectedLicense(null);
+                }}
+                className="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <WifiOff className="w-4 h-4" />
+                <span>تمدید آفلاین</span>
+              </button>
 
               <button
                 onClick={() => setSelectedLicense(null)}

@@ -249,6 +249,92 @@ function expireLicense(licenseId) {
   }
 }
 
+function restoreLicense(licenseId) {
+  const cleanId = (licenseId || '').trim().toUpperCase();
+  const record = licenseDatabase.get(cleanId);
+  if (record) {
+    record.status = record.activatedAt ? 'ACTIVE' : 'UNUSED';
+    return { success: true, status: record.status, message: 'لایسنس با موفقیت بازگردانی شد' };
+  }
+  return { success: false, error: 'NOT_FOUND', message: 'لایسنس یافت نشد' };
+}
+
+function generateOfflinePackage({
+  licenseId,
+  deviceFingerprint,
+  startDate,
+  expiresAt,
+  isRecovery,
+  recoveryCode,
+  durationMonths,
+}) {
+  const cleanId = (licenseId || '').trim().toUpperCase();
+  const record = licenseDatabase.get(cleanId);
+  if (!record) {
+    return { success: false, error: 'LICENSE_NOT_FOUND', message: 'لایسنس یافت نشد' };
+  }
+
+  if (isRecovery && recoveryCode) {
+    if (record.recoveryCode !== recoveryCode.trim()) {
+      return { success: false, error: 'UNAUTHORIZED_RECOVERY', message: 'کد بازیابی لایسنس نامعتبر است' };
+    }
+  }
+
+  const cleanHw = (deviceFingerprint || '').trim();
+  if (!cleanHw) {
+    return { success: false, error: 'MISSING_FINGERPRINT', message: 'شناسه سخت‌افزاری دستگاه الزامی است' };
+  }
+
+  const now = startDate || new Date().toISOString();
+  let finalExpiry = expiresAt !== undefined ? expiresAt : record.expiresAt;
+  if (durationMonths && durationMonths > 0) {
+    const startObj = new Date(now);
+    startObj.setMonth(startObj.getMonth() + Number(durationMonths));
+    finalExpiry = startObj.toISOString();
+  }
+
+  // Update server authority record to ACTIVE
+  record.status = 'ACTIVE';
+  record.deviceBinding = cleanHw;
+  record.activatedAt = now;
+  record.expiresAt = finalExpiry;
+
+  const payload = {
+    licenseId: record.licenseId,
+    gymId: record.gymId,
+    gymName: record.gymName,
+    customerName: record.gymName,
+    product: record.product,
+    plan: record.plan,
+    deviceFingerprint: cleanHw,
+    activatedAt: now,
+    expiresAt: finalExpiry,
+    tokenVersion: record.tokenVersion || 1,
+    activationType: 'OFFLINE_PACKAGE',
+  };
+
+  const signature = signPayload(payload);
+
+  const pkgObj = {
+    version: 1,
+    packageType: 'OFFLINE_ACTIVATION',
+    createdAt: new Date().toISOString(),
+    payload,
+    signature,
+  };
+
+  const packageJson = JSON.stringify(pkgObj, null, 2);
+  const packageBase64 = Buffer.from(JSON.stringify(pkgObj)).toString('base64');
+
+  return {
+    success: true,
+    message: 'بسته فعالسازی و تمدید آفلاین با موفقیت تولید شد',
+    package: pkgObj,
+    packageJson,
+    packageBase64,
+  };
+}
+
 function setLicenseStatus(licenseId, status) {
   const cleanId = (licenseId || '').trim().toUpperCase();
   const record = licenseDatabase.get(cleanId);
@@ -332,8 +418,10 @@ module.exports = {
   processRecovery,
   checkLicenseStatus,
   revokeLicense,
+  restoreLicense,
   expireLicense,
   setLicenseStatus,
+  generateOfflinePackage,
   resetMockDatabase,
   getLicenseRecord,
   canonicalizePayload,

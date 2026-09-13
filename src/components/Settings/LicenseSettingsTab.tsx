@@ -29,6 +29,9 @@ import {
 } from 'lucide-react';
 import { licenseService } from '../../services/licenseService';
 import { LicenseInfo, LicenseStatus } from '../../types/license';
+import { AuthService } from '../../services/auth/authService';
+import { supabaseAuthService, SuperAdminProfile } from '../../services/auth/supabaseAuthService';
+import { StaffUser } from '../../types';
 import { AdminLicensePortal } from './AdminLicensePortal';
 
 interface LicenseSettingsTabProps {
@@ -39,6 +42,78 @@ export const LicenseSettingsTab: React.FC<LicenseSettingsTabProps> = ({ onLicens
   const [viewMode, setViewMode] = useState<'client' | 'admin'>('client');
   const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Client User & Role
+  const [currentUser, setCurrentUser] = useState<StaffUser | null>(() => {
+    AuthService.initialize();
+    return AuthService.getCurrentUser();
+  });
+
+  // Real Super Admin Auth State for Admin Portal
+  const [adminProfile, setAdminProfile] = useState<SuperAdminProfile | null>(() => {
+    return supabaseAuthService.getCurrentProfile();
+  });
+  const [isSuperAdmin, setIsSuperAdmin] = useState<boolean>(() => {
+    return supabaseAuthService.isSuperAdmin();
+  });
+
+  // Admin inline login state with Supabase Auth
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminLoginError, setAdminLoginError] = useState<string | null>(null);
+  const [isAdminLoggingIn, setIsAdminLoggingIn] = useState(false);
+
+  useEffect(() => {
+    AuthService.initialize();
+    const unsubscribeLocal = AuthService.subscribe((session) => {
+      setCurrentUser(session?.user || null);
+    });
+
+    const unsubscribeSupabase = supabaseAuthService.subscribe((_session, profile) => {
+      setAdminProfile(profile);
+      setIsSuperAdmin(profile?.role === 'super_admin');
+    });
+
+    // Check existing server session
+    supabaseAuthService.checkSession().then((res) => {
+      if (res.isSuperAdmin) {
+        setIsSuperAdmin(true);
+        setAdminProfile(supabaseAuthService.getCurrentProfile());
+      }
+    });
+
+    return () => {
+      unsubscribeLocal();
+      unsubscribeSupabase();
+    };
+  }, []);
+
+  const openDedicatedAdminConsole = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('route', 'admin-license');
+    window.history.pushState(null, '', url.pathname + (url.search ? url.search : ''));
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
+
+  const handleAdminInlineLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminLoginError(null);
+    setIsAdminLoggingIn(true);
+
+    try {
+      const res = await supabaseAuthService.signIn(adminEmail.trim(), adminPassword);
+      if (res.success && res.isSuperAdmin) {
+        setIsSuperAdmin(true);
+        setAdminProfile(supabaseAuthService.getCurrentProfile());
+      } else {
+        setAdminLoginError(res.error || 'ورود ناموفق بود: نیاز به حساب راهبر ارشد (super_admin) در سرور است.');
+      }
+    } catch {
+      setAdminLoginError('خطای سیستمی در احراز هویت سرور.');
+    } finally {
+      setIsAdminLoggingIn(false);
+    }
+  };
 
   // Manual Activation Form
   const [activateKey, setActivateKey] = useState('');
@@ -259,8 +334,8 @@ export const LicenseSettingsTab: React.FC<LicenseSettingsTabProps> = ({ onLicens
   return (
     <div className="space-y-6" dir="rtl">
       {/* Top View Mode Switcher */}
-      <div className="flex items-center justify-between bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800">
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between bg-slate-900/80 p-2 rounded-2xl border border-slate-800 gap-2">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setViewMode('client')}
@@ -271,7 +346,7 @@ export const LicenseSettingsTab: React.FC<LicenseSettingsTabProps> = ({ onLicens
             }`}
           >
             <Laptop className="w-4 h-4 text-cyan-400" />
-            <span>مدیریت لایسنس این سیستم</span>
+            <span>مشخصات لایسنس این سیستم (کلاینت)</span>
           </button>
 
           <button
@@ -284,13 +359,86 @@ export const LicenseSettingsTab: React.FC<LicenseSettingsTabProps> = ({ onLicens
             }`}
           >
             <Key className="w-4 h-4" />
-            <span>مدیریت و صدور لایسنس</span>
+            <span>مدیریت و صدور لایسنس (ادمین)</span>
           </button>
         </div>
+
+        <button
+          type="button"
+          onClick={openDedicatedAdminConsole}
+          className="flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 text-xs font-bold transition-all cursor-pointer"
+          title="باز کردن کنسول در صفحه مستقل و تمام‌صفحه"
+        >
+          <Lock className="w-3.5 h-3.5" />
+          <span>کنسول مستقل تمام‌صفحه</span>
+        </button>
       </div>
 
       {viewMode === 'admin' ? (
-        <AdminLicensePortal />
+        <div className="space-y-4">
+          {!isSuperAdmin ? (
+            <div className="bg-slate-900/70 border border-slate-800 rounded-3xl p-6 max-w-md mx-auto my-8 space-y-4 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mx-auto">
+                <Lock className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white">
+                  احراز هویت سروری مدیر لایسنس
+                </h4>
+                <p className="text-xs text-slate-400 mt-1">
+                  مشاهده و صدور لایسنس‌ها مستلزم احراز هویت با دسترسی <strong className="text-emerald-400">super_admin</strong> در Supabase Auth است.
+                </p>
+              </div>
+
+              {adminLoginError && (
+                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-400">
+                  {adminLoginError}
+                </div>
+              )}
+
+              <form onSubmit={handleAdminInlineLogin} className="space-y-3 text-right">
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">
+                    ایمیل راهبر ارشد (Super Admin):
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    placeholder="admin@gymos.internal"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-xs text-white"
+                    dir="ltr"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-300 block mb-1">
+                    رمز عبور:
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-xs text-white"
+                    dir="ltr"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isAdminLoggingIn}
+                  className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                >
+                  <Key className="w-4 h-4" />
+                  <span>{isAdminLoggingIn ? 'در حال بررسی هویت سرور...' : 'تایید دسترسی سروری و ورود'}</span>
+                </button>
+              </form>
+            </div>
+          ) : (
+            <AdminLicensePortal />
+          )}
+        </div>
       ) : (
         <div className="space-y-6">
           {/* 1. Status Banner */}
