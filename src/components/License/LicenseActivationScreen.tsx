@@ -299,6 +299,20 @@ export const LicenseActivationScreen: React.FC<LicenseActivationScreenProps> = (
             <span>این لایسنس توسط مدیریت لغو شده</span>
           </div>
         );
+      case 'CLOCK_ROLLBACK_DETECTED':
+        return (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold">
+            <AlertCircle className="w-4 h-4" />
+            <span>خطای ساعت سیستم (تغییر ساعت به گذشته)</span>
+          </div>
+        );
+      case 'LICENSE_STATE_TAMPERED':
+        return (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold">
+            <ShieldAlert className="w-4 h-4" />
+            <span>خطای امنیتی (دستکاری در اطلاعات لایسنس)</span>
+          </div>
+        );
       case 'UNACTIVATED':
       default:
         return (

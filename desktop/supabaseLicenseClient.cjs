@@ -76,12 +76,15 @@ function postJson(urlStr, headers, body, timeoutMs = 12000) {
           rawData += chunk;
         });
         res.on('end', () => {
+          const dateHeader = res.headers['date'] || null;
           try {
             const parsed = JSON.parse(rawData);
-            resolve({ statusCode: res.statusCode, data: parsed });
+            resolve({ statusCode: res.statusCode, headers: res.headers, serverDateHeader: dateHeader, data: parsed });
           } catch (e) {
             resolve({
               statusCode: res.statusCode,
+              headers: res.headers,
+              serverDateHeader: dateHeader,
               data: { error: 'Invalid JSON response from server', raw: rawData },
             });
           }
@@ -161,6 +164,7 @@ async function checkLicenseStatus(licenseKey, deviceFingerprint, options = {}) {
 
     const resData = response.data || {};
     const errorCode = resData.code || resData.error;
+    const serverTimestamp = resData.serverTimeIso || response.serverDateHeader || new Date().toISOString();
 
     // 1. Authoritative REVOKED check
     if (
@@ -174,6 +178,7 @@ async function checkLicenseStatus(licenseKey, deviceFingerprint, options = {}) {
         status: 'REVOKED',
         error: 'REVOKED_LICENSE',
         code: 'REVOKED_LICENSE',
+        serverTimeIso: serverTimestamp,
         isNetworkError: false,
         message: 'لایسنس این نرم‌افزار توسط مدیریت لغو شده است.',
       };
@@ -191,6 +196,7 @@ async function checkLicenseStatus(licenseKey, deviceFingerprint, options = {}) {
         status: 'EXPIRED',
         error: 'EXPIRED_LICENSE',
         code: 'EXPIRED_LICENSE',
+        serverTimeIso: serverTimestamp,
         isNetworkError: false,
         message: 'اعتبار لایسنس این نرم‌افزار به پایان رسیده است.',
       };
@@ -203,6 +209,7 @@ async function checkLicenseStatus(licenseKey, deviceFingerprint, options = {}) {
         status: 'ACTIVE',
         token: resData.token,
         licenseInfo: resData.licenseInfo,
+        serverTimeIso: serverTimestamp,
         message: 'لایسنس معتبر و فعال است',
       };
     }
@@ -273,6 +280,7 @@ async function processActivation(licenseKey, deviceFingerprint, options = {}) {
       return {
         success: true,
         token: response.data.token,
+        serverTimeIso: response.data.serverTimeIso || response.serverDateHeader || new Date().toISOString(),
         message: response.data.message || 'لایسنس با موفقیت فعال و به این سیستم متصل شد',
         licenseInfo: response.data.licenseInfo,
       };
@@ -336,6 +344,7 @@ async function processRecovery(licenseKey, recoveryCode, newHardwareFingerprint,
       return {
         success: true,
         token: response.data.token,
+        serverTimeIso: response.data.serverTimeIso || response.serverDateHeader || new Date().toISOString(),
         newRecoveryCode: response.data.newRecoveryCode,
         message: response.data.message || 'لایسنس با موفقیت بازیابی و به این سیستم جدید متصل شد',
         licenseInfo: response.data.licenseInfo,

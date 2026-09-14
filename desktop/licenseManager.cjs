@@ -14,6 +14,7 @@ const path = require('path');
 const crypto = require('crypto');
 const os = require('os');
 const { execSync } = require('child_process');
+const securityStore = require('./licenseSecurityStore.cjs');
 
 // Production Public Verification Key (Ed25519)
 const LICENSING_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
@@ -153,7 +154,7 @@ function verifyTokenSignature(token) {
 /**
  * Evaluates license token against current device state and policy
  */
-function evaluateToken(token) {
+function evaluateToken(token, storagePaths) {
   if (!token || !token.payload) {
     return { status: 'UNACTIVATED', reason: 'NO_TOKEN' };
   }
@@ -164,6 +165,8 @@ function evaluateToken(token) {
     return {
       status: 'RECOVERY_REQUIRED',
       reason: 'TAMPERED_SIGNATURE',
+      error: 'TAMPERED_SIGNATURE',
+      code: 'TAMPERED_SIGNATURE',
       message: 'امضای دیجیتال لایسنس معتبر نیست یا فایل دستکاری شده است',
       deviceBindingStatus: 'TAMPERED',
     };
@@ -185,10 +188,60 @@ function evaluateToken(token) {
     };
   }
 
-  // 3. Verify expiration date if non-perpetual
+  // 3. Verify Clock Rollback & Secure State Integrity (if storagePaths provided)
+  const nowWallMs = Date.now();
+  if (storagePaths) {
+    const secResult = securityStore.readSecureState(storagePaths, currentDeviceFp);
+    if (!secResult.ok) {
+      return {
+        status: 'LICENSE_STATE_TAMPERED',
+        error: 'LICENSE_STATE_TAMPERED',
+        code: 'LICENSE_STATE_TAMPERED',
+        reason: 'SECURE_STATE_TAMPERED',
+        message: secResult.message || 'وضعیت امن لایسنس یا ساعت سیستم دستکاری شده است.',
+        payload,
+        deviceBindingStatus: 'TAMPERED',
+      };
+    }
+
+    if (secResult.exists && secResult.state) {
+      const stored = secResult.state;
+      const lastTrusted = stored.lastTrustedWallClockMs || 0;
+
+      // Clock Rollback Detection with 2-hour tolerance
+      if (lastTrusted > 0 && nowWallMs < (lastTrusted - securityStore.ROLLBACK_TOLERANCE_MS)) {
+        return {
+          status: 'CLOCK_ROLLBACK_DETECTED',
+          error: 'CLOCK_ROLLBACK_DETECTED',
+          code: 'CLOCK_ROLLBACK_DETECTED',
+          reason: 'CLOCK_ROLLBACK',
+          message: 'دستکاری در تاریخ و ساعت سیستم تشخیص داده شد. لطفاً ساعت رایانه خود را تصحیح نمایید.',
+          payload,
+          deviceBindingStatus: 'BOUND_MATCHED',
+        };
+      }
+
+      // Anti-Replay / Monotonic Generation Check:
+      // If token payload has a tokenVersion or generation that is older than stored generation
+      const incomingGen = payload.tokenVersion || payload.generation || 1;
+      if (stored.licenseId === payload.licenseId && stored.tokenGeneration > incomingGen) {
+        return {
+          status: 'EXPIRED',
+          error: 'OUTDATED_TOKEN_REPLACED',
+          code: 'EXPIRED_LICENSE',
+          reason: 'OUTDATED_TOKEN',
+          message: 'این بسته یا فایل لایسنس قبلاً با نسخه جدیدتر جایگزین شده و دیگر معتبر نیست.',
+          payload,
+          deviceBindingStatus: 'BOUND_MATCHED',
+        };
+      }
+    }
+  }
+
+  // 4. Verify expiration date if non-perpetual
   if (payload.expiresAt) {
     const expiryTime = Date.parse(payload.expiresAt);
-    if (!isNaN(expiryTime) && Date.now() > expiryTime) {
+    if (!isNaN(expiryTime) && nowWallMs > expiryTime) {
       return {
         status: 'EXPIRED',
         error: 'EXPIRED_LICENSE',
@@ -201,7 +254,7 @@ function evaluateToken(token) {
     }
   }
 
-  // 4. Token passes all verification checks
+  // 5. Token passes all verification checks
   return {
     status: 'ACTIVE',
     payload,
@@ -246,7 +299,7 @@ function getLicenseStatus(storagePaths) {
   try {
     const rawContent = fs.readFileSync(licenseFile, 'utf8');
     const token = JSON.parse(rawContent);
-    const evaluation = evaluateToken(token);
+    const evaluation = evaluateToken(token, storagePaths);
 
     const payload = evaluation.payload || (token && token.payload) || {};
 
@@ -291,6 +344,28 @@ function getLicenseStatus(storagePaths) {
       };
     }
 
+    // If successfully ACTIVE, advance monotonic lastTrustedWallClock
+    if (evaluation.status === 'ACTIVE' && storagePaths) {
+      try {
+        const secRes = securityStore.readSecureState(storagePaths, currentFp);
+        const existingState = (secRes.ok && secRes.state) ? secRes.state : {};
+        const nowMs = Date.now();
+        const prevTrusted = existingState.lastTrustedWallClockMs || 0;
+        const newTrusted = Math.max(prevTrusted, nowMs);
+
+        securityStore.writeSecureState(storagePaths, {
+          ...existingState,
+          licenseId: payload.licenseId,
+          tokenFingerprint: securityStore.computeTokenFingerprint(token),
+          tokenGeneration: payload.tokenVersion || existingState.tokenGeneration || 1,
+          lastTrustedWallClockMs: newTrusted,
+          lastValidationAt: new Date().toISOString(),
+        }, currentFp);
+      } catch {
+        // non-blocking
+      }
+    }
+
     return baseStatus;
   } catch (err) {
     return {
@@ -307,9 +382,9 @@ function getLicenseStatus(storagePaths) {
 }
 
 /**
- * Saves a signed activation token atomically to local disk
+ * Saves a signed activation token atomically to local disk and hardware-bound secure store
  */
-function saveTokenAtomically(storagePaths, token) {
+function saveTokenAtomically(storagePaths, token, authoritativeServerTimeIso) {
   const licenseFile = getLicenseFilePath(storagePaths);
   const dir = path.dirname(licenseFile);
   if (!fs.existsSync(dir)) {
@@ -320,6 +395,43 @@ function saveTokenAtomically(storagePaths, token) {
   const content = JSON.stringify(token, null, 2);
   fs.writeFileSync(tempFile, content, 'utf8');
   fs.renameSync(tempFile, licenseFile);
+
+  // Update hardware-bound secure state store
+  try {
+    const currentFp = getDeviceFingerprint();
+    const payload = token && token.payload ? token.payload : {};
+    const secRes = securityStore.readSecureState(storagePaths, currentFp);
+    const existing = (secRes.ok && secRes.state) ? secRes.state : {};
+    
+    let trustedTimeMs = Date.now();
+    if (authoritativeServerTimeIso) {
+      const serverParsed = Date.parse(authoritativeServerTimeIso);
+      if (!isNaN(serverParsed) && serverParsed > 0) {
+        trustedTimeMs = serverParsed;
+      }
+    }
+    const prevTrusted = existing.lastTrustedWallClockMs || 0;
+    const finalTrusted = Math.max(prevTrusted, trustedTimeMs);
+
+    securityStore.writeSecureState(storagePaths, {
+      ...existing,
+      licenseId: payload.licenseId || null,
+      gymId: payload.gymId || null,
+      gymName: payload.gymName || payload.customerName || null,
+      tokenFingerprint: securityStore.computeTokenFingerprint(token),
+      tokenGeneration: payload.tokenVersion || payload.generation || 1,
+      deviceFingerprint: currentFp,
+      firstActivatedAt: existing.firstActivatedAt || payload.activatedAt || new Date().toISOString(),
+      lastValidationAt: new Date().toISOString(),
+      lastAuthoritativeCheckAt: authoritativeServerTimeIso ? new Date().toISOString() : (existing.lastAuthoritativeCheckAt || null),
+      lastAuthoritativeServerTime: authoritativeServerTimeIso || existing.lastAuthoritativeServerTime || null,
+      lastTrustedWallClockMs: finalTrusted,
+      offlineGraceDaysAllowed: 30,
+      revocationStatus: null,
+    }, currentFp);
+  } catch (err) {
+    // Non-blocking fallback
+  }
 }
 
 /**
@@ -380,7 +492,7 @@ async function activateLicense(licenseKey, storagePaths, customServer) {
   }
 
   // Save token atomically
-  saveTokenAtomically(storagePaths, result.token);
+  saveTokenAtomically(storagePaths, result.token, result.serverTimeIso);
   resetSessionRevocationStatus();
 
   const finalStatus = getLicenseStatus(storagePaths);
@@ -529,8 +641,8 @@ function activateOfflinePackage(rawPackageData, storagePaths) {
     }
   }
 
-  // 4. Save token atomically to local disk
-  saveTokenAtomically(storagePaths, token);
+  // 4. Save token atomically to local disk and secure state store
+  saveTokenAtomically(storagePaths, token, payload.activatedAt || null);
   resetSessionRevocationStatus();
 
   const finalStatus = getLicenseStatus(storagePaths);
@@ -592,8 +704,8 @@ async function recoverLicense(licenseKey, recoveryCode, storagePaths, customServ
     };
   }
 
-  // Save token atomically
-  saveTokenAtomically(storagePaths, result.token);
+  // Save token atomically and update authoritative time
+  saveTokenAtomically(storagePaths, result.token, result.serverTimeIso);
   resetSessionRevocationStatus();
 
   const finalStatus = getLicenseStatus(storagePaths);
@@ -608,7 +720,7 @@ async function recoverLicense(licenseKey, recoveryCode, storagePaths, customServ
 
 /**
  * Removes local activation token (e.g. for re-activation or uninstallation).
- * Crucial invariant: strictly deletes license_activation.json; preserves SQLite database,
+ * Crucial invariant: strictly deletes license_activation.json and secure store state; preserves SQLite database,
  * members, subscriptions, payments, and backups.
  */
 function clearActivation(storagePaths) {
@@ -618,6 +730,8 @@ function clearActivation(storagePaths) {
     if (fs.existsSync(licenseFile)) {
       fs.unlinkSync(licenseFile);
     }
+    // Also securely clear hardware-bound encrypted state
+    securityStore.clearSecureState(storagePaths);
     return true;
   } catch (err) {
     return false;
@@ -628,10 +742,11 @@ function clearActivation(storagePaths) {
  * Startup License Validation:
  * 1. Checks and verifies local Ed25519 token offline.
  * 2. If locally valid and internet is available, checks authoritative status from Supabase.
- * 3. If server status is REVOKED: blocks entry, sets session status to REVOKED, and shows clear message.
- * 4. If server status is EXPIRED: blocks entry, sets session status to EXPIRED.
- * 5. If server status is ACTIVE: confirms active status and allows normal dashboard entry.
- * 6. If internet is completely unavailable (offline / network timeout): applies Offline Grace Policy,
+ * 3. Ingests and updates authoritative Server Time for clock rollback protection.
+ * 4. If server status is REVOKED: blocks entry, sets session status to REVOKED, and shows clear message.
+ * 5. If server status is EXPIRED: blocks entry, sets session status to EXPIRED.
+ * 6. If server status is ACTIVE: confirms active status and allows normal dashboard entry.
+ * 7. If internet is completely unavailable (offline / network timeout): applies Offline Grace Policy,
  *    allowing normal entry based on valid local Ed25519 token.
  */
 async function validateStartupLicense(storagePaths, customServer, options = {}) {
@@ -680,6 +795,28 @@ async function validateStartupLicense(storagePaths, customServer, options = {}) 
       return localStatus;
     }
 
+    // Process and record authoritative server time
+    if (checkResult.serverTimeIso) {
+      try {
+        const parsedServerMs = Date.parse(checkResult.serverTimeIso);
+        if (!isNaN(parsedServerMs) && parsedServerMs > 0) {
+          const secRes = securityStore.readSecureState(storagePaths, currentFp);
+          const currSec = (secRes.ok && secRes.state) ? secRes.state : {};
+          const prevTrusted = currSec.lastTrustedWallClockMs || 0;
+          const newTrusted = Math.max(prevTrusted, parsedServerMs);
+
+          securityStore.writeSecureState(storagePaths, {
+            ...currSec,
+            lastAuthoritativeCheckAt: new Date().toISOString(),
+            lastAuthoritativeServerTime: checkResult.serverTimeIso,
+            lastTrustedWallClockMs: newTrusted,
+          }, currentFp);
+        }
+      } catch {
+        // non-blocking
+      }
+    }
+
     // Step 3: Authoritative REVOKED check
     if (
       checkResult.status === 'REVOKED' ||
@@ -725,7 +862,7 @@ async function validateStartupLicense(storagePaths, customServer, options = {}) 
       // If server returned an updated signed token, save it atomically
       if (checkResult.token && verifyTokenSignature(checkResult.token)) {
         try {
-          saveTokenAtomically(storagePaths, checkResult.token);
+          saveTokenAtomically(storagePaths, checkResult.token, checkResult.serverTimeIso);
         } catch (e) {
           // ignore save error
         }
