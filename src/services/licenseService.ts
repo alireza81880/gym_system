@@ -823,7 +823,7 @@ class LicenseService {
       isRecovery?: boolean;
       recoveryCode?: string;
     },
-    config?: { supabaseUrl?: string; supabaseAnonKey?: string }
+    config?: { supabaseUrl?: string; supabaseAnonKey?: string; url?: string; anonKey?: string }
   ): Promise<{
     success: boolean;
     package?: unknown;
@@ -842,91 +842,62 @@ class LicenseService {
       return { success: false, error: 'شناسه سخت‌افزاری دستگاه مقصد الزامی است.' };
     }
 
-    const url = config?.supabaseUrl?.trim();
-    const anonKey = config?.supabaseAnonKey?.trim();
+    // Auto-detect Supabase configuration if not explicitly provided
+    const resolvedConfig = config || supabaseAuthService.getConfig();
+    const url = ('supabaseUrl' in resolvedConfig ? resolvedConfig.supabaseUrl : resolvedConfig.url)?.trim();
+    const anonKey = ('supabaseAnonKey' in resolvedConfig ? resolvedConfig.supabaseAnonKey : resolvedConfig.anonKey)?.trim();
 
-    if (url && anonKey) {
-      try {
-        const endpoint = `${url.replace(/\/+$/, '')}/functions/v1/create-license`;
-        const authToken = supabaseAuthService.getAccessToken() || anonKey;
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: anonKey,
-            Authorization: `Bearer ${authToken}`,
-          },
-          body: JSON.stringify({
-            action: 'generate_offline_package',
-            license_key: cleanKey,
-            hardware_fingerprint: cleanHw,
-            start_date: input.startDate,
-            expires_at: input.expiresAt,
-            duration_months: input.durationMonths,
-            is_recovery: input.isRecovery,
-            recovery_code: input.recoveryCode,
-          }),
-        });
-        const data = await res.json();
-        if (data.success && data.package) {
-          AuditService.logEvent({
-            action: 'LICENSE_OFFLINE_PACKAGE_GENERATED',
-            category: 'security',
-            entityType: 'setting',
-            entityId: cleanKey,
-            description: `تولید بسته فعالسازی آفلاین سروری برای لایسنس ${cleanKey} و دستگاه ${cleanHw}`,
-            result: 'success',
-          });
-          return {
-            success: true,
-            package: data.package,
-            packageBase64: data.packageBase64,
-            packageJson: data.packageJson,
-            message: data.message || 'بسته فعالسازی آفلاین با موفقیت تولید شد.',
-          };
-        }
-        return { success: false, error: data.error || 'خطا در تولید بسته آفلاین از سرور' };
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'خطای ارتباط با سرور';
-        return { success: false, error: msg };
-      }
+    if (!url || !anonKey) {
+      return {
+        success: false,
+        error: 'SUPABASE_CONFIGURATION_MISSING: تنظیمات اتصال ابری Supabase یافت نشد. لطفاً مقادیر VITE_SUPABASE_URL و VITE_SUPABASE_ANON_KEY را تنظیم کنید یا از منوی تنظیمات سرور متصل شوید.',
+      };
     }
 
-    // Web simulation fallback for offline package generation preview
-    const now = input.startDate || new Date().toISOString();
-    const pkgObj = {
-      version: 1,
-      packageType: 'OFFLINE_ACTIVATION',
-      createdAt: now,
-      payload: {
-        licenseId: cleanKey,
-        gymId: 'gym-sim-' + cleanKey,
-        gymName: 'مجموعه ورزشی مرکزی',
-        customerName: 'مجموعه ورزشی مرکزی',
-        product: 'GymOS-Desktop',
-        plan: 'Enterprise',
-        licenseType: input.expiresAt ? 'YEARLY' : 'LIFETIME',
-        durationMonths: input.durationMonths || 12,
-        maxDevices: 1,
-        deviceFingerprint: cleanHw,
-        activatedAt: now,
-        expiresAt: input.expiresAt || null,
-        tokenVersion: 1,
-        activationType: 'OFFLINE_PACKAGE',
-      },
-      signature: 'SIMULATED_WEB_SIGNATURE_FOR_PREVIEW_ONLY',
-    };
-
-    const packageJson = JSON.stringify(pkgObj, null, 2);
-    const packageBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(pkgObj))));
-
-    return {
-      success: true,
-      package: pkgObj,
-      packageJson,
-      packageBase64,
-      message: 'بسته آفلاین در محیط شبیه‌سازی وب تولید شد. (برای کلاینت واقعی دسکتاپ اتصال به سرور جهت امضای دیجیتال لازم است)',
-    };
+    try {
+      const endpoint = `${url.replace(/\/+$/, '')}/functions/v1/create-license`;
+      const authToken = supabaseAuthService.getAccessToken() || anonKey;
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: anonKey,
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          action: 'generate_offline_package',
+          license_key: cleanKey,
+          hardware_fingerprint: cleanHw,
+          start_date: input.startDate,
+          expires_at: input.expiresAt,
+          duration_months: input.durationMonths,
+          is_recovery: input.isRecovery,
+          recovery_code: input.recoveryCode,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.package) {
+        AuditService.logEvent({
+          action: 'LICENSE_OFFLINE_PACKAGE_GENERATED',
+          category: 'security',
+          entityType: 'setting',
+          entityId: cleanKey,
+          description: `تولید بسته فعالسازی آفلاین سروری برای لایسنس ${cleanKey} و دستگاه ${cleanHw}`,
+          result: 'success',
+        });
+        return {
+          success: true,
+          package: data.package,
+          packageBase64: data.packageBase64,
+          packageJson: data.packageJson,
+          message: data.message || 'بسته فعالسازی آفلاین با موفقیت تولید شد.',
+        };
+      }
+      return { success: false, error: data.error || 'خطا در تولید بسته آفلاین از سرور' };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'خطای ارتباط با سرور';
+      return { success: false, error: msg };
+    }
   }
 }
 

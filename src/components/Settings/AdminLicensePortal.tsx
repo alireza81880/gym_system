@@ -30,6 +30,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { licenseService } from '../../services/licenseService';
+import { supabaseAuthService } from '../../services/auth/supabaseAuthService';
 import { LicenseRecord, LicenseType } from '../../types/license';
 import { calculateLicenseExpiry, formatPersianDate, getDurationLabel, generateLicenseReceipt } from '../../utils/licenseUtils';
 
@@ -261,15 +262,24 @@ export const AdminLicensePortal: React.FC = () => {
 
     setIsGeneratingPackage(true);
     try {
-      const res = await licenseService.generateOfflinePackage({
-        licenseKey: cleanKey,
-        hardwareFingerprint: cleanHw,
-        startDate: startDateIso,
-        expiresAt,
-        durationMonths: months,
-        isRecovery: renewIsRecovery,
-        recoveryCode: renewIsRecovery ? renewRecoveryCode.trim() : undefined,
-      });
+      const activeConfig = supabaseAuthService.getConfig();
+      const res = await licenseService.generateOfflinePackage(
+        {
+          licenseKey: cleanKey,
+          hardwareFingerprint: cleanHw,
+          startDate: startDateIso,
+          expiresAt,
+          durationMonths: months,
+          isRecovery: renewIsRecovery,
+          recoveryCode: renewIsRecovery ? renewRecoveryCode.trim() : undefined,
+        },
+        activeConfig.url && activeConfig.anonKey
+          ? {
+              supabaseUrl: activeConfig.url,
+              supabaseAnonKey: activeConfig.anonKey,
+            }
+          : undefined
+      );
 
       if (res.success && res.packageBase64) {
         setGeneratedPackageResult({
